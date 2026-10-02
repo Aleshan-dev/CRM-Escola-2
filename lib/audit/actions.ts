@@ -1000,6 +1000,9 @@ export const AUDIT_ACTIONS = [
   "contacts.person_linked",
   "imports.companies_people",
 
+  // A assinatura do emissor (#2066, PR #2079): quem ligou ou desligou o nome de
+  // quem fala nas mensagens ao cliente, e com que nome a IA passou a assinar.
+  "settings.message_signature_updated",
   // #1639, fatia do login: o código colado em /admin/sistema virou tokens e foi
   // guardado cifrado. Sem esta linha, "quem conectou a assinatura, e quando"
   // ficaria sem rastro — e é a conta que passa a pagar as chamadas.
