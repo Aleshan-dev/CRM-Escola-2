@@ -76,6 +76,13 @@ describe("costCents — cada tarifa isolada, por modelo", () => {
     ["gpt-5.4-mini", 75, 450, 7.5, 75, 75],
     ["gpt-5.4-nano", 20, 125, 2, 20, 20],
     ["gpt-5.4-pro", 3000, 18000, 3000, 3000, 3000],
+    // Google — cache cobrado como entrada (critério conservador, ver pricing.ts)
+    ["gemini-3.5-flash", 150, 900, 150, 150, 150],
+    ["gemini-3.1-pro-preview", 200, 1200, 200, 200, 200],
+    ["gemini-2.5-pro", 125, 1000, 125, 125, 125],
+    ["gemini-2.5-flash", 30, 250, 30, 30, 30],
+    ["gemini-2.5-flash-lite", 10, 40, 10, 10, 10],
+    ["gemini-2.0-flash", 10, 40, 10, 10, 10],
   ])("%s", (model, cIn, cOut, cLeitura, cGrav5m, cGrav1h) => {
     expect(entrada(model)).toBeCloseTo(cIn, 6);
     expect(saida(model)).toBeCloseTo(cOut, 6);

@@ -4,7 +4,7 @@
  *
  * Fontes: https://platform.claude.com/docs/en/about-claude/pricing (Anthropic) e
  * https://developers.openai.com/api/docs/pricing (OpenAI, tabela Standard, conferida em
- * 23/09/2026). Cache da Anthropic: leitura = 0.1× a entrada; gravação = 1.25× no TTL de 5 minutos e 2× no de
+ * 23/09/2026). Google: o `ai_pricing` do catálogo curado (ver o bloco Gemini). Cache da Anthropic: leitura = 0.1× a entrada; gravação = 1.25× no TTL de 5 minutos e 2× no de
  * 1 hora — os dois TTLs que o knob `LLM_CACHE_TTL` aceita (`lib/agent-engine/env.ts`),
  * e é por isso que `costCents` recebe o TTL em vigor em vez de supor a doutrina.
  *
@@ -86,6 +86,21 @@ const USD_PER_MTOK: Record<string, Preco> = {
   'gpt-5.4-mini': { input: 0.75, output: 4.5, cacheRead: 0.075, cacheWrite5m: 0.75, cacheWrite1h: 0.75 },
   'gpt-5.4-nano': { input: 0.2, output: 1.25, cacheRead: 0.02, cacheWrite5m: 0.2, cacheWrite1h: 0.2 },
   'gpt-5.4-pro': { input: 30, output: 180, cacheRead: 30, cacheWrite5m: 30, cacheWrite1h: 30 },
+
+  // Google — os seis Gemini do catálogo curado (migrations 0023 e 0101), com o
+  // preço do `ai_pricing` em vigor (centavos/100). Sem estas linhas o custo de
+  // toda org em Google saía NULL e o teto mensal não disparava.
+  // Cache: o caching implícito do Gemini cobra a leitura com desconto e não cobra
+  // gravação, mas o repo não tem fonte conferida para o tamanho do desconto. Fica
+  // o critério conservador já usado nos `-pro` da OpenAI e no Jev: leitura e
+  // gravação = entrada. Superestima o turno com cache, nunca o subestima.
+  // Fora da tabela: a faixa acima de 200K tokens de entrada do 2.5 Pro e do 3.1 Pro.
+  'gemini-3.5-flash': { input: 1.5, output: 9, cacheRead: 1.5, cacheWrite5m: 1.5, cacheWrite1h: 1.5 },
+  'gemini-3.1-pro-preview': { input: 2, output: 12, cacheRead: 2, cacheWrite5m: 2, cacheWrite1h: 2 },
+  'gemini-2.5-pro': { input: 1.25, output: 10, cacheRead: 1.25, cacheWrite5m: 1.25, cacheWrite1h: 1.25 },
+  'gemini-2.5-flash': { input: 0.3, output: 2.5, cacheRead: 0.3, cacheWrite5m: 0.3, cacheWrite1h: 0.3 },
+  'gemini-2.5-flash-lite': { input: 0.1, output: 0.4, cacheRead: 0.1, cacheWrite5m: 0.1, cacheWrite1h: 0.1 },
+  'gemini-2.0-flash': { input: 0.1, output: 0.4, cacheRead: 0.1, cacheWrite5m: 0.1, cacheWrite1h: 0.1 },
 
   // Jev (TypeSafe AI), a versão FIXADA em lib/ai/decisao/cliente.ts. Fonte:
   // docs.typesafe.ai/models.md, conferida em 23/09/2026 — "Charged per input
