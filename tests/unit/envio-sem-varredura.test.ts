@@ -187,7 +187,11 @@ describe("/healthz: só a fila viva, pelos índices parciais", () => {
   it("o handler do worker usa a função, não o group by antigo", () => {
     const main = readFileSync(join(process.cwd(), "workers", "agent-worker", "main.ts"), "utf8");
     expect(main).toContain("await profundidadeDaFilaViva(pool)");
-    const healthz = main.slice(main.indexOf("const uptime_s"), main.indexOf("respond(res, 503"));
+    const inicio = main.indexOf("const uptime_s");
+    // O fim procurado DEPOIS do início: há um `respond(res, 503` antes dele (a
+    // checagem do banco), e com ele o recorte saía vazio e a asserção passava sem ler nada.
+    const healthz = main.slice(inicio, main.indexOf("respond(res, 503", inicio));
+    expect(healthz).toContain("profundidadeDaFilaViva(pool)");
     expect(healthz).not.toMatch(/group by/i);
   });
 
