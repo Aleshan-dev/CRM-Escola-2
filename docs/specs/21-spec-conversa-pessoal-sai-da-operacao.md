@@ -63,10 +63,13 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 - Sem exceção para gerente. Gerente marca e desmarca, mas não envia para marcado.
 - Erro padrão de envio recusado, sem vazar dado do contato.
 
-### 3.4 Resposta: guarda, mas esconde
+### 3.4 Resposta: guarda, mas esconde — e não gera nada
 
 - A resposta do pessoal entra pelo ingest normal (contato e conversa gravados, carimbo de não-lida atualizado pela função SQL de marcação de mensagem).
-- Depois de gravada, ela some de tudo: inbox, funil, busca, contadores, relatórios, base de busca da IA e contexto do agente. Cada caminho que reage a mensagem nova ignora pessoal:
+- Depois de gravada, ela some de tudo: inbox, funil, busca, contadores, relatórios, base de busca da IA e contexto do agente.
+- **Não cria negócio**: mensagem nova de marcado não abre negócio no funil (o aberto continua por trás e volta ao desmarcar, decisão 2).
+- **Não chama a IA**: nenhum trabalho é enfileirado e nenhum turno roda para marcado.
+- Cada caminho que reage a mensagem nova ignora pessoal:
   - alerta no navegador (`useInboundMessageAlerts` → `entregarAviso` em `lib/notifications/deliver.ts` → `emitNotification` em `lib/notifications/emit.ts` + `playSound` em `lib/notifications/sounds.ts`);
   - inbox em tempo real (`useConversationsRealtime` em `hooks/inbox/useConversationsRealtime.ts` + `useMessagesRealtime` em `hooks/inbox/useMessagesRealtime.ts`, via `useRealtimeChannel`): a invalidação chega, mas a lista filtrada não mostra nada;
   - push no celular (`webPushInboundHandler` → `montarPayloadDeInbound` em `lib/notifications/push_payload.ts` → `enviarPushDaOrg` em `lib/notifications/web_push.ts`);
@@ -76,6 +79,8 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
   - webhook externo (`automationRulesHandler` → `executeCallWebhook`: evento de pessoal não casa com regra);
   - distribuição (`runRoutingWorker`/`decideRouting`: conversa de pessoal não distribui);
   - métricas (`taxasDaCampanha`, contagens, função SQL de marcação, uso da plataforma): pessoal não soma.
+  - ferramentas externas (`lib/mcp/tools/`: leitura exclui pessoal; escrita recusa pessoal): o assistente externo não lê nem escreve para pessoal.
+  - ligação (`workers/voice-agent`): chamada de pessoal não cria negócio e a IA de voz não assume (cai no caminho humano da rota).
 - Contador no título da aba não existe (nenhum `document.title` escrito em `app/`, `hooks/`, `components/` ou `lib/`), então não há nada para esconder ali.
 - Tudo só volta a aparecer ao desmarcar, com o histórico inteiro.
 
@@ -83,7 +88,13 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 
 - Auditoria pelo emissor `audit` (`lib/audit/index.ts`), lista `AUDIT_ACTIONS` (`lib/audit/actions.ts`; regra: acrescenta no fim, nunca renomeia).
 - Eventos novos no fim da lista, no padrão de `contact.blocked` (emitido na pós-entrada) e `contact.unblocked` (emitido na rota de desbloqueio): um para marcar, outro para desmarcar, com quem fez e quando. São eventos novos de propósito, para não misturar com descadastro.
+- Quem marcou e quando fica só na auditoria + timeline, sem coluna extra no contato.
 - Timeline pela função `emitLeadActivity` (`lib/leads/activity-emitter.ts`): organização, contato, tipo, ator e motivo sem dado pessoal.
+
+### 3.6 Tela e atendimento em curso (decisão do dono pendente)
+
+- Proposta: botão marcar/desmarcar no cabeçalho da conversa e na ficha do contato; filtro "Pessoais" na lista de Contatos. Botão em tela existente não cria tela nova e não exige porta no menu.
+- Proposta: ao marcar, a conversa fecha e sai do atendente, sem nada pendurado.
 
 ---
 
@@ -91,7 +102,7 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 
 1. Marca contato com conversa ativa e lê a lista: a conversa não está. Sabotagem: tirar o filtro da lista — o teste quebra.
 2. Com a conversa marcada, busca por nome, telefone e prévia: zero resultados. Sabotagem: filtrar só a prévia e deixar os ids passarem — o teste acusa.
-3. Marca com não-lidas pendentes e lê a contagem: igual a antes. Sabotagem: somar a busca na contagem — o número diverge.
+3. Marca com não-lidas pendentes e lê a contagem: o número cai exatamente nas não-lidas daquele contato. Sabotagem: manter somando — o badge diverge da lista.
 4. Com negócio aberto, marca: o board não lista, a linha continua no banco; mensagem nova: nenhum negócio nasce. Sabotagem: apagar a linha em vez de esconder — a volta vem vazia e acusa.
 5. Marca e abre Contatos: selo "Pessoal" visível; edita as etiquetas: o selo fica. Sabotagem: ler o selo da etiqueta — some ao editar e acusa.
 6. Manda inbound para marcado: nenhum trabalho enfileirado, nenhuma resposta, nenhum negócio; nenhum alerta, push, follow-up, carimbo de campanha, análise do Jev, webhook ou redistribuição. Sabotagem por caminho: ligar cada efeito de volta — o teste daquele efeito acusa.
@@ -113,6 +124,15 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 
 ---
 
-## Rodapé da revisão
+## 6. O que a v4 muda (03/10/2026, segunda rodada de revisão)
 
-Revisor cego conferiu 17 pontos da v2 no disco: 14 confirmados, 5 endereços corrigidos nesta v3 (`useMessagesRealtime` tem arquivo próprio; `emitNotification` e `playSound` têm paths próprios; handlers de follow-up e de handoff por sentimento têm paths próprios; marcação de mensagem é função SQL; funções privadas citadas como comportamento, não como ponto de importação). Nenhum número de migration, nome de coluna ou diff nesta spec.
+Regra nova do dono: contato marcado fica inutilizado (nenhum envio, nem manual). Mais 6 pontos:
+
+1. **Ferramentas externas (MCP) entram na regra.** Medido em `lib/mcp/tools/`: `crmSearchContacts` e `crmGetContact` (`contacts.ts`), `crmListConversations`, `crmGetConversation` e `crmGetConversationHistory` (`conversations.ts`), `crmListLeads`, `crmGetLead`, `crmCreateLead`, `crmUpdateLead`, `crmMoveLeadStage` e `crmRetomarLead` (`leads.ts`), `crmSendWhatsappMessage` (`messages.ts`) e `crmStartConversationAndSend` (`start-conversation.ts`, abre ou reabre a 1:1 pelo mesmo helper da rota). Decisão: leitura (lista, busca, ficha, histórico) exclui pessoal; escrita (criar lead, mover, enviar, abrir conversa) recusa pessoal. Sem isso o assistente externo lê e escreve para pessoal furando a decisão 3.
+2. **Ligação entra na regra.** Medido em `workers/voice-agent/index.ts`: entrada resolve o contato (`resolveOrCreateCallerContact`), grava `voice_calls` e chama `garantirLeadDaConversa` (que já recusa bloqueado e recusará pessoal). Decisão: ligação de pessoal não cria negócio e a IA de voz não assume (cai no caminho humano da rota: `routing_mode` com `fallback_user_id`).
+3. **Contrato cita os dois efeitos principais.** "Não cria negócio" e "não chama a IA" agora estão no contrato (§3.4), não só no aceite.
+4. **Critério 3 corrigido.** Antes dizia "contagem igual a antes" — errado: ao marcar, as não-lidas do pessoal saem da conta e o número cai. Texto certo: marca e a contagem cai exatamente nas não-lidas daquele contato.
+5. **Tela (pergunta ao dono, ponto 5).** Proposta: botão marcar/desmarcar dentro da conversa (cabeçalho da inbox) e na ficha do contato; filtro "Pessoais" na lista de Contatos. Botão em tela existente não cria tela nova e não exige porta no menu (`lib/navigation/registry.ts`).
+6. **Quem está atendendo (pergunta ao dono, ponto 6).** Proposta: ao marcar, a conversa fecha e sai do atendente, sem nada pendurado.
+
+Detalhe: quem marcou e quando fica só na auditoria + timeline, sem coluna extra no contato (menos coluna, mesma prova).
