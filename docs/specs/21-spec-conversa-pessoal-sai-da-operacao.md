@@ -91,10 +91,10 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 - Quem marcou e quando fica só na auditoria + timeline, sem coluna extra no contato.
 - Timeline pela função `emitLeadActivity` (`lib/leads/activity-emitter.ts`): organização, contato, tipo, ator e motivo sem dado pessoal.
 
-### 3.6 Tela e atendimento em curso (decisão do dono pendente)
+### 3.6 Tela e atendimento em curso (decidido pelo dono em 03/10/2026)
 
-- Proposta: botão marcar/desmarcar no cabeçalho da conversa e na ficha do contato; filtro "Pessoais" na lista de Contatos. Botão em tela existente não cria tela nova e não exige porta no menu.
-- Proposta: ao marcar, a conversa fecha e sai do atendente, sem nada pendurado.
+- Botão marcar/desmarcar no cabeçalho da conversa e na ficha do contato; filtro "Pessoais" na lista de Contatos. Botão em tela existente não cria tela nova e não exige porta no menu.
+- Ao marcar, a conversa fecha e sai do atendente, sem nada pendurado.
 
 ---
 
