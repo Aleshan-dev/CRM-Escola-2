@@ -37,7 +37,7 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 |---|---|---|
 | **1** | **só gerente e dono marcam e desmarcam** | no código: `requireRole("manager")` (o rank cobre gerente e admin; atendente não esconde conversa da operação) |
 | **2** | **o negócio aberto some da vista mas continua por trás, e volta ao desmarcar** | esconder não é apagar: o board deixa de listar, a linha continua no banco, desmarcar relista |
-| **3** | **contato pessoal fica inutilizado: nenhum envio pelo CRM, nem manual** | o veto segue o padrão do bloqueio que `sendMessageHandler` em `app/api/v1/messages/_handler.ts` já aplica para `is_blocked`, mas em coluna e eventos próprios (ver §3.1 e §3.5): `is_blocked` continua significando só descadastro/STOP |
+| **3** | **contato pessoal fica inutilizado: nenhum envio pelo CRM, nem manual** | o veto segue o padrão do bloqueio que `sendMessageHandler` em `app/api/v1/messages/_handler.ts` já aplica para `is_blocked`, mas em coluna e eventos próprios (ver §3.1 e §3.6): `is_blocked` continua significando só descadastro/STOP |
 
 ---
 
@@ -80,18 +80,24 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
   - distribuição (`runRoutingWorker`/`decideRouting`: conversa de pessoal não distribui);
   - métricas (`taxasDaCampanha`, contagens, função SQL de marcação, uso da plataforma): pessoal não soma.
   - ferramentas externas (`lib/mcp/tools/`: leitura exclui pessoal; escrita recusa pessoal): o assistente externo não lê nem escreve para pessoal.
-  - ligação (`workers/voice-agent`): chamada de pessoal não cria negócio e a IA de voz não assume (cai no caminho humano da rota).
+  - ligação (`workers/voice-agent`): chamada de pessoal recebe o mesmo tratamento de bloqueado — ver achado e regra abaixo.
 - Contador no título da aba não existe (nenhum `document.title` escrito em `app/`, `hooks/`, `components/` ou `lib/`), então não há nada para esconder ali.
 - Tudo só volta a aparecer ao desmarcar, com o histórico inteiro.
 
-### 3.5 Registro: auditoria e timeline
+### 3.5 Ligação: mesmo tratamento do bloqueado
+
+- Achado medido em 03/10/2026 (`workers/voice-agent/index.ts`, função `handleStasisStart`): hoje o contato bloqueado NÃO é recusado na ligação. O caminho resolve o contato (`resolveOrCreateCallerContact` em `lib/voip/resolve-caller.ts`, que não lê `is_blocked`), grava a linha em `voice_calls`, recusa só o negócio (`garantirLeadDaConversa` recusa bloqueado) e segue: devolve o controle ao dialplan (`continueDialplan`) e a IA de voz atende pelo agente padrão. É defeito do bloqueio também, registrado aqui.
+- Regra da spec: pessoal E bloqueado são recusados no mesmo ponto, antes da IA e antes de tocar. Ao identificar o contato da chamada, se bloqueado ou pessoal: grava a chamada (escondida, como a mensagem), desliga (`hangupChannel`), sem IA, sem negócio, sem tocar para atendente, sem alerta.
+- A chamada gravada some do histórico de voz e só volta ao desmarcar (pessoal) ou desbloquear (bloqueado).
+
+### 3.6 Registro: auditoria e timeline
 
 - Auditoria pelo emissor `audit` (`lib/audit/index.ts`), lista `AUDIT_ACTIONS` (`lib/audit/actions.ts`; regra: acrescenta no fim, nunca renomeia).
 - Eventos novos no fim da lista, no padrão de `contact.blocked` (emitido na pós-entrada) e `contact.unblocked` (emitido na rota de desbloqueio): um para marcar, outro para desmarcar, com quem fez e quando. São eventos novos de propósito, para não misturar com descadastro.
 - Quem marcou e quando fica só na auditoria + timeline, sem coluna extra no contato.
 - Timeline pela função `emitLeadActivity` (`lib/leads/activity-emitter.ts`): organização, contato, tipo, ator e motivo sem dado pessoal.
 
-### 3.6 Tela e atendimento em curso (decidido pelo dono em 03/10/2026)
+### 3.7 Tela e atendimento em curso (decidido pelo dono em 03/10/2026)
 
 - Botão marcar/desmarcar no cabeçalho da conversa e na ficha do contato; filtro "Pessoais" na lista de Contatos. Botão em tela existente não cria tela nova e não exige porta no menu.
 - Ao marcar, a conversa fecha e sai do atendente, sem nada pendurado.
@@ -110,6 +116,7 @@ Quem usa o mesmo número para vender e para a vida — família, fornecedor, ami
 8. Marcar cancela fluxo e retorno pendentes, tira da campanha com saída e pula candidato de prospecção. Sabotagem: cancelar só o fluxo — o retorno dispara depois e acusa.
 9. Auditoria guarda os dois eventos novos e a timeline guarda o registro. Sabotagem: reutilizar os eventos de bloqueio — o teste de nome acusa.
 10. Filtra pessoais, desmarca: conversa de volta no inbox e negócio de volta no board, mensagens antigas todas lá. Sabotagem: limpar mensagem ao marcar — a volta vem vazia e acusa.
+11. Contato pessoal liga: a IA não atende, ninguém recebe a chamada, nenhum negócio nasce, a chamada fica registrada. Sabotagem: deixar a IA atender — o teste acusa.
 
 ---
 
