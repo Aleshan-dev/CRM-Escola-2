@@ -20,4 +20,4 @@ não derruba o turno — ele volta sem as ferramentas remotas, com o motivo no
 log. Esta fatia entrega REGISTRÁVEL + INVOCÁVEL e só leitura: a tela em
 `/admin`, a escrita remota, o catálogo completo e limites ficam para depois.
 
-Contribuição de @webtecnica (Refs #2147).
+Contribuição de @webtecnica (PR #2204, Refs #2147).
