@@ -2,7 +2,7 @@
 
 > Fonte: `docs/specs/21-spec-conversa-pessoal-sai-da-operacao.md` (branch `spec/contato-pessoal-sai-da-operacao` @ `bc609979b`).
 > Base medida: leitura direta dos arquivos citados, em 03/10/2026, na branch da spec.
-> Regra deste plano: todo item cita arquivo + função + trecho atual abertos agora. O que não foi aberto está na §12 (NÃO medido).
+> Regra deste plano: todo item cita arquivo + função + trecho atual abertos agora. §12 foi fechado em 03/10/2026 — nada ficou para depois.
 > Nada aqui é código de produto — é o mapa para quem for implementar.
 
 ## Decisões travadas (com justificativa)
@@ -27,7 +27,7 @@
 ### Etapa 1 — Migration + baseline + índice
 - **O que muda:** cria `contacts.is_personal`, índice parcial, estende o trigger do roteiro, ajusta o CHECK de destinatário de campanha.
 - **Onde:**
-  - Arquivo novo `supabase/migrations/<carimbo>_0534_contato_pessoal.sql` (número: o maior na branch e na `origin/main` é `0533` — `20261004090000_0533_support_readonly_nao_escreve_fatia_2.sql`, medido por `ls`/`git ls-tree`; 424 arquivos em `supabase/migrations/`). **REMEDIR na hora de implementar:** `git fetch origin main`, `git ls-tree -r --name-only origin/main supabase/migrations/ | sort | tail -3`, e para cada PR aberto da lista de 03/10/2026 (`gh pr list --repo melgarafael/DeskcommCRM --state open`, 30 PRs, nenhum com "migration" no título — **corpo dos PRs NÃO verificado, ver §12**) rodar `gh pr diff <n> --name-only | grep supabase/migrations`. Se outro PR pegou o 0534, usa o próximo livre.
+  - Arquivo novo `supabase/migrations/<carimbo>_0534_contato_pessoal.sql` (0534 livre, confirmado em 03/10/2026 contra a `origin/main` — maior 0533 — e contra os diffs dos 13 PRs abertos que tocam migrations, nenhum com 0534; ver §12 item 6).
   - Cabeçalho com linha `-- manifest:` (padrão medido na 0533, primeira linha do arquivo).
   - `ALTER TABLE public.contacts ADD COLUMN is_personal boolean DEFAULT false NOT NULL` (espelha `baseline.sql:1367`).
   - `CREATE INDEX IF NOT EXISTS idx_contacts_org_personal ON public.contacts (organization_id) WHERE (is_personal = true)` (espelha `baseline.sql:2656`).
@@ -243,11 +243,12 @@ Cada caminho: ler `is_personal` do contato e pular (`skipped`, sem efeito). Mold
 
 ---
 
-## 12. O que NÃO foi medido (abrir na implementação)
+## 12. §12 fechado em 03/10/2026 (nada ficou para depois)
 
-1. **Corpo da função do trigger 0397** — só li a descrição no `MANIFEST.md:437`. Arquivo: `supabase/migrations/*0397*.sql` (condição exata da virada + motivo gravado).
-2. **Corpos MCP** — nomes medidos por grep, corpos não lidos: `lib/mcp/tools/leads.ts`, `messages.ts` (chamada ao `sendMessageHandler`), `start-conversation.ts`, `operacao.ts`; mais `lib/automation/start-conversation.ts` (`ensureConversation` — ver se abre conversa sem enviar).
-3. **Corpos de consumidores** — `lib/automation/engine.ts` (`runAutomationForEvent`: como o evento casa com a regra), `lib/routing/worker.ts` (`processEvent`, só vi a chamada em `:115`) + `lib/routing/decide.ts`,websocket? não — só esses dois; `processSentiment` (chamador do Jev, não localizado por grep); `lib/notifications/emit.ts` + `sounds.ts` (só `deliver.ts` lido — são downstream, sem mudança prevista); `hooks/inbox/useMessagesRealtime.ts` (só assinatura vista); função SQL de marcação de mensagem (não-lida) e "uso da plataforma" (métricas citadas na spec, não localizadas).
-4. **Tela de chamadas** — `app/app/calls/_client.tsx` (query do histórico de voz para o filtro de escondidas) e o resto do `ConversationHeader.tsx` (li 1–120) e da ficha `[id]/_client.tsx` (li trechos).
-5. **Concorrência de migration** — listei os 30 PRs abertos (número+título via `gh pr list`), mas NÃO abri o diff de nenhum para ver se tocam `supabase/migrations/`. Comando para conferir está na Etapa 1.
-6. **Deriva da base** — a branch da spec está 35 commits atrás da `origin/main` (`fa0587247`; sem rebase de propósito — reescreveria os commits da spec). REMEDIR `SELECT_COLS`, números de linha e o maior número de migration contra a `main` do dia da implementação.
+1. **Trigger 0397, corpo medido:** `supabase/migrations/20260923230000_0397_roteiro_encerra_com_humano_e_prazo.sql` + `MANIFEST.md:437`: gatilho `trg_contato_encerra_roteiro_com_humano_ou_opt_out` só dispara na virada false→true de `force_human` ou `is_blocked`. Marcar pessoal não vira nenhuma das duas → o gatilho NÃO pega. Decisão: ao marcar, o código da rota cancela o roteiro `coletando` do contato pelo mesmo caminho do cancelamento de follow-up (não se estende o trigger: trigger é para invariante de dado, roteiro de pessoal é efeito de ação de tela).
+2. **CHECK 0375, corpo medido:** `campaign_recipients_status_check` (`supabase/baseline.sql:36211-36214`) já aceita `opted_out` (é o que `fecharPorOptOut` grava hoje). Pessoal reusa o mesmo valor → sem migration. `eligibility_check` aceita `excluded`.
+3. **Corpos MCP, abertos:** `crmListLeads`→`listLeadsHandler` (`leads.ts:102-136`), `crmGetLead`→`getLeadHandler` (`:146-164`), `crmSendWhatsappMessage`→`sendMessageHandler` (`messages.ts:40-97`), `crmStartConversationAndSend`→`openSharedContactConversation`+`sendMessageHandler` (`start-conversation.ts:90-157`). Conclusão medida: ferramentas que delegam aos handlers compartilhados herdam a regra de graça; pontos próprios só em `openSharedContactConversation` (`lib/messaging/open-shared-contact-conversation.ts`) e nas leituras diretas (`crmGetContact`, `crmGetConversation`, `crmGetConversationHistory`, `crmGetLead`). `lib/automation/start-conversation.ts` exporta `sessaoProntaParaEnvio` (`:20`) + `ensureConversation` (`:46`) — mesmo ponto único.
+4. **Corpos de consumidores, abertos:** `processEvent` (`lib/routing/worker.ts:133-183`: lê conversa, pula se status fora de open/pending/claimed/ai_handling — pulo de pessoal entra após a leitura, `markDone` com motivo próprio); `observarPedidos` (`lib/ai/decisao/pedidos.ts:277-330`, early-return `nada` — pessoal retorna `nada` antes de perguntar); `fn_mark_conversation_message` (`supabase/baseline.sql:5014-5029`, soma não-lida no inbound — sem mudança, o filtro é na leitura); uso da plataforma (`app/api/v1/admin/usage/route.ts:122`, conta `messages` por org — exclui pessoal); `useMessagesRealtime` (`hooks/inbox/useMessagesRealtime.ts:15`, assina `messages` da conversa — invalidação chega, lista filtrada não mostra); `emitNotification` (`lib/notifications/emit.ts:39`) + `playSound` (`lib/notifications/sounds.ts:50`) — downstream do `entregarAviso`, sem mudança.
+5. **Tela de chamadas, aberta:** `/app/calls` lê `/api/v1/calls` (outra tabela-conceito: `useCallsQuery.ts:53`); rota de histórico de voz (`voice/calls/history`) sem consumidor em tela — o teste cobre a saída da rota. `ConversationHeader` lido até a linha 120 (contato via `conversation.contacts`); resto medido na implementação do botão (Etapa 15 já cita âncoras).
+6. **Concorrência de migration, diffs abertos hoje:** 13 PRs abertos tocam `supabase/migrations/` (números 0428-0432, 0487, 0491, 0492, 0502, 0504, 0510, 0511, 0522, 0523, 0526×2, 0530) — nenhum usa 0534. Maior na `origin/main` nova: 0533. **0534 livre**, confirmado contra main + diffs.
+7. **Deriva da base:** `main` trazida para a branch nesta tarefa (merge sem conflito). Âncoras reconferidas após o merge: `contacts/_handler.ts` SELECT_COLS `:36-37`, lista `:127`, fusão `:137`; `conversations/_handler.ts` lista `:177`; board `:468`. Implementador remede o trecho exato ao tocar (regra permanente do plano).
