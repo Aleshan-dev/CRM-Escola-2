@@ -300,3 +300,24 @@ describe("motivoDoVazioExterno — o audit não conta erro como sucesso (#484)",
     expect(crmDescribeExternalData.motivoDoVazio).toBe(motivoDoVazioExterno);
   });
 });
+
+describe("crm_query_external_data durante a conversa de atendimento", () => {
+  // O banco externo não tem a chave de contato do CRM: com `contatoDoTurno`
+  // (contexto de confiança do runtime), a consulta não roda.
+  const PEDIDO = { connection_id: "conn-1", schema: "public", tabela: "assinaturas", limite: 20 };
+
+  it("com contato do turno, recusa sem abrir a conexão", async () => {
+    const ctx = { ...ctxFake(), contatoDoTurno: "contato-1" } as McpContext;
+    const r = (await crmQueryExternalData.handler(PEDIDO, ctx)) as Record<string, unknown>;
+    expect(r.erro).toBe("indisponivel_na_conversa");
+    expect(abrirAcesso).not.toHaveBeenCalled();
+    expect(lerTabela).not.toHaveBeenCalled();
+  });
+
+  it("CONTROLE: sem contato do turno, a consulta segue como antes", async () => {
+    vi.mocked(lerTabela).mockResolvedValue({ colunas: ["id", "status"], linhas: [], limite: 20, offset: 0 });
+    const r = (await crmQueryExternalData.handler(PEDIDO, ctxFake())) as Record<string, unknown>;
+    expect(r.erro).not.toBe("indisponivel_na_conversa");
+    expect(lerTabela).toHaveBeenCalledTimes(1);
+  });
+});
