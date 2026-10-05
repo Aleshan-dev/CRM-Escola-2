@@ -36,7 +36,7 @@ describe("o painel de conexão da empresa", () => {
     expect(screen.getByTestId("aviso-login-codex").textContent).toContain(
       "nada disso é contrato público da OpenAI",
     );
-    expect(screen.getByLabelText("Código que o navegador deixou")).toBeTruthy();
+    expect(screen.getByLabelText("Endereço em que o navegador parou")).toBeTruthy();
     expect(screen.getByTestId("estado-login-codex").textContent).toContain(
       "Nenhuma conta conectada nesta empresa ainda.",
     );
@@ -58,7 +58,7 @@ describe("o painel de conexão da empresa", () => {
     render(
       <PainelDeLoginCodex url="u" codeVerifier={"v".repeat(60)} conectado={true} validada={true} />,
     );
-    await userEvent.type(screen.getByLabelText("Código que o navegador deixou"), "abc");
+    await userEvent.type(screen.getByLabelText("Endereço em que o navegador parou"), "abc");
     await userEvent.click(screen.getByRole("button", { name: "Conectar" }));
     await vi.waitFor(() => expect(conectar).toHaveBeenCalled());
     const chamada = conectar.mock.calls[0]![0] as { codeVerifier: string };

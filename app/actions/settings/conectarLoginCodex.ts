@@ -5,10 +5,12 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { desconectarLoginCodex, guardarLoginCodex } from "@/lib/ai/credenciais/login-codex";
-import { trocarCodigoPorTokens } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { lerRetornoColado, trocarCodigoPorTokens } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { verificarEstado } from "@/lib/agenda/google/estado";
 import { audit } from "@/lib/audit";
 import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { env } from "@/lib/env";
 import { supportWriteError } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,6 +31,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * Com o interruptor da instalação (`login_codex`) desligado, a gravação
  * recusa: `guardarLoginCodex` consulta `moduloLigado` e falha fechado.
+ *
+ * ─── O `state` é conferido ANTES da troca ─────────────────────────────────
+ *
+ * `codigo` é o endereço inteiro que o navegador mostrou, com `code` e `state`.
+ * O `state` foi emitido pela tela (`emitirEstado`, HMAC com `INTERNAL_SECRET`,
+ * prazo de 10 min) e carrega a empresa e a pessoa: só o retorno do link que
+ * ESTA pessoa abriu, NESTA empresa, chega à OpenAI. Sem isso, um admin induzido
+ * a colar o retorno de login de outra conta ligaria à empresa uma conta ChatGPT
+ * alheia. A comparação da assinatura é em tempo constante (`verificarEstado`).
  */
 const entradaSchema = z.object({
   codigo: z.string().min(1).max(4096),
@@ -51,10 +62,23 @@ export async function conectarLoginCodex(
   const parsed = entradaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
+  const retorno = lerRetornoColado(parsed.data.codigo);
+  if (!retorno) return { ok: false, error: "retorno_sem_estado" };
+  let estado: ReturnType<typeof verificarEstado> = null;
+  try {
+    estado = verificarEstado(retorno.state, { segredo: env.INTERNAL_SECRET, agora: new Date() });
+  } catch {
+    // Segredo ausente/curto: sem ele nenhum retorno é conferível — recusa.
+    estado = null;
+  }
+  if (!estado || estado.organizationId !== activeOrg.orgId || estado.userId !== authUser.id) {
+    return { ok: false, error: "estado_invalido" };
+  }
+
   let tokens: Awaited<ReturnType<typeof trocarCodigoPorTokens>>;
   try {
     tokens = await trocarCodigoPorTokens({
-      code: parsed.data.codigo,
+      code: retorno.code,
       codeVerifier: parsed.data.codeVerifier,
     });
   } catch {

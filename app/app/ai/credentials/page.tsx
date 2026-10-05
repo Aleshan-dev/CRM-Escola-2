@@ -23,6 +23,8 @@ import { resolverModeloDoPonto } from "@/lib/ai/gateway-binding";
 import { lerAmbiente } from "@/lib/instalacao/ambiente";
 import { logger } from "@/lib/logger";
 import { criarSessaoPkce } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { emitirEstado } from "@/lib/agenda/google/estado";
+import { env } from "@/lib/env";
 import { PROVEDOR_POR_ASSINATURA, PROVEDORES } from "@/lib/ai/pontos/provedores";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -77,7 +79,26 @@ export default async function CredentialsPage() {
   // isso não faz do verifier um valor público: é segredo de uso ÚNICO, que
   // existe para esta conexão e morre com ela. Não é chave da OpenAI — quem
   // tiver os dois, porém, troca o `code` por tokens.
-  const sessaoPkce = criarSessaoPkce();
+  //
+  // O `state` é ASSINADO com a empresa e a pessoa (o mesmo `emitirEstado` da
+  // agenda do Google): a action só troca o código cujo retorno traz este
+  // `state`. Sem segredo utilizável o painel não aparece — um login que
+  // ninguém consegue conferir não deve ser oferecido.
+  let sessaoPkce: ReturnType<typeof criarSessaoPkce> | null = null;
+  if (moduloLoginCodex) {
+    try {
+      sessaoPkce = criarSessaoPkce(
+        emitirEstado(
+          { organizationId: activeOrg.orgId, userId: user.id },
+          { segredo: env.INTERNAL_SECRET, agora: new Date() },
+        ),
+      );
+    } catch (err) {
+      logger.warn("[ai/credentials] login por assinatura sem state assinado (INTERNAL_SECRET?)", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   // Mesma regra do DELETE — e a mesma da FK `ON DELETE RESTRICT`: TODA versão
   // que aponta para a credencial trava a exclusão, não só a publicada. O número
@@ -194,7 +215,7 @@ export default async function CredentialsPage() {
           )}
         </p>
       </header>
-      {moduloLoginCodex && (
+      {moduloLoginCodex && sessaoPkce && (
         <PainelDeLoginCodex
           url={sessaoPkce.url}
           codeVerifier={sessaoPkce.codeVerifier}

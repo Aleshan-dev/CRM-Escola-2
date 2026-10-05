@@ -71,6 +71,10 @@ export function PainelDeLoginCodex({
     forbidden_tenant: "Você não tem uma empresa ativa para gravar esta conta.",
     unauthenticated: "Sessão expirada. Entre de novo.",
     somente_leitura: "Acompanhamento somente leitura ou encerrado.",
+    retorno_sem_estado:
+      "Cole o endereço inteiro da barra do navegador (começa com http://localhost:1455/auth/callback), não só o código.",
+    estado_invalido:
+      "Este endereço não veio do link desta tela, aberto por você nesta empresa — ou o link venceu (vale 10 minutos). Recarregue a página, abra o link de novo e cole o endereço novo.",
   };
 
   function conectar() {
@@ -113,7 +117,7 @@ export function PainelDeLoginCodex({
         <CardTitle>{t("Conectar a assinatura do Codex")}</CardTitle>
         <CardDescription>
           {t(
-            "Cada empresa conecta a própria conta do ChatGPT. Abra o link, entre com a conta que tem a assinatura, e o navegador fica em localhost:1455 mostrando um código. Cole esse código aqui.",
+            "Cada empresa conecta a própria conta do ChatGPT. Abra o link e entre com a conta que tem a assinatura. No fim, o navegador vai para um endereço em localhost:1455 que não abre — é esperado. Copie esse endereço inteiro, da barra do navegador, e cole aqui.",
           )}
         </CardDescription>
       </CardHeader>
@@ -128,7 +132,7 @@ export function PainelDeLoginCodex({
         <div className="flex items-end gap-3">
           <div className="flex-1 space-y-1">
             <Label htmlFor="codex-codigo" className="text-base">
-              {t("Código que o navegador deixou")}
+              {t("Endereço em que o navegador parou")}
             </Label>
             <Input
               id="codex-codigo"

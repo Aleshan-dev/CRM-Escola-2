@@ -92,9 +92,13 @@ export interface SessaoPkce {
   url: string;
 }
 
-export function criarSessaoPkce(): SessaoPkce {
+/**
+ * `estado` vem de fora quando precisa ser CONFERIDO na volta: a tela de
+ * Credenciais passa um `state` assinado com a empresa e a pessoa
+ * (`emitirEstado`), e a action recusa o retorno cujo `state` não é esse.
+ */
+export function criarSessaoPkce(estado: string = gerarEstado()): SessaoPkce {
   const codeVerifier = gerarCodeVerifier();
-  const estado = gerarEstado();
   return {
     codeVerifier,
     estado,
@@ -123,6 +127,29 @@ export function montarUrlDeAutorizacao(entrada: {
     state: entrada.estado,
   });
   return `${ENDPOINT_DE_AUTORIZACAO}?${parametros.toString()}`;
+}
+
+/**
+ * O QUE A PESSOA COLOU — o endereço em que o navegador parou
+ * (`http://localhost:1455/auth/callback?code=…&state=…`). Ninguém escuta essa
+ * porta, então a página não abre; o que serve é o endereço da barra.
+ *
+ * Devolve `code` e `state` só quando os DOIS vieram: sem o `state` não há como
+ * provar que o retorno nasceu do link desta tela, para esta pessoa — e um
+ * retorno de login de OUTRA conta, colado por engano ou por indução, ligaria à
+ * empresa uma conta ChatGPT alheia (login CSRF). Código solto é recusado.
+ * Aceita também só a parte depois do `?`.
+ */
+export function lerRetornoColado(texto: string): { code: string; state: string } | null {
+  const limpo = texto.trim();
+  const inicio = limpo.indexOf("?");
+  const consulta = inicio >= 0 ? limpo.slice(inicio + 1) : limpo.includes("=") ? limpo : "";
+  if (consulta === "") return null;
+  const parametros = new URLSearchParams(consulta.split("#")[0]);
+  const code = parametros.get("code")?.trim() ?? "";
+  const state = parametros.get("state")?.trim() ?? "";
+  if (code === "" || state === "") return null;
+  return { code, state };
 }
 
 /** Por que a troca falhou — na linguagem que a renovação usa. */
