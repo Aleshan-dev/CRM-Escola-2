@@ -182,44 +182,247 @@ export async function POST(_req: NextRequest, ctx: Context): Promise<Response> {
   }
   if (!contato) return fail("not_found", t("Contato não encontrado."), 404, { requestId });
 
-  // Idempotente: já pessoal, nada a fazer — e nada a auditar. Recontar a
-  // história a cada clique duplicaria a prova sem fato novo.
-  if ((contato as { is_personal?: boolean }).is_personal === true) {
-    return ok({ contact: contato, effects: { ...SEM_EFEITO } }, { requestId });
+  // Idempotente na PROVA, não nos efeitos: quem já era pessoal não gera nova
+  // auditoria nem nova linha de timeline (recontar a história a cada clique
+  // duplicaria a prova sem fato novo) — mas os efeitos SEMPRE rodam, porque
+  // são condicionais e viram no-op quando já aplicados. Sem isso, uma falha no
+  // meio dos efeitos deixaria a prova pela metade para sempre: a retentativa
+  // bateria no "já é pessoal" e nunca completaria o que faltou.
+  const eraPessoal = (contato as { is_personal?: boolean }).is_personal === true;
+
+  let marcado = contato as { id: string; display_name: string | null; is_personal: boolean };
+  if (!eraPessoal) {
+    const { data, error: updateErro } = await admin
+      .from("contacts")
+      .update({ is_personal: true })
+      .eq("organization_id", authz.org.orgId)
+      .eq("id", id)
+      .select("id, display_name, is_personal")
+      .maybeSingle();
+    if (updateErro || !data) {
+      return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
+        requestId,
+      });
+    }
+    marcado = data as typeof marcado;
   }
 
-  const { data: marcado, error: updateErro } = await admin
-    .from("contacts")
-    .update({ is_personal: true })
-    .eq("organization_id", authz.org.orgId)
-    .eq("id", id)
-    .select("id, display_name, is_personal")
-    .maybeSingle();
-  if (updateErro || !marcado) {
+  const efeitos: EfeitosDoMarcar = { ...SEM_EFEITO };
+  const orgId = authz.org.orgId;
+  const agora = new Date().toISOString();
+
+  // O negócio aberto é resolvido ANTES dos efeitos: a auditoria dos retornos
+  // avulsos carrega o `lead_id` (mesmo contrato da rota de cancel de promessa)
+  // e a timeline o usa como âncora. Resolver não escreve nada.
+  const leadId = await negocioAbertoDoContato(admin, orgId, id);
+
+  // 2) Follow-ups: parada total, como o bloqueio — vivos + dormente + coletando
+  // (os mesmos de `STATUS_ALCANCADOS_PELO_OPT_OUT`, `lib/followup/reactivity.ts`).
+  // `outcome` reaproveita `opted_out` porque o CHECK da coluna é fechado
+  // (`converted|replied|exhausted|opted_out|handoff`); o que distingue pessoal
+  // de STOP é o `cancel_reason` próprio (`pessoal`), nunca o outcome.
+  const { data: inscricoes } = await admin
+    .from("followup_enrollments")
+    .select("id, status, current_node_id")
+    .eq("organization_id", orgId)
+    .eq("contact_id", id)
+    .in("status", ["active", "waiting_reply", "paused_handoff", "dormente", "coletando"]);
+  for (const e of (inscricoes ?? []) as Array<{ id: string; status: string; current_node_id: string }>) {
+    const { error: cancelaErro } = await admin
+      .from("followup_enrollments")
+      .update({
+        status: "cancelled",
+        outcome: "opted_out",
+        cancel_reason: "pessoal",
+        next_eval_at: null,
+        claimed_until: null,
+        completed_at: agora,
+        updated_at: agora,
+      })
+      .eq("organization_id", orgId)
+      .eq("id", e.id);
+    if (cancelaErro) {
+      return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
+        requestId,
+      });
+    }
+    await admin.from("followup_enrollment_events").insert({
+      organization_id: orgId,
+      enrollment_id: e.id,
+      node_id: e.current_node_id,
+      event_type: "cancelled_personal",
+      payload: { reason: "pessoal", via: "contato_pessoal" },
+    });
+    await audit({
+      action: "followup_enrollment.cancelled",
+      actorUserId: authz.user.id,
+      organizationId: orgId,
+      resourceType: "followup_enrollment",
+      resourceId: e.id,
+      requestId,
+      metadata: { previous_status: e.status, cancel_reason: "pessoal", via: "contato_pessoal" },
+    });
+    efeitos.followups_cancelados += 1;
+  }
+
+  // 3) Retornos avulsos (`cron_jobs`, promessas): cancela o pendente para não
+  // deixar lixo que dispararia depois. Mesma trava do cancel manual
+  // (`enabled = true` + `cancelled_at is null` no WHERE).
+  const { data: retornos } = await admin
+    .from("cron_jobs")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("contact_id", id)
+    .eq("kind", "at")
+    .eq("job_kind", "followup_turn")
+    .eq("enabled", true)
+    .is("cancelled_at", null);
+  for (const r of (retornos ?? []) as Array<{ id: string }>) {
+    const { data: marcados, error: retornoErro } = await admin
+      .from("cron_jobs")
+      .update({
+        enabled: false,
+        cancelled_at: agora,
+        cancel_reason: "Contato marcado como pessoal",
+        updated_at: agora,
+      })
+      .eq("organization_id", orgId)
+      .eq("id", r.id)
+      .eq("enabled", true)
+      .select("id");
+    if (retornoErro) {
+      return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
+        requestId,
+      });
+    }
+    if ((marcados ?? []).length === 0) continue; // perdeu a corrida: o cron disparou entre a leitura e a escrita.
+    await audit({
+      action: "followup.cancelled",
+      actorUserId: authz.user.id,
+      organizationId: orgId,
+      resourceType: "cron_job",
+      resourceId: r.id,
+      requestId,
+      metadata: { actor_type: "user", via: "contato_pessoal", contact_id: id, lead_id: leadId },
+    });
+    efeitos.retornos_cancelados += 1;
+  }
+
+  // 4) Saída de campanha com status/motivo PRÓPRIOS (D7): `personal` +
+  // `contato_pessoal`, nunca `opted_out` — a taxa "pediu para parar" não mexe.
+  // Marca a saída sem remover a linha, como o pedido de saída faz (mesmo
+  // conjunto de status de `fecharPorOptOut`, `lib/campanhas/resposta.ts`).
+  // `opted_out_at` NÃO é carimbado de propósito: aquela coluna é métrica de
+  // STOP, e pessoal não é STOP.
+  const { data: saidas, error: campanhaErro } = await admin
+    .from("campaign_recipients")
+    .update({
+      status: "personal",
+      eligibility_status: "excluded",
+      exclusion_reason: "contato_pessoal",
+    })
+    .eq("organization_id", orgId)
+    .eq("contact_id", id)
+    .in("status", ["pending", "queued", "sent", "delivered", "read", "replied"])
+    .select("id");
+  if (campanhaErro) {
     return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
       requestId,
     });
   }
+  efeitos.campanha_saidas = (saidas ?? []).length;
 
-  const efeitos: EfeitosDoMarcar = { ...SEM_EFEITO };
-  // Os efeitos 2–6 (follow-up, retorno avulso, campanha, prospecção, conversas)
-  // entram na etapa 4, nesta ordem fixa — ver o cabeçalho do arquivo.
+  // 5) Prospecção vira pulada com motivo PRÓPRIO: `skipped` por outra razão não
+  // volta pela remarcação do operador (`lib/prospecting/store.ts`), então o
+  // motivo importa — `contato_pessoal` nunca ressuscita pela caixa de seleção.
+  const { data: pulados, error: prospeccaoErro } = await admin
+    .from("prospecting_candidates")
+    .update({ status: "skipped", error: "contato_pessoal", updated_at: agora })
+    .eq("organization_id", orgId)
+    .eq("contact_id", id)
+    .in("status", ["new", "queued"])
+    .select("id");
+  if (prospeccaoErro) {
+    return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
+      requestId,
+    });
+  }
+  efeitos.prospeccao_pulada = (pulados ?? []).length;
 
-  // Espelha o registro do desbloqueio (`unblock/route.ts`): mesmo
+  // 6) Para cada conversa aberta: solta do atendente E fecha. A ordem é
+  // `release` antes de `close` porque `fn_conversation_assign` com destino
+  // nulo volta o status para `open` — fechar antes seria desfeito na linha
+  // seguinte. `p_enforce_expected=false` porque quem marca não é
+  // necessariamente o dono da conversa.
+  const { data: abertas } = await admin
+    .from("conversations")
+    .select("id, status, assigned_to_user_id")
+    .eq("organization_id", orgId)
+    .eq("contact_id", id)
+    .in("status", ["open", "pending", "claimed", "ai_handling"]);
+  for (const conv of (abertas ?? []) as Array<{ id: string; assigned_to_user_id: string | null }>) {
+    const { data: solta, error: soltaErro } = await admin.rpc("fn_conversation_assign", {
+      p_organization_id: orgId,
+      p_conversation_id: conv.id,
+      p_to_user_id: null as unknown as string,
+      p_reason: "release",
+      p_enforce_expected: false,
+    });
+    if (soltaErro) {
+      return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
+        requestId,
+      });
+    }
+    if (!solta || (solta as unknown[]).length === 0) continue; // a conversa sumiu entre a leitura e a escrita.
+    const { error: fechaErro } = await admin.rpc("fn_service_status", {
+      p_org: orgId,
+      p_conversation: conv.id,
+      p_status: "closed",
+    });
+    if (fechaErro) {
+      return fail("internal_error", t("Não foi possível marcar o contato como pessoal."), 500, {
+        requestId,
+      });
+    }
+    await audit({
+      action: "conversation.released",
+      actorUserId: authz.user.id,
+      organizationId: orgId,
+      resourceType: "conversation",
+      resourceId: conv.id,
+      requestId,
+      metadata: { via: "contato_pessoal" },
+    });
+    await audit({
+      action: "conversation.closed",
+      actorUserId: authz.user.id,
+      organizationId: orgId,
+      resourceType: "conversation",
+      resourceId: conv.id,
+      requestId,
+      metadata: { via: "contato_pessoal" },
+    });
+    efeitos.conversas_fechadas += 1;
+  }
+
+  if (eraPessoal) {
+    return ok({ contact: marcado, effects: efeitos }, { requestId });
+  }
+
+  // 7) Espelha o registro do desbloqueio (`unblock/route.ts`): mesmo
   // `resourceType`, mesmo `contact_id` no metadata. O telefone NÃO entra —
   // auditoria não é lugar de dado pessoal, e o `contact_id` já identifica.
   // Os contadores de efeitos entram para a prova dizer O QUE foi desarmado.
   await audit({
     action: "contact.marked_personal",
     actorUserId: authz.user.id,
-    organizationId: authz.org.orgId,
+    organizationId: orgId,
     resourceType: "contact",
     resourceId: id,
     requestId,
     metadata: { contact_id: id, origem: "tela_do_contato", ...efeitos },
   });
 
-  const leadId = await negocioAbertoDoContato(admin, authz.org.orgId, id);
   if (leadId) {
     await registraNaTimeline(admin, {
       orgId: authz.org.orgId,
