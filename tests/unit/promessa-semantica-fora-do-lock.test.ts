@@ -181,3 +181,16 @@ describe('memoizarPorCandidata — a mesma frase não é paga duas vezes no turn
     expect(vez).toBe(2);
   });
 });
+
+describe('memoizarPorCandidata — evidência nova invalida o veredito de antes', () => {
+  it('a mesma frase depois de o modelo consultar o preço é classificada de novo', async () => {
+    let evidencias: string[] = [];
+    const classificar = vi.fn(async (_c: string): Promise<PromiseClassification> => NAO_E_PROMESSA);
+    const memo = memoizarPorCandidata(classificar, () => JSON.stringify(evidencias));
+    await memo('faço por R$ 90');
+    await memo('faço por R$ 90');
+    evidencias = ['catalogo:produto-1'];
+    await memo('faço por R$ 90');
+    expect(classificar).toHaveBeenCalledTimes(2);
+  });
+});
