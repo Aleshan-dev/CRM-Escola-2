@@ -32,10 +32,14 @@ import { generateText, stepCountIs, type LanguageModel, type StopCondition, type
 import {
   cabecalhosDeAtribuicaoOpenRouter,
   DEEPSEEK_ENDPOINT,
+  OPENAI_CODEX_ENDPOINT,
   OPENROUTER_ENDPOINT,
   REQUESTY_ENDPOINT,
 } from "@/lib/agent-engine/edge/llm/providers";
 import { CredentialUnavailableError, loadCredential } from "@/lib/ai/credentials";
+import { lerLoginCodexRenovandoSeProxima } from "@/lib/ai/credenciais/login-codex";
+import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
+import { PROVEDOR_DE_RESERVA_DA_ASSINATURA } from "@/lib/ai/pontos/reserva-da-assinatura";
 import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-internos-autorizados";
 import { decidirElegibilidadeDaConversaViaSupabase } from "@/lib/ai/elegibilidade/consulta-supabase";
 import { ttlDaAutorizacaoMs } from "@/lib/ai/elegibilidade/gate";
@@ -179,6 +183,13 @@ export function buildModel(
       return createAnthropic({ apiKey })(modelId);
     case "openai":
       return createOpenAI({ apiKey })(modelId);
+    // A ASSINATURA (#1639): mesma fábrica da OpenAI, endpoint do Codex. O
+    // `apiKey` que chega por aqui é o `access_token` do login por PKCE — quem
+    // o monta é o leitor próprio (`lerLoginCodexRenovandoSeProxima`), nunca a
+    // tela de chave. Sem este caso o ensaio responderia `unsupported_provider`
+    // enquanto o worker atenderia a mensagem real.
+    case PROVEDOR_POR_ASSINATURA:
+      return createOpenAI({ apiKey, baseURL: OPENAI_CODEX_ENDPOINT })(modelId);
     case "google":
       return createGoogleGenerativeAI({ apiKey })(modelId);
     // O ensaio precisa alcançar o mesmo provedor que o turno real alcança.
@@ -336,7 +347,72 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     let credentialApiKey: string;
     /** O endereço do provedor personalizado (#1642) — nasce junto da credencial. */
     let credentialBaseUrl: string | null = null;
-    if (version.credential_id) {
+    /**
+     * Quem RESPONDE este turno. É o provider da versão, exceto quando a
+     * assinatura não tem login utilizável e a reserva assume: aí a chave é a
+     * `openai` da empresa, e montar o modelo com o provider da versão mandaria
+     * essa chave de API ao endpoint do Codex — que não a aceita. Chave e
+     * provider andam juntos, como no `resolveOrgLlmConfig` do motor.
+     */
+    let providerDoTurno: string = version.provider;
+    /**
+     * A RESERVA DA ASSINATURA (#1639), na MESMA escada que o resolvedor do
+     * turno usa: a chave `openai` mais recente, ativa e validada da EMPRESA,
+     * e na falta dela a chave de plataforma da instalação. Sem nenhuma, `null`
+     * — e quem chama responde com o `failRun` de sempre.
+     */
+    const reservaDaAssinatura = async () => {
+      try {
+        const { data } = await createAdminClient()
+          .from("ai_provider_credentials")
+          .select("id")
+          .eq("organization_id", run.organization_id)
+          .eq("provider", PROVEDOR_DE_RESERVA_DA_ASSINATURA)
+          .eq("is_active", true)
+          .not("validated_at", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.id) {
+          const credential = await loadCredential(data.id, run.organization_id);
+          return { apiKey: credential.apiKey };
+        }
+      } catch {
+        // Sem linha utilizável (ou `loadCredential` recusou): a escada cai no
+        // `.env`, exatamente como o turno de produção cai.
+      }
+      const daInstalacao = chaveDePlataforma(PROVEDOR_DE_RESERVA_DA_ASSINATURA);
+      return { apiKey: daInstalacao };
+    }
+
+    if (version.provider === PROVEDOR_POR_ASSINATURA) {
+      // A ASSINATURA NÃO É CHAVE: o par de tokens mora na linha de login da
+      // empresa e é lido pelo leitor próprio, que ainda renova antes de
+      // devolver (janela de 8 dias, `userId: null`). `loadCredential` recusa
+      // este provider de propósito — mandaria o JSON dos tokens como chave.
+      //
+      // Sem linha utilizável → a RESERVA, e sem ela o `failRun` de sempre:
+      // nenhum erro novo, só o caminho que já existia.
+      const tokens = await lerLoginCodexRenovandoSeProxima({
+        admin: createAdminClient(),
+        orgId: run.organization_id,
+      });
+      if (tokens) {
+        credentialApiKey = tokens.access_token;
+      } else {
+        const reserva = await reservaDaAssinatura();
+        if (!reserva.apiKey) {
+          return await failRun(
+            run,
+            "credential_invalid",
+            `sem linha de login nem chave de reserva para ${version.provider}: conecte o Codex em IA › Credenciais`,
+            startedAt,
+          );
+        }
+        credentialApiKey = reserva.apiKey;
+        providerDoTurno = PROVEDOR_DE_RESERVA_DA_ASSINATURA;
+      }
+    } else if (version.credential_id) {
       try {
         const credential = await loadCredential(version.credential_id, run.organization_id);
         credentialApiKey = credential.apiKey;
@@ -551,7 +627,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       : [];
 
     // 9) Build LM directly against the provider (BYOK credential — see buildModel doc).
-    const model = buildModel(version.provider, credentialApiKey, version.model, credentialBaseUrl);
+    const model = buildModel(providerDoTurno, credentialApiKey, version.model, credentialBaseUrl);
 
     // 10) Cost/token guard. Fires BEFORE the next step is taken.
     let abortReason: string | null = null;
@@ -567,7 +643,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         return true;
       }
       const cost = await computeCostCents({
-        provider: version.provider,
+        provider: providerDoTurno,
         model: version.model,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -600,7 +676,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     // 12) Aggregate metrics.
     const usage = totalUsage(result.steps as Array<{ usage?: { inputTokens?: number; outputTokens?: number } }>);
     const cost = await computeCostCents({
-      provider: version.provider,
+      provider: providerDoTurno,
       model: version.model,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
