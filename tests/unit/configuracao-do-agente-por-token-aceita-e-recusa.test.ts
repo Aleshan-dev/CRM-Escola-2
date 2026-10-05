@@ -269,6 +269,32 @@ describe("token que JÁ existe não ganha poder de configuração (decisão do P
   });
 });
 
+// A fronteira que a decisão cria: ler NÃO é escrever. O token oferecido na
+// tela como "Ler a configuração do agente" não publica, não testa, não edita
+// rascunho, não pausa e não arquiva.
+describe("config:read não escreve; config:write passa da auth", () => {
+  it.each(PORTAS_DE_ESCRITA)("$nome: config:read + role:admin → 403", async ({ chamar }) => {
+    token({ scopes: ["config:read", "role:admin"], role: "admin" });
+
+    const res = await chamar();
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("forbidden_role");
+    expect(filtros).toEqual([]);
+  });
+
+  it.each(PORTAS_DE_ESCRITA)("$nome: config:write + role:admin passa da auth", async ({ chamar }) => {
+    token({ scopes: ["config:write", "role:admin"], role: "admin" });
+
+    const res = await chamar();
+
+    // Depois da auth vem o banco vazio (404) ou a validação do corpo (422):
+    // qualquer coisa, menos a porta fechada.
+    expect([401, 403]).not.toContain(res.status);
+    expect(requireRole).not.toHaveBeenCalled();
+  });
+});
+
 describe("token NOVO com config:write pausa o agente, e a auditoria nomeia o token", () => {
   it("PATCH paused_at por token → 200, UPDATE na org do token, audit ai_agent.paused com o id do token", async () => {
     token({ scopes: ["config:write", "role:admin"], role: "admin" });
