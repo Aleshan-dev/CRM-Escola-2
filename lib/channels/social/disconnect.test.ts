@@ -119,3 +119,15 @@ it("never deletes an account outside the configured profile", async () => {
   expect(deletes()).toEqual([]);
   expect(updates).toHaveLength(0);
 });
+
+it("archives a channel whose account left the profile without deleting that account", async () => {
+  provider({});
+  const gone = "b".repeat(24);
+  const { db, updates } = fakeDb([{ ...channel, zernio_account_id: gone }]);
+  expect(await disconnectSocialAccount(db, org, gone, true)).toEqual({
+    channel_id: "ch-1",
+    account_removed: false,
+  });
+  expect(deletes()).toEqual(["webhooks/settings?webhookId=wh-1"]);
+  expect(updates).toHaveLength(1);
+});
