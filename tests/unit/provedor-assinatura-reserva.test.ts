@@ -114,7 +114,11 @@ describe("decidirQuedaDoProvedor — quem tem direito a cair", () => {
   });
 
   it("provedor nativo que falha segue com o desfecho de sempre — não cai para chave alheia", () => {
-    for (const id of IDS_DE_PROVEDOR) {
+    // A assinatura fica de fora do laço COM PROPÓSITO: para
+    // `decidirQuedaDoProvedor` a regra é POR VOCABULÁRIO — `openai-assinatura`
+    // É o caminho por assinatura, e é exatamente o que os casos acima cobrem.
+    // Este laço mede os provedores NATIVOS, que não têm esse direito.
+    for (const id of IDS_DE_PROVEDOR.filter((x) => x !== PROVEDOR_POR_ASSINATURA)) {
       expect(
         decidirQuedaDoProvedor({ provider: id, status: 401, temChaveDeReserva: true }),
         `${id} não é proveniente do caminho por assinatura e não pode cair para outra credencial`,

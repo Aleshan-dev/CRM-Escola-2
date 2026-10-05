@@ -71,7 +71,12 @@ export default async function CredentialsPage() {
   const credentials = todas.filter((c) => c.provider !== PROVEDOR_POR_ASSINATURA);
   const canWrite = ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
   // O par PKCE DESTA renderização: o link mostrado e o verifier do campo de
-  // colagem viajam juntos; nenhum dos dois é segredo (o segredo nasce da troca).
+  // colagem nascem juntos — e só JUNTOS valem: o `code` que o navegador deixa
+  // não troca sem o verifier. Nenhum dos dois circula sozinho (o `code` só
+  // existe no navegador de quem conecta, e a troca acontece no servidor), mas
+  // isso não faz do verifier um valor público: é segredo de uso ÚNICO, que
+  // existe para esta conexão e morre com ela. Não é chave da OpenAI — quem
+  // tiver os dois, porém, troca o `code` por tokens.
   const sessaoPkce = criarSessaoPkce();
 
   // Mesma regra do DELETE — e a mesma da FK `ON DELETE RESTRICT`: TODA versão

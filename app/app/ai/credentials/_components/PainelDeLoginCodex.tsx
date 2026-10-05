@@ -172,7 +172,7 @@ export function PainelDeLoginCodex({
           <p data-testid="estado-login-codex">
             {jaConectado
               ? t(
-                  "Conta conectada nesta empresa, guardada com cifra. O token é renovado sozinho antes de vencer.",
+                  "Conta conectada nesta empresa, guardada com cifra. O sistema renova o token antes de vencer — na janela de 8 dias, e também na hora em que o sistema acordar.",
                 )
               : t("Nenhuma conta conectada nesta empresa ainda.")}
             {jaConectado && !validada && !conectouAgora
@@ -189,7 +189,7 @@ export function PainelDeLoginCodex({
         {conectouAgora && (
           <p className="text-sm text-muted-foreground" role="status">
             {t(
-              "Login guardado com cifra nesta empresa. Ligar o caminho do agente é a próxima fatia — enquanto isso, nada muda nas chamadas.",
+              "Login guardado com cifra nesta empresa. A partir de agora o agente fala por esta assinatura; se ela não estiver disponível ou falhar, a chamada cai na chave da empresa.",
             )}
           </p>
         )}

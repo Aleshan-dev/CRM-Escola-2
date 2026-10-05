@@ -14428,11 +14428,15 @@ export const DICIONARIO: Traducoes = {
   "Este servidor não tem a chave de cifra (AI_CRED_AES_KEY) configurada, então o login não pode ser guardado.": { es: "Este servidor no tiene la clave de cifrado (AI_CRED_AES_KEY) configurada, así que el inicio de sesión no se puede guardar." },
   "O banco recusou a gravação. Tente de novo em instantes.": { es: "La base de datos rechazó la grabación. Intente de nuevo en un momento." },
   "Não deu para conectar. Tente de novo em instantes.": { es: "No se pudo conectar. Intente de nuevo en un momento." },
-  "Login guardado com cifra nesta empresa. Ligar o caminho do agente é a próxima fatia — enquanto isso, nada muda nas chamadas.": { es: "Inicio de sesión guardado con cifrado en esta empresa. Activar la ruta del agente es la próxima parte; mientras tanto, nada cambia en las llamadas." },
+  "Login guardado com cifra nesta empresa. A partir de agora o agente fala por esta assinatura; se ela não estiver disponível ou falhar, a chamada cai na chave da empresa.": { es: "Inicio de sesión guardado con cifrado en esta empresa. A partir de ahora el agente habla por esta suscripción; si no está disponible o falla, la llamada cae a la clave de la empresa." },
 
   // ─── #1639, conta POR EMPRESA (PR #1672) — painel em Credenciais ─────────
+  // O `quandoUsar` do provedor não é literal de `t()`: chega à tela por
+  // `t(provedor.quandoUsar)`, que o guarda de tela não enxerga — por isto a
+  // entrada vive aqui, coberta por `i18n-provedores-e-pontos`.
+  "Para quem já paga o ChatGPT: a conversa sai pela mesma conta do Codex, sem chave de API nenhuma — e, se a assinatura não estiver disponível ou falhar, a chamada cai sozinha na chave da empresa.": { es: "Para quien ya paga ChatGPT: la conversa sale por la misma cuenta de Codex, sin clave de API alguna — y, si la suscripción no está disponible o falla, la llamada cae sola a la clave de la empresa." },
   "Nenhuma conta conectada nesta empresa ainda.": { es: "Ninguna cuenta conectada en esta empresa todavía." },
-  "Conta conectada nesta empresa, guardada com cifra. O token é renovado sozinho antes de vencer.": { es: "Cuenta conectada en esta empresa, guardada con cifrado. El token se renueva solo antes de vencer." },
+  "Conta conectada nesta empresa, guardada com cifra. O sistema renova o token antes de vencer — na janela de 8 dias, e também na hora em que o sistema acordar.": { es: "Cuenta conectada en esta empresa, guardada con cifrado. El sistema renueva el token antes de vencer — en la ventana de 8 días, y también cuando el sistema despierta." },
   "Ainda sem validação registrada: gere o link de novo e conecte de novo.": { es: "Aún sin validación registrada: genere el enlace de nuevo y conecte otra vez." },
   "Não deu para desconectar. Tente de novo em instantes.": { es: "No se pudo desconectar. Intente de nuevo en un momento." },
   "O recurso está desligado nesta instalação. Só quem administra a instalação pode ligá-lo, em Recursos opcionais.": { es: "El recurso está desactivado en esta instalación. Solo quien administra la instalación puede activarlo, en Recursos opcionales." },

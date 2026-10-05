@@ -1,162 +1,96 @@
 /**
- * A TRAVA DA ROTAÇÃO E A MEMÓRIA DE REVOGAÇÃO — o que este teste guarda.
+ * A TRAVA DA ROTAÇÃO E O QUE SOBROU DELA — o que este teste guarda.
  *
- *  1. DOIS refreshes concorrentes fazem UM só POST. Sem a trava, a segunda
- *     chamada envia um `refresh_token` que a primeira acabou de trocar, o
- *     provedor recusa (ou pior, derruba a sessão) e a instalação inteira perde
- *     o login por causa de duas mensagens que chegaram juntas.
+ *  1. DOIS refreshes concorrentes fazem UM só POST — mas essa garantia AGORA
+ *     mora no banco (`renovarComTravaDeBanco`, com o UPDATE condicional), não
+ *     num `Map` de processo: `app`, `worker` e `scheduler` são contêineres
+ *     separados e o mapa de um deles não atravessa os outros. A trava em
+ *     memória (`rotacoesEmCurso`) foi apagada na fiação da assinatura
+ *     (#1639, parte 2); reimportá-la agora erra no IMPORT, não em produção.
+ *     A cobertura com dois processos está em
+ *     `credenciais-login-codex-por-empresa.test.ts`.
  *  2. `refresh_token_revoked` NÃO tenta de novo: repetir é mandar de propósito
  *     um token sabidamente revogado — e o motivo vira decisão de queda pelas
- *     funções que já existem em `reserva-da-assinatura.ts` (reserva se houver,
- *     humano se não houver).
- *  3. Falha de rede NÃO marca revogada: ela pode acontecer uma vez e o passo
- *     seguinte pode tentar de novo.
+ *     funções que já existem em `reserva-da-assinatura.ts` (reserva se há,
+ *     humano se não há).
+ *  3. A janela de renovação continua sendo de 8 dias, e `expires_at` nulo
+ *     nunca decide sozinho: renovar sem precisar troca um token bom por nada.
  *
- * Sabotagem que confirma que a guarda vigia: remover a trava (o `if` que
- * devolve a promessa em curso) deixa o primeiro caso vermelho — previsão
- * escrita antes de rodar, no corpo do PR.
+ * Sabotagem que confirma a guarda: recolar `const rotacoesEmCurso = new Map()`
+ * em `lib/ai/pontos/renovacao-da-assinatura.ts` deixa o caso 1 vermelho —
+ * previsão escrita antes de rodar, no corpo do PR.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 
-import { ErroDeToken, type TokensDoCodex } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { describe, expect, it, vi } from "vitest";
+
 import {
-  comTravaDeRotacao,
-  esquecerEstadosDeRefresh,
+  JANELA_DE_RENOVACAO_MS,
   quedaPorTokenRevogado,
-  renovarComTrava,
+  renovacaoProxima,
+  renovarSeProxima,
 } from "@/lib/ai/pontos/renovacao-da-assinatura";
 
-const CHAVE = "login_codex";
+const FONTE_DA_RENOVACAO = path.join(process.cwd(), "lib/ai/pontos/renovacao-da-assinatura.ts");
+const FONTE_DO_LOGIN = path.join(process.cwd(), "lib/ai/credenciais/login-codex.ts");
+const renovacao = fs.readFileSync(FONTE_DA_RENOVACAO, "utf8");
+const login = fs.readFileSync(FONTE_DO_LOGIN, "utf8");
 
-function tokens(sufixo: string): TokensDoCodex {
-  return {
-    access_token: `access_${sufixo}`,
-    refresh_token: `refresh_${sufixo}`,
-    expires_at: Date.now() + 30 * 24 * 60 * 60 * 1000,
-  };
-}
-
-beforeEach(() => {
-  esquecerEstadosDeRefresh();
-});
-
-describe("dois refreshes concorrentes fazem UM só POST", () => {
-  it("as duas chamadas recebem o MESMO resultado, e o `renovar` roda uma vez", async () => {
-    let liberar: () => void = () => {};
-    const porta = new Promise<void>((resolver) => {
-      liberar = resolver;
-    });
-    const renovar = vi.fn(async () => {
-      await porta;
-      return tokens("novo");
-    });
-
-    const primeira = renovarComTrava({ chave: CHAVE, renovar });
-    const segunda = renovarComTrava({ chave: CHAVE, renovar });
-    liberar();
-
-    const [r1, r2] = await Promise.all([primeira, segunda]);
-    expect(renovar).toHaveBeenCalledTimes(1);
-    // `expires_at` é `Date.now()` no instante da chamada — compara-se a forma,
-    // não o instante (os dois resultados são o MESMO objeto, provado abaixo).
-    expect(r1).toMatchObject({
-      ok: true,
-      tokens: { access_token: "access_novo", refresh_token: "refresh_novo" },
-    });
-    expect(r2).toBe(r1);
+describe("a trava em memória não existe mais — ninguém a usa por engano", () => {
+  it("rotacoesEmCurso, comTravaDeRotacao, chavesRevogadas e renovarComTrava saíram do módulo", () => {
+    expect(renovacao, "a trava de processo voltou — ela não atravessa contêineres").not.toContain(
+      "rotacoesEmCurso",
+    );
+    expect(renovacao).not.toContain("comTravaDeRotacao");
+    expect(renovacao).not.toContain("chavesRevogadas");
+    expect(renovacao, "renovarComTrava prometia uma trava que não existe mais").not.toContain(
+      "renovarComTrava(",
+    );
   });
 
-  it("travas de chaves DIFERENTES rodam em paralelo — a trava é por chave", async () => {
-    let liberar: () => void = () => {};
-    const porta = new Promise<void>((resolver) => {
-      liberar = resolver;
-    });
-    const renovar = vi.fn(async () => {
-      await porta;
-      return tokens("paralelo");
-    });
-
-    const a = comTravaDeRotacao("chave_a", renovar);
-    const b = comTravaDeRotacao("chave_b", renovar);
-    liberar();
-    await Promise.all([a, b]);
-    expect(renovar).toHaveBeenCalledTimes(2);
-  });
-
-  it("depois de terminar, a chave fica livre — a próxima janela renova de novo", async () => {
-    const renovar = vi.fn(async () => tokens("primeira"));
-    await renovarComTrava({ chave: CHAVE, renovar });
-    await renovarComTrava({ chave: CHAVE, renovar });
-    expect(renovar).toHaveBeenCalledTimes(2);
+  it("quem renova usa a trava DO BANCO, que vale em todos os processos", () => {
+    expect(login, "a rotação simultânea precisa do UPDATE condicional").toContain(
+      "renovarComTravaDeBanco",
+    );
   });
 });
 
-describe("refresh_token_revoked não tenta de novo", () => {
-  it("a primeira recusa marca a chave; a segunda volta sem chamar a rede", async () => {
-    const renovar = vi.fn(async () => {
-      throw new ErroDeToken("refresh_token_revoked", 400, "refresh_token_revoked");
-    });
-
-    const primeira = await renovarComTrava({ chave: CHAVE, renovar });
-    expect(primeira).toEqual({ ok: false, motivo: "refresh_token_revoked" });
-    expect(renovar).toHaveBeenCalledTimes(1);
-
-    const segunda = await renovarComTrava({ chave: CHAVE, renovar });
-    expect(segunda).toEqual({ ok: false, motivo: "refresh_token_revoked" });
-    expect(renovar).toHaveBeenCalledTimes(1);
+describe("a janela de renovação continua sendo a mesma", () => {
+  it("8 dias — e a folga contada inteira ainda não é hora de renovar", () => {
+    expect(JANELA_DE_RENOVACAO_MS).toBe(8 * 24 * 60 * 60 * 1000);
+    const agora = 1_700_000_000_000;
+    expect(renovacaoProxima(agora + JANELA_DE_RENOVACAO_MS, agora)).toBe(true);
+    expect(renovacaoProxima(agora + JANELA_DE_RENOVACAO_MS + 1, agora)).toBe(false);
   });
 
-  it("o motivo revogado aciona a queda que já existe: reserva se há, humano se não há", () => {
+  it("`expires_at` nulo nunca decide sozinho", () => {
+    expect(renovacaoProxima(null)).toBe(false);
+  });
+
+  it("renovarSeProxima só chama o provedor quando a janela abriu", async () => {
+    const renovar = vi.fn(async () => ({ access_token: "x", refresh_token: "y", expires_at: null }));
+    expect(await renovarSeProxima({ expiraEm: null, renovar })).toBe(false);
+    expect(renovar).not.toHaveBeenCalled();
+
+    expect(await renovarSeProxima({ expiraEm: Date.now() + 60 * 60 * 1000, renovar })).toBe(true);
+    expect(renovar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("refresh_token_revoked vira decisão de queda — pelas funções que já existem", () => {
+  it("havendo reserva, a chamada cai na chave da empresa", () => {
     expect(quedaPorTokenRevogado(true)).toEqual({
       acao: "tentar_reserva",
       provedorDeReserva: "openai",
       motivo: "sem_autorizacao",
     });
+  });
+
+  it("sem reserva, a conversa passa para um humano — nunca fica calada", () => {
     expect(quedaPorTokenRevogado(false)).toEqual({
       acao: "passar_para_humano",
       motivo: "sem_autorizacao",
     });
-  });
-
-  it("cada chave tem a memória dela: revogar uma não revoga a outra", async () => {
-    const revogado = vi.fn(async () => {
-      throw new ErroDeToken("refresh_token_revoked", 400);
-    });
-    const outro = vi.fn(async () => tokens("outro"));
-
-    await renovarComTrava({ chave: "chave_revogada", renovar: revogado });
-    const resultado = await renovarComTrava({ chave: "chave_boa", renovar: outro });
-
-    expect(revogado).toHaveBeenCalledTimes(1);
-    expect(resultado.ok).toBe(true);
-    expect(outro).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("falha de rede NÃO marca revogada", () => {
-  it("a segunda tentativa chega à rede de novo", async () => {
-    const renovar = vi
-      .fn()
-      .mockRejectedValueOnce(new ErroDeToken("rede", null, "timeout"))
-      .mockResolvedValueOnce(tokens("depois"));
-
-    const primeira = await renovarComTrava({ chave: CHAVE, renovar });
-    expect(primeira).toEqual({ ok: false, motivo: "rede" });
-
-    const segunda = await renovarComTrava({ chave: CHAVE, renovar });
-    expect(segunda.ok).toBe(true);
-    expect(renovar).toHaveBeenCalledTimes(2);
-  });
-
-  it("erro desconhecido vira 'recusado' e também não trava a chave", async () => {
-    const renovar = vi.fn(async () => {
-      throw new Error("estranho");
-    });
-    await expect(renovarComTrava({ chave: CHAVE, renovar })).resolves.toEqual({
-      ok: false,
-      motivo: "recusado",
-    });
-    await renovarComTrava({ chave: CHAVE, renovar });
-    expect(renovar).toHaveBeenCalledTimes(2);
   });
 });

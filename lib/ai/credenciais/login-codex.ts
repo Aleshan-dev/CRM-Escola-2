@@ -32,7 +32,8 @@ import { byteaToBuffer, decryptKey } from "@/lib/crypto/aes_gcm";
 import { guardarCredencial, rotacionarCredencial } from "@/lib/ai/credenciais/guardar";
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
-import type { TokensDoCodex } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { renovacaoProxima, renovarSeProxima } from "@/lib/ai/pontos/renovacao-da-assinatura";
+import { renovarPorRefreshToken, type TokensDoCodex } from "@/lib/ai/pontos/pkce-da-assinatura";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -260,4 +261,63 @@ export async function renovarComTravaDeBanco(p: {
   if (!gravado.ok) return { ok: false, motivo: "falha" };
 
   return { ok: true, tokens: renovados };
+}
+
+/**
+ * LÊ o par da empresa e, quando a janela de renovação abriu, RENOVA antes de
+ * devolver — é este que o caminho do agente chama (#1639, parte 2).
+ *
+ * Duas decisões aqui, e só duas:
+ *
+ *  1. **`userId: null`.** Ninguém pediu esta renovação: é o relógio batendo na
+ *     janela de 8 dias, dentro de uma chamada de conversa. A auditoria grava
+ *     `null` de propósito, e não um usuário qualquer — quem nunca pediu nada não
+ *     pode aparecer como quem pediu. O caminho MANUAL (botão "revalidar" em
+ *     `revalidate/route.ts`) continua levando o `userId` de quem clicou.
+ *  2. **Falha de renovação não derruba a leitura.** O token atual ainda pode
+ *     valer; se estiver vencido, a chamada cai na reserva pela política que já
+ *     existe (`decidirQuedaDoProvedor`). Derrubar o turno aqui seria trocar um
+ *     problema de manutenção por um cliente sem resposta.
+ *
+ * A trava contra renovação simultânea é a DO BANCO (`renovarComTravaDeBanco`),
+ * por uma razão de topologia: `app`, `worker` e `scheduler` são contêineres
+ * separados, e um `Map` de processo não os atravessa.
+ */
+export async function lerLoginCodexRenovandoSeProxima(p: {
+  admin: Admin;
+  orgId: string;
+  /** Só para teste: o relógio da janela de renovação. */
+  agora?: number;
+}): Promise<TokensDoCodex | null> {
+  const tokens = await lerLoginCodex(p);
+  if (tokens === null) return null;
+  if (!renovacaoProxima(tokens.expires_at, p.agora)) return tokens;
+
+  const linha = await linhaDoLogin(p.admin, p.orgId);
+  if (linha === null) return tokens;
+
+  let renovados: TokensDoCodex | null = null;
+  try {
+    await renovarSeProxima({
+      expiraEm: tokens.expires_at,
+      ...(p.agora === undefined ? {} : { agora: p.agora }),
+      renovar: async () => {
+        const r = await renovarComTravaDeBanco({
+          admin: p.admin,
+          orgId: p.orgId,
+          credentialId: linha.id,
+          userId: null,
+          renovar: (atuais) => renovarPorRefreshToken({ refreshToken: atuais.refresh_token }),
+        });
+        if (!r.ok) throw new Error(`renovacao_automática_recusada: ${r.motivo}`);
+        renovados = r.tokens;
+        return r.tokens;
+      },
+    });
+  } catch {
+    // Renovação recusada, em curso noutro processo ou módulo desligado no meio
+    // do caminho. O token que já temos segue em uso; a queda, se for o caso,
+    // acontece na política da reserva e não aqui.
+  }
+  return renovados ?? tokens;
 }
