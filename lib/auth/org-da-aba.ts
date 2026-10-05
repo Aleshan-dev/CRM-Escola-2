@@ -26,13 +26,14 @@
  *   actions que ainda não recebem o parâmetro é cobertura declarada, não
  *   inventada aqui.
  */
+import { ApiErrorCodes } from "@/lib/api/errors";
 import type { Idioma } from "@/lib/i18n/idiomas";
 
 /** Header enviado pelo `apiClient` em toda mutação. */
 export const HEADER_ORG_DA_ABA = "X-Org-Da-Aba";
 
 /** Código próprio da recusa — a tela o traduz no MESMO aviso da metade 1. */
-export const CODIGO_ORG_DIVERGENTE = "org_divergente";
+export const CODIGO_ORG_DIVERGENTE = ApiErrorCodes.org_divergente;
 
 /** Id do toast: leitura e escrita compartilham uma janela só na tela. */
 export const ID_DO_AVISO_ORG_DIVERGENTE = "org-divergente";

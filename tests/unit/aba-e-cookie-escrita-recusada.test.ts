@@ -190,3 +190,47 @@ describe("requireRole — o gate único recusa a divergência", () => {
     expect(res.ok).toBe(true);
   });
 });
+
+describe("requireRole — o header só RECUSA, nunca escolhe a organização", () => {
+  function rpcEspiao() {
+    const rpc = vi.fn(async () => ({ data: "admin", error: null }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(createClient).mockResolvedValue({ rpc } as any);
+    return rpc;
+  }
+
+  it("header com organização da qual a pessoa NÃO é membro → 409, papel nunca resolvido", async () => {
+    const rpc = rpcEspiao();
+    requisicao({ cookie: ORG_DO_COOKIE, aba: "org-alheia" });
+
+    const res = await requireRole("viewer");
+
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.response.status).toBe(409);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("membro das duas, header numa e cookie na outra → 409, e o papel nunca é lido na org do header", async () => {
+    const rpc = rpcEspiao();
+    requisicao({ cookie: ORG_DO_COOKIE, aba: ORG_DA_ABA });
+
+    const res = await requireRole("viewer");
+
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.response.status).toBe(409);
+    expect(rpc).not.toHaveBeenCalledWith("fn_user_role_in_org", { p_org: ORG_DA_ABA });
+  });
+
+  it("headers() lançando (fora de requisição) não recusa nada", async () => {
+    requisicao({ cookie: ORG_DO_COOKIE });
+    vi.mocked(headers).mockRejectedValue(new Error("fora de requisição"));
+
+    const res = await requireRole("viewer");
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("unreachable");
+    expect(res.org.orgId).toBe(ORG_DO_COOKIE);
+  });
+});
