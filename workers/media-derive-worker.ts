@@ -56,7 +56,7 @@ interface MessageRow {
   media_derived_status: string | null;
   /**
    * Onde o motivo do `failed` mora: sem ele o operador vê o estado sem a causa.
-   * É também o marcador da retenção (migration 0526, #1534): `media_status='expired'`
+   * É também o marcador da retenção (migration 0557, #1534): `media_status='expired'`
    * separa "arquivo que ainda vai chegar" de "arquivo que a política já retirou".
    */
   metadata: Record<string, unknown> | null;
@@ -105,7 +105,7 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     return { consumer_key, status: "skipped", detail };
   };
 
-  // A retenção já retirou esta mídia (migration 0526, #1534): não há o que
+  // A retenção já retirou esta mídia (migration 0557, #1534): não há o que
   // derivar e, principalmente, nada a baixar do provedor — o `media_storage_path`
   // foi anulado junto, mas o DETALHE tem de dizer o motivo real, senão o turno
   // seguinte esperaria 120s por uma leitura que a política proibiu.
