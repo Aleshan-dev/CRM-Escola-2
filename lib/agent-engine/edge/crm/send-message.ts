@@ -1,4 +1,3 @@
-import { assertAgentOperationPg } from '@/lib/ai/agents/operation';
 import type { AgentOperationContext } from '@/lib/ai/agents/operation';
 import { assertApprovedReplyPg, type ApprovedReplyContext } from '@/lib/ai/replies/delivery';
 import { assertMeetingDeliveryPg, type MeetingDeliveryContext } from '@/lib/agenda/meet-delivery';
@@ -111,7 +110,6 @@ export async function sendTurnMessage(
   cfg: CrmEdgeConfig,
   input: SendMessageInput,
 ): Promise<SendOutcome> {
-  if (input.agentOperation) await assertAgentOperationPg(db, input.agentOperation);
   const { rows: sourceJobs } = await db.query<{ kind: string; payload: Record<string, unknown> }>(
     'select payload,kind from job_queue where id=$1 and organization_id=$2 and contact_id=$3',
     [input.jobId, input.tenantId, input.leadId],
