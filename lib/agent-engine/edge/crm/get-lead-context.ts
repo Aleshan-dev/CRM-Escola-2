@@ -112,6 +112,14 @@ export interface LeadContext {
     tags: string[];
     /** contacts.is_blocked lido NESTE turno (fonte da verdade do gate 1). */
     is_blocked: boolean;
+    /**
+     * Spec 21: `contacts.is_personal` lido NESTE turno, ao lado do bloqueio.
+     *
+     * OPCIONAL no tipo pelo mesmo motivo de `contact_id`: exigir obrigaria a
+     * editar fixtures em `tests/invariants/**`, que é congelado. A produção
+     * sempre preenche; quem constrói contexto à mão num teste não precisa.
+     */
+    is_personal?: boolean;
   };
   conversation_id: string | null;
   previous_service?: { label: string; outcomes: string[] };
@@ -335,6 +343,7 @@ export async function getLeadContext(
         email: contact.email,
         tags: contact.tags ?? [],
         is_blocked: contact.is_blocked,
+        is_personal: contact.is_personal,
       },
       conversation_id: conversationId,
       last_human_decision: lastHumanDecision,
