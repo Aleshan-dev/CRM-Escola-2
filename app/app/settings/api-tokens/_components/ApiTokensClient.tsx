@@ -55,6 +55,11 @@ const SCOPES: { id: string; label: string }[] = [
   // Sem esta linha o escopo existia na rota e ninguém conseguia concedê-lo:
   // todo Bearer de configuração fechava em 403 `forbidden_role`.
   { id: "role:admin", label: "Tratar o token como administrador (necessário p/ configurar o CRM)" },
+  // #2052 / PR #2194: configurar o agente é escopo PRÓPRIO, nunca `mcp:*`. Um
+  // token já emitido não ganha este poder na atualização: só quem cria um token
+  // novo marcando esta caixa. O rótulo diz o poder inteiro de propósito.
+  { id: "config:read", label: "Ler a configuração do agente de IA (exige papel de administrador)" },
+  { id: "config:write", label: "Editar, testar, PUBLICAR e PAUSAR o agente de IA que atende seus clientes (exige papel de administrador)" },
   { id: "contacts:read", label: "Ler contatos" },
   { id: "contacts:write", label: "Criar e editar contatos" },
   { id: "leads:read", label: "Ler leads" },

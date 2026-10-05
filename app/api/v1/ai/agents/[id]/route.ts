@@ -45,7 +45,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     requestId,
     resource: "ai_agents",
     role: "manager",
-    scope: "mcp:read",
+    scope: "config:read",
     tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
@@ -88,12 +88,12 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     requestId,
     resource: "ai_agents",
     role: "admin",
-    scope: "mcp:write",
+    scope: "config:write",
     tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
   const t = (texto: string) => traduzir(texto, authz.idioma ?? "pt-BR");
-  const { organizationId } = authz;
+  const { organizationId, actor } = authz;
 
   const teto = await tetoDeEscritaDoToken(authz, "ai_agents", requestId);
   if (teto) return teto;
@@ -241,7 +241,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
     requestId,
     resource: "ai_agents",
     role: "admin",
-    scope: "mcp:write",
+    scope: "config:write",
     tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;

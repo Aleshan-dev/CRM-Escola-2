@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     requestId,
     resource: "ai_agents",
     role: "admin",
-    scope: "mcp:write",
+    scope: "config:write",
     tokenRole: "admin",
   });
   if (!authz.ok) return authz.response;
