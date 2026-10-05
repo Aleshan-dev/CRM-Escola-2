@@ -98,6 +98,7 @@ describe("ConversationHeader — chamada de voz na Inbox", () => {
       phone_number: "+5511999999999",
       tags: [],
       is_blocked: false,
+      is_personal: false,
       is_anonymized: false,
     };
     render(<ConversationHeader conversation={atual} />);
@@ -116,6 +117,7 @@ describe("ConversationHeader — chamada de voz na Inbox", () => {
       phone_number: "+5511999999999",
       tags: [],
       is_blocked: false,
+      is_personal: false,
       is_anonymized: false,
     };
     render(<ConversationHeader conversation={atual} />);
