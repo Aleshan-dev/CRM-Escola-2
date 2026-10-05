@@ -272,15 +272,25 @@ export async function listMessagesHandler(
   // Pessoal não é alcançável nem pelo histórico (spec 21, etapa 7): a conversa
   // sumiu da lista e o link direto dá 404, então o histórico recusa junto —
   // defesa em profundidade, com o mesmo 404 mudo para não revelar a conversa.
-  const { data: dona } = await supabase
+  // Duas consultas planas (sem embed, sem `maybeSingle`): o dublê do invariante
+  // de paginação traduz a cadeia em SQL literal e só modela esses métodos.
+  const { data: donas } = await supabase
     .from("conversations")
-    .select("contact_id, contacts:contact_id(is_personal)")
+    .select("contact_id")
     .eq("id", conversationId)
     .eq("organization_id", ctx.organization_id)
-    .maybeSingle();
-  const ehPessoal =
-    (dona as unknown as { contacts?: { is_personal?: boolean } | null } | null)?.contacts
-      ?.is_personal === true;
+    .limit(1);
+  const contatoId = ((donas ?? []) as Array<{ contact_id?: string | null }>)[0]?.contact_id ?? null;
+  let ehPessoal = false;
+  if (contatoId) {
+    const { data: contato } = await supabase
+      .from("contacts")
+      .select("is_personal")
+      .eq("id", contatoId)
+      .eq("organization_id", ctx.organization_id)
+      .limit(1);
+    ehPessoal = ((contato ?? []) as Array<{ is_personal?: boolean }>)[0]?.is_personal === true;
+  }
   if (ehPessoal) {
     throw new ApiError(
       404,

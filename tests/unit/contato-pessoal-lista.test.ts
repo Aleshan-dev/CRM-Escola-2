@@ -68,13 +68,35 @@ describe("contagem cai junto com a lista (critério 3)", () => {
 describe("link direto e histórico recusam (defesa em profundidade)", () => {
   interface EloLeitura {
     eq(coluna: string, valor: unknown): EloLeitura;
+    limit(n: number): EloLeitura;
     maybeSingle(): Promise<{ data: unknown; error: null }>;
   }
   function banco(conversa: unknown) {
     const q: EloLeitura = {
       eq: () => q,
+      limit: () => q,
       async maybeSingle() {
         return { data: conversa, error: null };
+      },
+    };
+    return { from: () => ({ select: () => q }) } as never;
+  }
+  // O histórico lê em DUAS consultas planas (sem embed, sem `maybeSingle` —
+  // o dublê do invariante de paginação traduz a cadeia em SQL literal):
+  // conversa → `contact_id`, contato → `is_personal`.
+  function bancoHistorico(pessoal: boolean) {
+    const q: EloLeitura & {
+      then(ok: (v: { data: unknown[]; error: null }) => unknown): unknown;
+    } = {
+      eq: () => q,
+      limit: () => q,
+      async maybeSingle() {
+        return { data: null, error: null };
+      },
+      then(ok) {
+        return Promise.resolve(
+          ok({ data: [{ contact_id: "ct-1", is_personal: pessoal }], error: null }),
+        );
       },
     };
     return { from: () => ({ select: () => q }) } as never;
@@ -113,14 +135,16 @@ describe("link direto e histórico recusam (defesa em profundidade)", () => {
   });
 
   it("histórico da conversa pessoal é recusado com o mesmo 404", async () => {
-    const err = await listMessagesHandler(banco(conversaPessoal), ctx, "conversa-1", {
+    const err = await listMessagesHandler(bancoHistorico(true), ctx, "conversa-1", {
       limit: 50,
     } as never).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(404);
   });
 
-  it("o corte do histórico está no fonte (antes de qualquer leitura)", () => {
-    expect(HISTORICO).toMatch(/contacts:contact_id\(is_personal\)/);
+  it("o corte do histórico está no fonte (duas consultas planas, antes de tudo)", () => {
+    expect(HISTORICO).toMatch(/\.select\("contact_id"\)/);
+    expect(HISTORICO).toMatch(/\.select\("is_personal"\)/);
   });
 });
