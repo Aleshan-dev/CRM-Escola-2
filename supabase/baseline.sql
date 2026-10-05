@@ -46788,3 +46788,29 @@ comment on column public.ai_router_members.pipeline_id is
   'Funil de DESTINO quando esta intenção casa (#2155). NULL = só roteia o agente, como antes.';
 comment on column public.ai_router_members.stage_id is
   'Etapa de destino dentro de pipeline_id (#2155). NULL = a primeira etapa aberta do funil.';
+
+-- ---- 0544: contato pessoal — a coluna e a saída de campanha (spec 21, fatia 1) ----
+-- Espelho idempotente da migration 0544 (é este apêndice que a instalação fresca
+-- aplica; quem atualiza recebe a migration). `is_personal` nasce desligado:
+-- contato novo é operacional até alguém marcar. O status `personal` é saída
+-- própria de campanha — nunca `opted_out`, para não inflar "pediu para parar".
+alter table public.contacts
+  add column if not exists is_personal boolean default false not null;
+
+comment on column public.contacts.is_personal is
+  'Contato de vida pessoal (spec 21): escondido da operação e inutilizado para envio. Só gerente/dono marca e desmarca, pela rota personal; quem/quando fica em auditoria + timeline, nunca aqui.';
+
+create index if not exists idx_contacts_org_personal
+  on public.contacts (organization_id)
+  where (is_personal = true);
+
+alter table public.campaign_recipients
+  drop constraint if exists campaign_recipients_status_check;
+
+alter table public.campaign_recipients
+  add constraint campaign_recipients_status_check check (status in (
+    'pending','queued','sending','sent','delivered','read','replied',
+    'failed','skipped','cancelled','opted_out','personal'
+  ));
+
+notify pgrst, 'reload schema';
