@@ -8856,5 +8856,13 @@
   "Remover do atendimento?": "Remove from support?",
   "As mensagens param de chegar e a conta sai do provedor. Para usar de novo, será preciso autorizar a conta outra vez. As conversas já recebidas continuam no CRM.": "Messages stop arriving and the account is removed from the provider. To use it again, you will need to authorize the account again. Conversations already received stay in the CRM.",
   "As mensagens desta conta param de chegar no atendimento. A conta continua vinculada e pode voltar a receber depois. As conversas já recebidas continuam no CRM.": "Messages from this account stop arriving in support. The account stays linked and can receive again later. Conversations already received stay in the CRM.",
-  "Conta removida do atendimento.": "Account removed from support."
+  "Conta removida do atendimento.": "Account removed from support.",
+  "Telefone do cliente": "Customer phone",
+  "E-mail do cliente": "Customer email",
+  "Informe o nome da coluna.": "Enter the column name.",
+  "Cliente nas conversas": "Customer in conversations",
+  "O que identifica o cliente": "What identifies the customer",
+  "Na conversa com um cliente, o assistente só lê as linhas em que esta coluna é igual ao telefone ou ao e-mail de quem está falando. Sem isso, ele não consulta este banco nas conversas.": "In a conversation with a customer, the assistant only reads the rows where this column matches the phone or email of the person talking. Without it, the assistant does not query this database in conversations.",
+  "O telefone precisa estar gravado só com números, com ou sem o código do país (5511999998888 ou 11999998888).": "The phone must be stored as digits only, with or without the country code (5511999998888 or 11999998888).",
+  "Nas conversas, o assistente não consulta este banco até você escolher, em Editar, a coluna que identifica o cliente.": "In conversations, the assistant does not query this database until you choose, in Edit, the column that identifies the customer."
 }
