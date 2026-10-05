@@ -15,6 +15,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+// O PATCH autentica por `resolveAuthDual`; o ramo sessão (sem Bearer) chama
+// `requireRole` — mockado acima — e abre o client de cookie, que fora de um
+// request do Next lança. Nenhum escritor testado aqui lê por ele.
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({})) }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/ai/agents/first-publication", () => ({
