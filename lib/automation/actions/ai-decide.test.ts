@@ -22,6 +22,13 @@ vi.mock("@/lib/agent-engine/agent/decisao-de-acao", () => ({ decidirAcao: vi.fn(
 // A falha vira `failed` ⇒ o motor audita. Sem o mock o audit escapa para o
 // banco de verdade (e para fora da suíte) no único caso em que ele roda.
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
+// A ação-alvo `create_or_move_lead` de verdade, com o handler de mover no lugar
+// do banco: o que a trava de laço precisa ver é o `requestId` que ele recebe.
+vi.mock("@/app/api/v1/leads/_handler", () => ({
+  moveLeadHandler: vi.fn(async (_sb: unknown, _ctx: unknown, id: string) => ({ id })),
+  createLeadHandler: vi.fn(),
+}));
+vi.mock("@/lib/atendimento/origem-automacao", () => ({ originFromAutomationEvent: vi.fn(async () => null) }));
 
 import { runAutomationForEvent } from "@/lib/automation/engine";
 import { getAction } from "@/lib/automation/actions";
@@ -30,10 +37,15 @@ import { decidirAcao } from "@/lib/agent-engine/agent/decisao-de-acao";
 import { createAutomationRuleSchema } from "@/lib/schemas/webhooks";
 import type { EventRow } from "@/lib/event-log/dispatcher";
 
+import { moveLeadHandler } from "@/app/api/v1/leads/_handler";
+import type { HandlerCtx } from "@/lib/api/handlers/types";
+
 import "@/lib/automation/actions/add-tag";
 import "@/lib/automation/actions/ai-decide";
+import "@/lib/automation/actions/create-or-move-lead";
 
 const decidir = vi.mocked(decidirAcao);
+const mover = vi.mocked(moveLeadHandler);
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const REGRA = "22222222-2222-4222-8222-222222222222";
@@ -172,6 +184,7 @@ const LEAD_HIDRATADO = { id: LEAD, contact_id: null, tags: [] as string[] };
 
 beforeEach(() => {
   decidir.mockReset();
+  mover.mockClear();
 });
 
 describe("schema: ai_decide é opcional e declarado", () => {
@@ -358,6 +371,69 @@ describe("motor: runAutomationForEvent", () => {
     expect(fake.updates.filter((u) => u.table === "crm_leads"), "a ação-alvo não pode ter rodado").toEqual([]);
     expect(fake.rpcs).toEqual([]);
   });
+});
+
+describe("trava contra laço infinito pelo passo novo (#1528)", () => {
+  const FUNIL = "44444444-4444-4444-8444-444444444444";
+  const ETAPA = "55555555-5555-4555-8555-555555555555";
+  /** A IA pode escolher MOVER o negócio — a opção que fecharia o laço. */
+  const AI_DECIDE_MOVE = {
+    type: "ai_decide",
+    config: {
+      custo_de_token: true,
+      instrucao: "Se quer parcelar, leva para Negociação; senão, etiqueta.",
+      opcoes: [
+        { id: "mover", rotulo: "Levar para Negociação", acao: { type: "create_or_move_lead", config: { pipeline_id: FUNIL, stage_id: ETAPA } } },
+        { id: "etiquetar", rotulo: "Etiquetar", acao: { type: "add_tag", config: { tags: ["esperando"] } } },
+      ],
+    },
+  };
+  const LEAD_NO_FUNIL = { id: LEAD, contact_id: null, pipeline_id: FUNIL, stage_id: "outra", tags: [] as string[] };
+  const eventoDeLead = (eventType: string, metadata: Record<string, unknown> = {}): EventRow => ({
+    ...evento(),
+    event_type: eventType,
+    metadata,
+  });
+
+  it("negócio movido → a IA move: o movimento volta marcado e o motor NÃO roda a regra de novo", async () => {
+    decidir.mockResolvedValue({ ok: true, escolha: "mover" });
+    const regras = [{ id: REGRA, name: "Regra de teste", conditions: [], actions: [AI_DECIDE_MOVE] }];
+
+    const primeira = adminFake({ rules: regras, lead: LEAD_NO_FUNIL });
+    await runAutomationForEvent(primeira.admin, eventoDeLead("lead.stage_changed"));
+
+    expect(mover, "a ação-alvo escolhida tem que ter movido o negócio").toHaveBeenCalledTimes(1);
+    const requestId = (mover.mock.calls[0]![1] as HandlerCtx).requestId;
+    expect(requestId).toBe(`rule:${REGRA}`);
+
+    // O `lead.stage_changed` que o mover emite carrega esse request_id em
+    // `metadata` (app/api/v1/leads/_handler.ts). Ele volta ao motor:
+    const segunda = adminFake({ rules: regras, lead: LEAD_NO_FUNIL });
+    const volta = await runAutomationForEvent(segunda.admin, eventoDeLead("lead.stage_changed", { request_id: requestId }));
+
+    expect(volta).toMatchObject({ status: "skipped", detail: "caused_by_rule" });
+    expect(decidir, "a volta não pode perguntar à IA de novo").toHaveBeenCalledTimes(1);
+    expect(mover, "a volta não pode mover de novo").toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["lead.won", "lead.lost", "lead.reopened", "lead.assigned"])(
+    "gatilho %s (nasce do trigger, sem marca): mover dentro de uma opção é recusado na porta e no motor",
+    async (gatilho) => {
+      expect(createAutomationRuleSchema.safeParse(regra([AI_DECIDE_MOVE], gatilho)).success, "a porta").toBe(false);
+
+      const fake = adminFake({ rules: [{ id: REGRA, name: "Regra de teste", conditions: [], actions: [AI_DECIDE_MOVE] }], lead: LEAD_NO_FUNIL });
+      await runAutomationForEvent(fake.admin, eventoDeLead(gatilho));
+
+      const run = fake.inserts.find((i) => i.table === "automation_rule_runs");
+      expect((run!.data.actions_result as Array<Record<string, unknown>>)[0]).toMatchObject({
+        type: "ai_decide",
+        status: "skipped",
+        error: "acao_fecharia_laco",
+      });
+      expect(decidir, "nem pergunta à IA").not.toHaveBeenCalled();
+      expect(mover).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("pré-checagem do motor (postponeUntil)", () => {
