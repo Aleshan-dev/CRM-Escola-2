@@ -41,7 +41,7 @@ const camposDeConexao = {
   /**
    * A coluna que identifica o cliente e o dado do contato que ela guarda. Os
    * dois juntos ou nenhum (o CHECK do banco diz o mesmo): sem eles, a consulta
-   * do agente durante a conversa é recusada.
+   * do agente durante a conversa segue sem o filtro do cliente.
    */
   customer_key_column: z.string().trim().min(1).max(128).nullable(),
   customer_key_kind: z.enum(TIPOS_DE_IDENTIFICADOR).nullable(),

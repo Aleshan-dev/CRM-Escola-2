@@ -47299,11 +47299,12 @@ alter table public.external_db_connections
   add constraint external_db_connections_customer_key_par
     check (
       (customer_key_column is null and customer_key_kind is null)
-      or (customer_key_kind is not null and length(btrim(customer_key_column)) between 1 and 128)
+      or (customer_key_column is not null and customer_key_kind is not null
+          and length(btrim(customer_key_column)) between 1 and 128)
     );
 
 comment on column public.external_db_connections.customer_key_column is
-  'Coluna das tabelas externas que guarda o telefone ou o e-mail do cliente. Na conversa, a consulta do agente é filtrada por ela com o dado do contato do turno. NULL = não configurada: a consulta na conversa é recusada.';
+  'Coluna das tabelas externas que guarda o telefone ou o e-mail do cliente. Na conversa, a consulta do agente é filtrada por ela com o dado do contato do turno. NULL = não configurada: a consulta segue sem esse filtro, e a tela avisa.';
 comment on column public.external_db_connections.customer_key_kind is
   'O que customer_key_column guarda: phone (contacts.phone_number) ou email (contacts.email). Anda junto com customer_key_column.';
 

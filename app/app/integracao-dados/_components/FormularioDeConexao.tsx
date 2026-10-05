@@ -333,7 +333,7 @@ export function FormularioDeConexao({ open, onOpenChange, conexao }: Props) {
             <legend className="px-1 text-sm font-medium">{t("Cliente nas conversas")}</legend>
             <p className="text-xs text-muted-foreground">
               {t(
-                "Na conversa com um cliente, o assistente só lê as linhas em que esta coluna é igual ao telefone ou ao e-mail de quem está falando. Sem isso, ele não consulta este banco nas conversas.",
+                "Na conversa com um cliente, o assistente só lê as linhas em que esta coluna é igual ao telefone ou ao e-mail de quem está falando. Sem isso, ele consulta este banco nas conversas sem limitar ao cliente.",
               )}
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -369,7 +369,7 @@ export function FormularioDeConexao({ open, onOpenChange, conexao }: Props) {
             </div>
             {identificador === "phone" && (
               <p className="text-[11px] text-muted-foreground">
-                {t("O telefone precisa estar gravado só com números, com ou sem o código do país (5511999998888 ou 11999998888).")}
+                {t("O telefone precisa estar gravado só com números, com ou sem o código do país ou o sinal + (5511999998888, 11999998888 ou +5511999998888).")}
               </p>
             )}
           </fieldset>

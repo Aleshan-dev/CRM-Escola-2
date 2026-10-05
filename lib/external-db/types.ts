@@ -37,7 +37,7 @@ export interface ConexaoExterna {
   /**
    * Qual coluna das tabelas externas guarda o telefone ou o e-mail do cliente.
    * Durante a conversa, a consulta do agente é filtrada por ela com o dado do
-   * contato do turno; `null` = não configurada, e a consulta na conversa é recusada.
+   * contato do turno; `null` = não configurada, e a consulta segue sem esse filtro.
    */
   chaveDoCliente: ChaveDoCliente | null;
   versao: string;

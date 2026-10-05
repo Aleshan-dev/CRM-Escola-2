@@ -115,10 +115,12 @@ resposta ensina o modelo a repetir com um trecho menor do termo.
 **Dados externos › Editar › Cliente nas conversas**. Com `ctx.contatoDoTurno`, a
 `crm_query_external_data` lê o telefone/e-mail do contato no CRM (organização +
 id do turno) e acrescenta `coluna in (...)` aos filtros do modelo — parametrizado,
-somado com `and`, sem o modelo escolher o valor. Sem a coluna configurada, sem o
-dado no cadastro ou com a tabela sem a coluna, a consulta na conversa é recusada
-(`cliente_nao_identificavel`, `cliente_sem_identificador`,
-`tabela_sem_identificador_do_cliente`). Fora do turno, nada muda. Prova:
+somado com `and`, sem o modelo escolher o valor. Com a coluna configurada, a
+consulta na conversa é recusada quando o contato não tem o dado no cadastro
+(`cliente_sem_identificador`) ou a tabela não tem a coluna
+(`tabela_sem_identificador_do_cliente`). Sem a coluna configurada, a consulta
+segue como antes (versão menor, decisão do mantenedor), e a lista de **Dados
+externos** avisa em destaque até a coluna ser escolhida. Fora do turno, nada muda. Prova:
 `lib/mcp/tools/dados-externos.test.ts`.
 
 ## Segurança

@@ -161,7 +161,7 @@ export function ListaDeConexoes({ initialData, canWrite }: Props) {
               {!conexao.customer_key_column && (
                 <p className="text-xs text-amber-700 dark:text-amber-400">
                   {t(
-                    "Nas conversas, o assistente não consulta este banco até você escolher, em Editar, a coluna que identifica o cliente.",
+                    "Nas conversas, o assistente consulta este banco sem limitar ao cliente que está falando. Escolha, em Editar, a coluna que identifica o cliente.",
                   )}
                 </p>
               )}

@@ -329,12 +329,13 @@ describe("crm_query_external_data durante a conversa: só as linhas do cliente",
     vi.mocked(lerTabela).mockResolvedValue({ colunas: ["id"], linhas: [], limite: 20, offset: 0 });
   });
 
-  it("conexão sem a coluna configurada: recusa e não lê nada", async () => {
-    const { ctx } = ctxDoTurno({ phone_number: "+5511999998888", email: null });
+  it("conexão sem a coluna configurada: a consulta segue como antes, sem filtro do cliente", async () => {
+    const { ctx, eq } = ctxDoTurno({ phone_number: "+5511999998888", email: null });
     const r = (await crmQueryExternalData.handler(PEDIDO, ctx)) as Record<string, unknown>;
-    expect(r.erro).toBe("cliente_nao_identificavel");
-    expect(String(r.mensagem)).toContain("Dados externos > Editar");
-    expect(lerTabela).not.toHaveBeenCalled();
+    expect(r.erro).toBeUndefined();
+    expect(vi.mocked(lerTabela).mock.calls[0]![1].filtros).toEqual([]);
+    // Sem coluna, o contato nem é lido.
+    expect(eq).not.toContainEqual(["id", "contato-1"]);
   });
 
   it("com a coluna configurada, o filtro do cliente entra junto com o do modelo", async () => {
