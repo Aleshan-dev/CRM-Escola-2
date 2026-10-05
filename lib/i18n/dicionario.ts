@@ -6295,8 +6295,8 @@ export const DICIONARIO: Traducoes = {
   "Tratar o token como gerente (necessário p/ criar e atribuir)": {
     es: "Tratar el token como gerente (necesario para crear y asignar)",
   },
-  "Tratar o token como administrador (necessário p/ configurar o CRM)": {
-    es: "Tratar el token como administrador (necesario para configurar el CRM)",
+  "Tratar o token como administrador: as permissões marcadas agem com poder de administrador (junto de AGIR no CRM, cria agentes de IA e rascunhos)": {
+    es: "Tratar el token como administrador: los permisos marcados actúan con poder de administrador (junto con ACTUAR en el CRM, crea agentes de IA y borradores)",
   },
   "Ler a configuração do agente de IA (exige papel de administrador)": {
     es: "Leer la configuración del agente de IA (requiere rol de administrador)",
