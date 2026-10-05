@@ -37,6 +37,62 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // Roteador do Jev sob demanda e resultados.
+  "Como o roteador consulta as IAs": { es: "Cómo consulta el enrutador a las IA" },
+  "Modo do roteador salvo.": { es: "Se guardó el modo del enrutador." },
+  "Comparar o Jev e a IA de sempre": { es: "Comparar a Jev y la IA de siempre" },
+  "Jev; IA de sempre só como reserva": { es: "Jev; IA de siempre solo como respaldo" },
+  "A IA de sempre só é chamada se o Jev falhar ou estiver inseguro.": { es: "La IA de siempre solo se consulta si Jev falla o tiene baja confianza." },
+  "As duas IAs respondem; a escolha do Jev decide.": { es: "Ambas IA responden; la elección de Jev decide." },
+  "Ver resultados do roteamento": { es: "Ver resultados del enrutamiento" },
+  "Mensagens anteriores para o roteamento": { es: "Mensajes anteriores para el enrutamiento" },
+  "Além da mensagem atual; inclui cliente e atendente.": { es: "Además del mensaje actual; incluye al cliente y al agente de atención." },
+  "Vale para a sua IA de sempre, que classifica com estas mensagens anteriores. O Jev recebe só a mensagem atual. Mais mensagens podem aumentar custo e demora.": { es: "Vale para tu IA de siempre, que clasifica con estos mensajes anteriores. Jev recibe solo el mensaje actual. Más mensajes pueden aumentar el costo y la demora." },
+  "Roteamento": { es: "Enrutamiento" },
+  "IA de sempre decide; Jev observa": { es: "La IA de siempre decide; Jev observa" },
+  "Jev decide; comparação ativa": { es: "Jev decide; comparación activa" },
+  "Jev; reserva sob demanda": { es: "Jev; respaldo bajo demanda" },
+  "Jev não respondeu": { es: "Jev no respondió" },
+  "Confiança abaixo do mínimo": { es: "Confianza inferior al mínimo" },
+  "Nenhuma intenção identificada": { es: "No se identificó ninguna intención" },
+  "Intenção fora do roteador": { es: "Intención fuera del enrutador" },
+  "Não foi possível carregar o roteamento.": { es: "No se pudo cargar el enrutamiento." },
+  "Não foi possível salvar a revisão.": { es: "No se pudo guardar la revisión." },
+  "Sem pares": { es: "Sin pares" },
+  "Resultados do roteamento": { es: "Resultados del enrutamiento" },
+  "Compare os modos e revise decisões reais. Concordância entre IAs não é prova de acerto.": { es: "Compare los modos y revise decisiones reales. El acuerdo entre IA no demuestra que la decisión sea correcta." },
+  "Roteador": { es: "Enrutador" },
+  "Modelo do Jev": { es: "Modelo de Jev" },
+  "Mensagens anteriores": { es: "Mensajes anteriores" },
+  "Decisões examinadas": { es: "Decisiones examinadas" },
+  "Até 500 casos recentes pelos filtros.": { es: "Hasta 500 casos recientes según los filtros." },
+  "Jev sem reserva": { es: "Jev sin respaldo" },
+  "Reserva acionada": { es: "Respaldo activado" },
+  "Custo conhecido": { es: "Costo conocido" },
+  "casos sem preço completo": { es: "casos sin precio completo" },
+  "Jev e reserva incluídos": { es: "Jev y respaldo incluidos" },
+  "Tempo total do roteamento": { es: "Tiempo total del enrutamiento" },
+  "Concordância de destino": { es: "Acuerdo sobre el destino" },
+  "de intenção": { es: "de intención" },
+  "Acerto revisado por pessoa": { es: "Aciertos revisados por una persona" },
+  "A concordância usa apenas os modos comparativos. Reservas sob demanda não formam amostra geral de comparação.": { es: "El acuerdo se calcula solo en los modos de comparación. Los respaldos bajo demanda no forman una muestra general de comparación." },
+  "Motivos da reserva": { es: "Motivos del respaldo" },
+  "Escolha final": { es: "Elección final" },
+  "Sem intenção": { es: "Sin intención" },
+  "Reserva da IA de sempre": { es: "Respaldo de la IA de siempre" },
+  "IA de sempre": { es: "IA de siempre" },
+  "Intenção do Jev": { es: "Intención de Jev" },
+  "Intenção da IA de sempre": { es: "Intención de la IA de siempre" },
+  "custo incompleto": { es: "costo incompleto" },
+  "Não revisado": { es: "Sin revisar" },
+  "Correto": { es: "Correcto" },
+  "Incorreto": { es: "Incorrecto" },
+  "Agente esperado": { es: "Agente esperado" },
+  "Escolher agente esperado": { es: "Elegir el agente esperado" },
+  "Ainda não há decisões de roteamento nesses filtros.": { es: "Todavía no hay decisiones de enrutamiento con estos filtros." },
+
+  // Contexto opcional do roteador do Jev.
+
   // ─── EMPRESAS, PESSOAS E IMPORTAÇÃO (metade B2B do #1621, de @renatofortal) ───
   "Arquivo": {"es": "Archivo"},
   "Atualizado": {"es": "Actualizado"},
@@ -1447,6 +1503,14 @@ export const DICIONARIO: Traducoes = {
   "Razão social": { es: "Razón social" },
   "DPO email": { es: "Email del DPO" },
   "Retenção de mídia (dias)": { es: "Retención de archivos multimedia (días)" },
+  "Limpeza automática de mídia antiga": { es: "Limpieza automática de multimedia antigua" },
+  "Ligado: apaga a mídia com mais de {n} dias.": {
+    es: "Activado: elimina la multimedia con más de {n} días.",
+  },
+  "Desligado: a mídia das conversas não é apagada por idade.": {
+    es: "Desactivado: la multimedia de las conversaciones no se elimina por antigüedad.",
+  },
+  "Ao ligar, a mídia de mensagem com mais de {n} dias começará a ser apagada.": { es: "Al activarlo, la multimedia de mensajes con más de {n} días comenzará a eliminarse." },
   "URL política de privacidade": { es: "URL de la política de privacidad" },
   "Informações pessoais. Email só pode ser trocado em breve.": {
     es: "Información personal. Pronto podrás cambiar el email.",
@@ -5832,6 +5896,9 @@ export const DICIONARIO: Traducoes = {
   "Validando com a Meta…": { es: "Validando con Meta…" },
   "Validar e conectar": { es: "Validar y conectar" },
   "Canal conectado.": { es: "Canal conectado." },
+  "Canal pausado.": { es: "Canal pausado." },
+  "Canal reativado.": { es: "Canal reactivado." },
+  "Não foi possível mudar o estado do canal.": { es: "No se pudo cambiar el estado del canal." },
   "Não foi possível conectar.": { es: "No se pudo conectar." },
   "provedor parceiro": { es: "proveedor asociado" },
   "Conectar por": { es: "Conectar por" },
@@ -7193,6 +7260,10 @@ export const DICIONARIO: Traducoes = {
 
   // ─── Inbox: mídia (áudio, imagem, figurinha, vídeo, documento) ───
   "Mídia indisponível": { es: "Contenido no disponible" },
+  "Mídia apagada pela política de retenção.": { es: "Multimedia eliminada por la política de retención." },
+  "Mídia apagada pela política de retenção ({n} dias)": {
+    es: "Multimedia eliminada por la política de retención ({n} días)",
+  },
   Áudio: { es: "Audio" },
   Imagem: { es: "Imagen" },
   Figurinha: { es: "Sticker" },
@@ -10029,6 +10100,8 @@ export const DICIONARIO: Traducoes = {
   "sem organização ativa": { es: "sin organización activa" },
   "Sem organização ativa": { es: "Sin organización activa" },
   "Sem organização ativa.": { es: "Sin organización activa." },
+  "Esta aba está numa organização diferente da sessão. Recarregar?": { es: "Esta pestaña está en una organización distinta a la de la sesión. ¿Recargar?" },
+  "Recarregar": { es: "Recargar" },
   "Sessão de canal não encontrada.": { es: "Sesión de canal no encontrada." },
   "Sessão expirada": { es: "Sesión expirada" },
   "Sessão sem token.": { es: "Sesión sin token." },
@@ -10352,6 +10425,9 @@ export const DICIONARIO: Traducoes = {
   "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.": {
     es: "De aquí salen el documento del contacto, la ley citada en el documento de acceso y el plazo en días hábiles. Solo aparecen países con la ley revisada: la lista es corta a propósito.",
   },
+  "A citação do RGPD (artigo 15.º do Regulamento (UE) 2016/679) foi conferida contra o texto oficial numa revisão feita por IA, sem advogado em Portugal. Os prazos do sistema (7 e 15 dias úteis) são mais curtos que o prazo legal de um mês, e o relatório de acesso ainda não traz todas as informações do art. 15.º. Trocar o país muda a regra do documento do contato: a partir daí, CPF enviado por API, importação ou integração é recusado como NIF inválido. O sistema não substitui o seu encarregado da proteção de dados: confirme com ele os textos enviados aos titulares, sobretudo nas campanhas de marketing, que em Portugal, em regra, exigem consentimento prévio (Lei 41/2004, art. 13.º-A).": {
+    es: "La cita del RGPD (artículo 15 del Reglamento (UE) 2016/679) se comprobó contra el texto oficial en una revisión hecha por IA, sin abogado en Portugal. Los plazos del sistema (7 y 15 días hábiles) son más cortos que el plazo legal de un mes, y el informe de acceso todavía no incluye toda la información del art. 15. Cambiar el país cambia la regla del documento del contacto: a partir de ahí, un CPF enviado por API, importación o integración se rechaza como NIF no válido. El sistema no sustituye a su delegado de protección de datos: confirme con él los textos que se envían a los titulares, sobre todo en las campañas de marketing, que en Portugal, por regla general, exigen consentimiento previo (Ley 41/2004, art. 13.º-A).",
+  },
   "Vale para todo preço do catálogo. Produto já cadastrado guarda a moeda com que nasceu.": {
     es: "Se aplica a todos los precios del catálogo. Un producto ya registrado conserva la moneda con la que se creó.",
   },
@@ -10539,6 +10615,7 @@ export const DICIONARIO: Traducoes = {
     es: "Mientras el catálogo esté vacío, el asistente responderá que no encontró el producto, aunque la tienda lo tenga.",
   },
   "Buscar por nome, código ou marca": { es: "Buscar por nombre, código o marca" },
+  "Nenhum produto encontrado para essa busca": { es: "Ningún producto encontrado para esa búsqueda" },
   "Novo produto": { es: "Nuevo producto" },
   "Importar planilha": { es: "Importar hoja de cálculo" },
   "Baixar planilha modelo": { es: "Descargar plantilla" },
@@ -12067,6 +12144,13 @@ export const DICIONARIO: Traducoes = {
   "Vinculada": { es: "Vinculada" },
   "Verificar conexão": { es: "Verificar conexión" },
   "Receber no atendimento": { es: "Recibir en atención" },
+  "Remover do atendimento": { es: "Quitar de la atención" },
+  "Desconectar conta": { es: "Desconectar cuenta" },
+  "Desconectar esta conta?": { es: "¿Desconectar esta cuenta?" },
+  "Remover do atendimento?": { es: "¿Quitar de la atención?" },
+  "As mensagens param de chegar e a conta sai do provedor. Para usar de novo, será preciso autorizar a conta outra vez. As conversas já recebidas continuam no CRM.": { es: "Los mensajes dejan de llegar y la cuenta sale del proveedor. Para usarla de nuevo, tendrás que autorizar la cuenta otra vez. Las conversaciones ya recibidas siguen en el CRM." },
+  "As mensagens desta conta param de chegar no atendimento. A conta continua vinculada e pode voltar a receber depois. As conversas já recebidas continuam no CRM.": { es: "Los mensajes de esta cuenta dejan de llegar a la atención. La cuenta sigue vinculada y puede volver a recibir después. Las conversaciones ya recibidas siguen en el CRM." },
+  "Conta removida do atendimento.": { es: "Cuenta quitada de la atención." },
   "Recebimento configurado. Novas mensagens entram na caixa de entrada.": { es: "Recepción configurada. Los nuevos mensajes llegan a la bandeja de entrada." },
   "O recebimento precisa de atenção. Confira a conexão antes de atender.": { es: "La recepción necesita atención. Verifica la conexión antes de atender." },
   "Ative para receber novas conversas. A IA começa pausada para evitar respostas duplicadas com outras automações.": { es: "Activa para recibir nuevas conversaciones. La IA empieza pausada para evitar respuestas duplicadas con otras automatizaciones." },
@@ -12705,6 +12789,8 @@ export const DICIONARIO: Traducoes = {
     { es: "La conexión de WhatsApp elegida para los avisos fue eliminada." },
   "A conexão escolhida só envia mensagens aprovadas — ela não serve para o aviso de caso.":
     { es: "La conexión elegida solo envía mensajes aprobados, así que no sirve para los avisos de casos." },
+  "A conexão escolhida para os avisos está pausada. Retome-a na Central de Conexões para os avisos voltarem a sair.":
+    { es: "La conexión elegida para los avisos está en pausa. Reanúdala en la Central de Conexiones para que los avisos vuelvan a salir." },
   "O serviço de WhatsApp desta instalação não está configurado.":
     { es: "El servicio de WhatsApp de esta instalación no está configurado." },
   "O número de aviso não foi aceito pelo WhatsApp.":
@@ -14081,6 +14167,29 @@ export const DICIONARIO: Traducoes = {
     es: "La tarea no se creó: la base de datos rechazó el registro. Inténtelo de nuevo en unos minutos; si persiste, abra la tarea en la agenda para ver el detalle.",
   },
 
+  // ─── ação ai_decide (issue #1970) ───
+  "A ação não rodou: a regra foi gravada sem declarar o gasto de IA (custo_de_token). Corrija a regra pela API; este passo ainda não tem tela.": {
+    es: "La acción no se ejecutó: la regla se guardó sin declarar el gasto de IA (custo_de_token). Corrija la regla por la API; este paso todavía no tiene pantalla.",
+  },
+  "A ação não rodou: a instrução ou as opções estão incompletas. Abra a automação e revise o texto e as alternativas.": {
+    es: "La acción no se ejecutó: la instrucción o las opciones están incompletas. Abra la automatización y revise el texto y las alternativas.",
+  },
+  "A IA devolveu uma opção que não está na lista desta ação, então nada foi executado. Corrija a instrução da regra para deixar as opções mais claras.": {
+    es: "La IA devolvió una opción que no está en la lista de esta acción, así que no se ejecutó nada. Corrija la instrucción de la regla para que las opciones queden más claras.",
+  },
+  "A opção escolhida aponta para uma ação que esta instalação não tem (pode ter saído em uma atualização). Abra a automação e escolha outra ação.": {
+    es: "La opción elegida apunta a una acción que esta instalación no tiene (puede haber salido en una actualización). Abra la automatización y elija otra acción.",
+  },
+  "A IA não devolveu nenhuma escolha entre as opções desta ação. Tente de novo ou corrija a instrução.": {
+    es: "La IA no devolvió ninguna opción entre las opciones de esta acción. Inténtelo de nuevo o corrija la instrucción.",
+  },
+  "A IA respondeu fora do formato esperado e nada foi executado. Tente de novo em alguns minutos.": {
+    es: "La IA respondió fuera del formato esperado y no se ejecutó nada. Inténtelo de nuevo en unos minutos.",
+  },
+  "A IA respondeu sem dizer qual opção escolher, então nada foi executado. Tente de novo ou corrija a instrução.": {
+    es: "La IA respondió sin decir qué opción elegir, así que no se ejecutó nada. Inténtelo de nuevo o corrija la instrucción.",
+  },
+
   // ─── PREVISÃO PONDERADA DO FUNIL (issue #1535) ───
   "Previsão": { es: "Previsión" },
   "Ponderado": { es: "Ponderado" },
@@ -14226,6 +14335,15 @@ export const DICIONARIO: Traducoes = {
   "Não dá para ver daqui": { es: "No se puede ver desde aquí" },
   "Ajustar": { es: "Ajustar" },
   "Tudo o que se liga e desliga, se está ligado e onde se ajusta.": { es: "Todo lo que se activa y desactiva, si está activado y dónde se ajusta." },
+  "Não foi necessário consultar a IA de sempre.": { es: "No fue necesario consultar a la IA de siempre." },
+  "O Jev decidiu sozinho; a IA de sempre não foi chamada.": { es: "Jev decidió solo; no se llamó a la IA de siempre." },
+  "O Jev precisou de reserva. A IA de sempre foi consultada; sem resposta válida, valem as regras de fallback do roteador.": { es: "Jev necesitó respaldo. Se consultó a la IA de siempre; sin respuesta válida, se aplican las reglas de respaldo del enrutador." },
+
+  "Janela de histórico": { es: "Ventana de historial" },
+  "A janela é a da sua IA de sempre. O Jev recebe só a mensagem atual.": { es: "La ventana es la de tu IA de siempre. Jev recibe solo el mensaje actual." },
+
+  "O Jev escolhe primeiro. A IA de sempre só entra em caso de falha, baixa confiança ou intenção inválida.": { es: "Jev elige primero. La IA de siempre solo interviene en caso de fallo, baja confianza o intención inválida." },
+  "Sem a sua IA de sempre, o Jev não escolhe o agente sozinho: é ela que cobre quando ele falha ou fica em dúvida. Cadastre uma chave de IA em Agentes IA › Credenciais para usar este modo. Até lá, vale a comparação.": { es: "Sin tu IA de siempre, Jev no elige el agente solo: es ella la que cubre cuando él falla o duda. Registra una clave de IA en Agentes IA › Credenciales para usar este modo. Hasta entonces, vale la comparación." },
   "Editar ritmo": { es: "Editar ritmo" },
   "Ritmo atualizado. A campanha continua pausada.": { es: "Ritmo actualizado. La campaña sigue en pausa." },
   "Só dá para ajustar com a campanha pausada. Ao retomar, o próximo envio já usa o ritmo novo. Limite de 1 a 50 por dia e intervalo de 5 a 1440 minutos.": { es: "Solo se puede ajustar con la campaña en pausa. Al reanudar, el próximo envío ya usa el ritmo nuevo. Límite de 1 a 50 por día e intervalo de 5 a 1440 minutos." },
