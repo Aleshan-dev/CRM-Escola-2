@@ -257,6 +257,12 @@ export async function listContactsHandler(
   }
   if (q.source) query = query.eq("source", q.source);
   if (soContato) query = query.eq("id", soContato);
+  // Pessoal fora da lista por padrão; `?pessoais=true` lista SÓ pessoais
+  // (spec 21, etapa 13 — a tela do filtro e o desmarcar). Sem esta linha a
+  // lista de Contatos furava pelo outro lado o esconderijo que o inbox
+  // construiu — e o MCP search herdaria o furo junto.
+  if (q.pessoais) query = query.eq("is_personal", true);
+  else query = query.eq("is_personal", false);
 
   if (q.cursor) {
     const c = decodeCursor(q.cursor);
