@@ -298,7 +298,7 @@ describe("marcar: a prova fecha a conta", () => {
       { id: "e1", organization_id: ORG, contact_id: CONTATO, status: "active", current_node_id: "n" } as Linha,
     ];
     tabelas["crm_leads"] = [
-      { id: "lead1", organization_id: ORG, pipeline_id: "f1", status: "open", last_activity_at: null, created_at: "2026-01-01T00:00:00Z" },
+      { id: "lead1", organization_id: ORG, contact_id: CONTATO, pipeline_id: "f1", status: "open", last_activity_at: null, created_at: "2026-01-01T00:00:00Z" },
     ];
     await POST(req(), contexto());
     expect(audit).toHaveBeenCalledWith(
