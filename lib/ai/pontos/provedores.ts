@@ -188,7 +188,30 @@ export const IDS_DE_PROVEDOR_DE_DECISAO = PROVEDORES_DE_DECISAO.map(
 /** Tudo o que tem chave cadastrável: a tela de Credenciais e a rota dela. */
 export const PROVEDORES_COM_CHAVE = [...PROVEDORES, ...PROVEDORES_DE_DECISAO] as const;
 
-export type ProvedorComChave = (typeof PROVEDORES_COM_CHAVE)[number]["id"];
+/**
+ * O LOGIN POR ASSINATURA (#1639) — vocabulário da credencial, não da conversa.
+ *
+ * A linha em `ai_provider_credentials` deste provedor guarda um PAR DE TOKENOS
+ * (access + refresh), não uma chave de API: quem a lê é o painel de conexão da
+ * empresa e a renovação, nunca um leitor genérico (`lib/ai/credentials.ts` e
+ * `resolveOrgLlmConfig` recusam este provider de propósito — a fiação da
+ * assinatura é uma fatia própria, e um leitor genérico mandaria o JSON dos
+ * tokens como se fosse chave).
+ *
+ * Por isso ele entra no TIPO das credenciais e FICA FORA de
+ * `PROVEDORES_COM_CHAVE`: essa união é a lista de quem cadastra chave na tela
+ * (e `tests/unit/provedores-de-decisao-catraca.test.ts` cobra que a união seja
+ * exatamente as duas listas). Colar "o par de tokens" como chave numa tela de
+ * chave seria o erro que este provider existe para não cometer.
+ *
+ * A constante mora aqui (e não em `./reserva-da-assinatura`) porque é
+ * vocabulário: quem escreve e quem lê importam do mesmo lugar, sem ciclo.
+ */
+export const PROVEDOR_POR_ASSINATURA = "openai-assinatura";
+
+export type ProvedorComChave =
+  | (typeof PROVEDORES_COM_CHAVE)[number]["id"]
+  | typeof PROVEDOR_POR_ASSINATURA;
 
 export const IDS_COM_CHAVE = PROVEDORES_COM_CHAVE.map((p) => p.id) as unknown as readonly [
   ProvedorComChave,

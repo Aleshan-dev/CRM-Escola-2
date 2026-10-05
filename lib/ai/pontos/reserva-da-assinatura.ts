@@ -52,7 +52,11 @@
  * lado dos que já existem"). Não é um dos ids nativos e não reaproveita `openai`:
  * a credencial de um não vale para o outro, e a reserva depende de serem dois.
  */
-export const PROVEDOR_POR_ASSINATURA = "openai-assinatura";
+// O vocabulário mora em `./provedores.ts` (é dele que o tipo `ProvedorComChave`
+// deriva); reexportado aqui para quem já importava de onde a política nasceu.
+import { PROVEDOR_POR_ASSINATURA } from "./provedores";
+
+export { PROVEDOR_POR_ASSINATURA };
 
 /**
  * A chave de API da MESMA OpenAI é a reserva (item 3). Poderia ser outro

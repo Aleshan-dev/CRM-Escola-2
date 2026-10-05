@@ -1020,6 +1020,8 @@ export const AUDIT_ACTIONS = [
   // guardado cifrado. Sem esta linha, "quem conectou a assinatura, e quando"
   // ficaria sem rastro — e é a conta que passa a pagar as chamadas.
   "ai.login_codex_conectado",
+  // A conta da empresa foi desconectada pela própria tela de Credenciais.
+  "ai.login_codex_desconectado",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

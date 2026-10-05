@@ -16,6 +16,8 @@
  * provider/teto é UPDATE na config, sem restart nem deploy.
  */
 import type pg from 'pg';
+
+import { PROVEDOR_POR_ASSINATURA } from '@/lib/ai/pontos/provedores';
 import { z } from 'zod';
 
 import { byteaToBuffer, decryptKey } from '@/lib/crypto/aes_gcm';
@@ -342,9 +344,17 @@ export async function resolveOrgLlmConfig(
         api_key_iv: unknown;
         api_key_tag: unknown;
       }>(
+        // O CAMPO POR credentialId (#1672, item 9): a busca filtrava só por
+        // empresa + id, SEM `provider`. Um vínculo apontando para a linha do
+        // login por assinatura decifraria o JSON dos tokens e o mandaria como
+        // CHAVE DE API. Com o filtro, e com o do caminho de baixo, a linha do
+        // login é invisível para o resolvedor — ligado ou desligado o
+        // interruptor da instalação — e só o leitor próprio
+        // (`lib/ai/credenciais/login-codex.ts`) a enxerga.
         `select id, api_key_encrypted, api_key_iv, api_key_tag
          from ai_provider_credentials
          where organization_id = $1 and id = $2
+           and provider <> '${PROVEDOR_POR_ASSINATURA}'
            and is_active and validated_at is not null
          limit 1`,
         [organizationId, override.credentialId],
@@ -355,9 +365,13 @@ export async function resolveOrgLlmConfig(
         api_key_iv: unknown;
         api_key_tag: unknown;
       }>(
+        // Mesma recusa do caminho de cima, pela outra porta (#1672, item 9):
+        // se um dia `settings.llm.provider` apontar para o provedor de login,
+        // esta query devolveria o par de tokens como se fosse chave.
         `select id, api_key_encrypted, api_key_iv, api_key_tag
          from ai_provider_credentials
          where organization_id = $1 and provider = $2
+           and provider <> '${PROVEDOR_POR_ASSINATURA}'
            and is_active and validated_at is not null
          order by created_at desc
          limit 1`,

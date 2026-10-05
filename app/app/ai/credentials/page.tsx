@@ -22,9 +22,13 @@ import { DEFAULT_CLASSIFIER_MODEL } from "@/lib/ai/gateway";
 import { resolverModeloDoPonto } from "@/lib/ai/gateway-binding";
 import { lerAmbiente } from "@/lib/instalacao/ambiente";
 import { logger } from "@/lib/logger";
-import { PROVEDORES } from "@/lib/ai/pontos/provedores";
+import { criarSessaoPkce } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { PROVEDOR_POR_ASSINATURA, PROVEDORES } from "@/lib/ai/pontos/provedores";
+import { moduloLigado } from "@/lib/instalacao/modulos";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { tagDeIdioma } from "@/lib/i18n/datas";
 import { CredentialsList } from "./_components/CredentialsList";
+import { PainelDeLoginCodex } from "./_components/PainelDeLoginCodex";
 
 export const dynamic = "force-dynamic";
 
@@ -47,8 +51,28 @@ export default async function CredentialsPage() {
     .eq("organization_id", activeOrg.orgId)
     .order("created_at", { ascending: false });
 
-  const credentials = (data ?? []) as CredentialRow[];
+  const todas = (data ?? []) as CredentialRow[];
+
+  // O INTERRUPTOR DA INSTALAÇÃO (#1672, itens 6 e 9): desligado, a linha do
+  // login por assinatura NÃO aparece aqui — nem no painel, nem na lista de
+  // chaves. A leitura do banco continua acontecendo (a linha é da empresa,
+  // cifrada e protegida por RLS), mas ninguém a enxerga: o leitor próprio
+  // (`lib/ai/credenciais/login-codex.ts`) também recusa quando o módulo está
+  // fora.
+  const moduloLoginCodex = await moduloLigado(createAdminClient(), "login_codex");
+
+  // A linha do login por assinatura não é uma CHAVE de API: ela guarda o par
+  // de tokens da conta da empresa, e vai para o painel próprio. Fora da lista
+  // de chaves, ela também não mentiria como "credencial" no agrupamento por
+  // provedor (que só conhece quem cadastra chave).
+  const linhaDeLogin = moduloLoginCodex
+    ? (todas.find((c) => c.provider === PROVEDOR_POR_ASSINATURA) ?? null)
+    : null;
+  const credentials = todas.filter((c) => c.provider !== PROVEDOR_POR_ASSINATURA);
   const canWrite = ROLE_RANK[activeOrg.role] >= ROLE_RANK.admin;
+  // O par PKCE DESTA renderização: o link mostrado e o verifier do campo de
+  // colagem viajam juntos; nenhum dos dois é segredo (o segredo nasce da troca).
+  const sessaoPkce = criarSessaoPkce();
 
   // Mesma regra do DELETE — e a mesma da FK `ON DELETE RESTRICT`: TODA versão
   // que aponta para a credencial trava a exclusão, não só a publicada. O número
@@ -165,6 +189,14 @@ export default async function CredentialsPage() {
           )}
         </p>
       </header>
+      {moduloLoginCodex && (
+        <PainelDeLoginCodex
+          url={sessaoPkce.url}
+          codeVerifier={sessaoPkce.codeVerifier}
+          conectado={linhaDeLogin !== null}
+          validada={linhaDeLogin?.validated_at != null}
+        />
+      )}
       <CredentialsList
         initialData={credentials}
         canWrite={canWrite}

@@ -222,7 +222,7 @@ const MODULOS_NA_TELA: ReadonlyArray<{ modulo: ModuloPorFlag; id: string; rotulo
     id: "modulo-login-codex",
     rotulo: "Login do Codex por assinatura",
     descricao:
-      "Ligado, o painel logo abaixo mostra o link de acesso do Codex e o campo para colar o código que o navegador deixa em localhost:1455. Desligado por padrão: sem este interruptor nada muda, e a reserva de chamada continua sendo a chave de API da organização.",
+      "Ligado, cada empresa vê em Credenciais o painel para conectar a própria conta do Codex. Desligado por padrão: sem este interruptor nada aparece para as empresas, e a reserva de chamada continua sendo a chave de API da organização.",
   },
 ];
 

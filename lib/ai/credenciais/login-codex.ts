@@ -1,81 +1,261 @@
 /**
- * GUARDAR O LOGIN DO CODEX — UMA função pequena e isolada, de propósito.
+ * A CONTA DE UMA EMPRESA — onde o par de tokens do Codex mora, quem lê e quem
+ * renova. Substitui a gravação por INSTALAÇÃO em `platform_config`
+ * (`OPENAI_CODEX_TOKENS`), que deixou de existir pela decisão do mantenedor
+ * (PR #1672): **uma conta ChatGPT por empresa**.
  *
- * Mesmo padrão de `./guardar.ts`: o plaintext (os tokens) nunca é persistido em
- * claro, nunca é logado e não sai desta função; a cifra é AES-GCM do
- * `lib/crypto/aes_gcm.ts`, com o envelope aberto só na leitura. A diferença é o
- * destino: `guardar.ts` escreve em `ai_provider_credentials` (que exige
- * `organization_id`), e aqui o token é gravado em `platform_config` como
- * SEGREDO, pela única porta que fala com aquela tabela (`lib/instalacao/config.ts`).
+ * ─── Onde a conta fica ─────────────────────────────────────────────────────
  *
- * ─── A ESCOPO ESTÁ COM O MANTENEDOR — e não foi escolhido aqui ─────────────
+ * Na MESMA tabela das chaves de API, `ai_provider_credentials`, com
+ * `organization_id not null` e o segredo em AES-GCM nas colunas
+ * `api_key_encrypted`/`api_key_iv`/`api_key_tag` (mesmíssimo `guardar.ts`).
+ * Escrita pela RLS que só deixa o `admin` da empresa gravar; leitura da tela
+ * pela view `ai_provider_credentials_safe`. Sem schema novo: o `provider` é
+ * vocabulário aberto desde a migration 0127.
  *
- * Ainda está em aberto se este token é UM só da instalação (uma assinatura
- * pessoal atende todas as empresas hospedadas aqui) ou UM por empresa (cada
- * empresa conecta a própria conta). Isso foi declarado no PR #1672 e a decisão
- * é do mantenedor. Hoje a gravação é por INSTALAÇÃO — que é o que a tela de
- * `/admin/sistema` alcança sem escolher organização nenhuma — e é POR ISSO que
- * tudo que decide isso mora neste arquivo: trocar para token por empresa muda
- * aqui (destino e chave), e mais em lugar nenhum do fluxo de login.
+ * O plaintext guardado é `JSON.stringify(tokens)` — o MESMO formato que a
+ * gravação antiga escrevia em `platform_config`, agora cifrado na tabela da
+ * empresa. Nenhum leitor genérico decifra isto como chave: `loadCredential`
+ * (`lib/ai/credentials.ts`) e o caminho por `credentialId` de
+ * `resolveOrgLlmConfig` recusam o provider `openai-assinatura` de propósito.
  *
- * Enquanto a resposta não chegar, nenhum caminho do agente lê isto: o login
- * entra ligado, e a fiação vem na próxima fatia.
+ * ─── MÓDULO DESLIGADO = ESTE ARQUIVO NÃO DEVOLVE NADA ──────────────────────
+ *
+ * O interruptor continua sendo o da INSTALAÇÃO (`login_codex` em
+ * `platform_config`). Com ele desligado as linhas FICAM no banco (são da
+ * empresa, cifradas e protegidas por RLS), mas todos os leitores delas as
+ * ignoram: `lerLoginCodex` e `guardarLoginCodex` consultam `moduloLigado` e
+ * falham fechado, e os leitores genéricos nem chegam aqui — eles recusam o
+ * provider. Nada decifra o JSON dos tokens e o manda como chave de API.
  */
-import { gravarPelaTela, voltarAoAmbiente, valorDaInstalacao } from "@/lib/instalacao/config";
+import { byteaToBuffer, decryptKey } from "@/lib/crypto/aes_gcm";
+import { guardarCredencial, rotacionarCredencial } from "@/lib/ai/credenciais/guardar";
+import { moduloLigado } from "@/lib/instalacao/modulos";
+import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
 import type { TokensDoCodex } from "@/lib/ai/pontos/pkce-da-assinatura";
+import type { createAdminClient } from "@/lib/supabase/admin";
+
+type Admin = ReturnType<typeof createAdminClient>;
+
+/** O rótulo da linha — fixo, porque é uma por empresa. */
+export const ROTULO_DO_LOGIN_CODEX = "Assinatura do Codex (ChatGPT)";
 
 /**
- * A chave em `platform_config` — nomeada como variável de ambiente, como toda
- * a tabela (constraint `platform_config_chave_formato`).
+ * A janela da trava de renovação no BANCO. Quem vence o `UPDATE` condicional
+ * segura a renovação por este tempo; quem chega dentro dele perde (`em_curso`).
+ * 30 s é ordem de grandeza de UMA troca de refresh_token, contra 8 dias de
+ * janela de renovação — perder aqui custa uma espera, ganhar duas vezes custa a
+ * sessão da empresa (refresh_token rotativo: o segundo POST chega com um token
+ * que o primeiro acabou de trocar).
  */
-export const CHAVE_DO_LOGIN_CODEX = "OPENAI_CODEX_TOKENS";
+export const JANELA_DA_TRAVA_MS = 30_000;
+
+/** Uma linha de login desta empresa, ou `null`. */
+async function linhaDoLogin(admin: Admin, orgId: string): Promise<{ id: string } | null> {
+  const { data } = await admin
+    .from("ai_provider_credentials")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("provider", PROVEDOR_POR_ASSINATURA)
+    .eq("is_active", true)
+    .maybeSingle();
+  return (data as { id: string } | null) ?? null;
+}
 
 export type ResultadoDeGuardarLogin =
-  | { ok: true }
-  /** `cifragem` = sem chave de cifra no ambiente; `banco` = o banco recusou. */
-  | { ok: false; motivo: "cifragem" | "banco" };
+  | { ok: true; id: string }
+  /** `modulo_desligado` = o interruptor da instalação está fora. */
+  | { ok: false; motivo: "cifragem" | "label_em_uso" | "banco" | "modulo_desligado" };
 
 /**
- * Grava o par de tokens, cifrados. Sem chave de cifra a escrita NÃO acontece —
- * gravar refresh_token em claro porque a chave sumiu seria o pior desfecho.
+ * GRAVA o par de tokens da empresa — insert novo, ou a MESMA linha quando ela
+ * já existe (conectar de novo não pode deixar uma segunda linha atrás).
+ *
+ * `validated_at` nasce preenchido porque quem prova o login é a troca do
+ * código (`trocarCodigoPorTokens`) — é a prova exigida por `loadCredential`,
+ * que recusa credencial sem `validated_at` com `not_validated`.
  */
-export async function guardarLoginCodex(
-  tokens: TokensDoCodex,
-  ator: string,
-): Promise<ResultadoDeGuardarLogin> {
-  const resultado = await gravarPelaTela(CHAVE_DO_LOGIN_CODEX, JSON.stringify(tokens), {
-    ehSegredo: true,
-    ator,
-  });
-  if (resultado.ok) return { ok: true };
-  return { ok: false, motivo: resultado.motivo === "sem_chave_de_cifra" ? "cifragem" : "banco" };
+export async function guardarLoginCodex(p: {
+  admin: Admin;
+  orgId: string;
+  userId: string;
+  tokens: TokensDoCodex;
+  requestId?: string;
+}): Promise<ResultadoDeGuardarLogin> {
+  if (!(await moduloLigado(p.admin, "login_codex"))) {
+    return { ok: false, motivo: "modulo_desligado" };
+  }
+  const segredo = JSON.stringify(p.tokens);
+  // O `provider` entra DENTRO do literal do argumento, e não numa variável
+  // intermediária: sem contexto, o TypeScript alargaria o literal para `string`
+  // e a chamada perderia o tipo `ProvedorComChave`.
+  const comum = {
+    admin: p.admin,
+    orgId: p.orgId,
+    userId: p.userId,
+    label: ROTULO_DO_LOGIN_CODEX,
+    apiKey: segredo,
+    ...(p.requestId ? { requestId: p.requestId } : {}),
+  };
+
+  const existente = await linhaDoLogin(p.admin, p.orgId);
+  const r = existente
+    ? await rotacionarCredencial({
+        ...comum,
+        provider: PROVEDOR_POR_ASSINATURA,
+        credentialId: existente.id,
+      })
+    : await guardarCredencial({ ...comum, provider: PROVEDOR_POR_ASSINATURA });
+
+  if (r.ok) return { ok: true, id: r.id };
+  if (r.motivo === "cifragem" || r.motivo === "label_em_uso") return { ok: false, motivo: r.motivo };
+  return { ok: false, motivo: "banco" };
 }
 
 /**
- * Lê o par de tokens, decifrado. `null` quando não há linha, quando o envelope
- * não abre ou quando o JSON não é o formato que gravamos — nunca lança, porque
- * quem chama é caminho de chamada e falha aqui deve virar queda, não 500.
+ * LÊ o par de tokens da empresa, decifrado. `null` quando o módulo está
+ * desligado, quando não há linha, quando o envelope não abre ou quando o JSON
+ * não é o formato gravado — nunca lança: quem chama é caminho de chamada, e
+ * falha aqui vira queda, não 500.
  */
-export async function lerLoginCodex(): Promise<TokensDoCodex | null> {
+export async function lerLoginCodex(p: {
+  admin: Admin;
+  orgId: string;
+}): Promise<TokensDoCodex | null> {
   try {
-    const { valor } = await valorDaInstalacao(CHAVE_DO_LOGIN_CODEX);
-    if (typeof valor !== "string" || valor === "") return null;
-    const bruto = JSON.parse(valor) as Partial<TokensDoCodex>;
-    if (typeof bruto.access_token !== "string" || typeof bruto.refresh_token !== "string") {
-      return null;
-    }
+    if (!(await moduloLigado(p.admin, "login_codex"))) return null;
+    const { data } = await p.admin
+      .from("ai_provider_credentials")
+      .select("api_key_encrypted, api_key_iv, api_key_tag, validated_at, is_active")
+      .eq("organization_id", p.orgId)
+      .eq("provider", PROVEDOR_POR_ASSINATURA)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!data?.validated_at) return null;
+    const bruto = decryptKey({
+      ciphertext: byteaToBuffer(data.api_key_encrypted),
+      iv: byteaToBuffer(data.api_key_iv),
+      tag: byteaToBuffer(data.api_key_tag),
+    });
+    const json = JSON.parse(bruto) as Partial<TokensDoCodex>;
+    if (typeof json.access_token !== "string" || typeof json.refresh_token !== "string") return null;
     return {
-      access_token: bruto.access_token,
-      refresh_token: bruto.refresh_token,
-      expires_at: typeof bruto.expires_at === "number" ? bruto.expires_at : null,
+      access_token: json.access_token,
+      refresh_token: json.refresh_token,
+      expires_at: typeof json.expires_at === "number" ? json.expires_at : null,
     };
   } catch {
     return null;
   }
 }
 
-/** Desconectar: apaga a linha e deixa o `.env` livre de responder de novo. */
-export async function apagarLoginCodex(): Promise<boolean> {
-  const resultado = await voltarAoAmbiente(CHAVE_DO_LOGIN_CODEX);
-  return resultado.ok;
+/**
+ * DESCONECTA: apaga a linha da empresa. Com o módulo desligado também apaga —
+ * desligar é a decisão de quem administra a instalação, e a conta continua
+ * sendo da empresa.
+ */
+export async function desconectarLoginCodex(p: {
+  admin: Admin;
+  orgId: string;
+}): Promise<boolean> {
+  const { error } = await p.admin
+    .from("ai_provider_credentials")
+    .delete()
+    .eq("organization_id", p.orgId)
+    .eq("provider", PROVEDOR_POR_ASSINATURA);
+  return !error;
+}
+
+export type ResultadoDaRenovacao =
+  | { ok: true; tokens: TokensDoCodex }
+  /** `em_curso` = OUTRO processo está renovando agora; `nao_encontrada`, a linha sumiu. */
+  | { ok: false; motivo: "em_curso" | "nao_encontrada" | "falha" | "modulo_desligado" };
+
+/**
+ * A TRAVA CONTRA RENOVAÇÃO SIMULTÂNEA — NO BANCO, não em memória.
+ *
+ * `app`, `worker` e `scheduler` são contêineres separados: um `Map` de processo
+ * não os atravessa, e com refresh_token rotativo duas renovações em processos
+ * diferentes revogam a sessão da empresa. O caminho escolhido é o UPDATE
+ * CONDICIONAL em `updated_at` (o mantenedor citou os dois caminhos possíveis):
+ *
+ *   `update … set updated_at = now() where id = X and updated_at < now() - 30s`
+ *
+ * O Postgres serializa os dois UPDATEs na mesma linha e o segundo re-avalia a
+ * condição contra a linha JÁ mudada — só um processo vence. Nada de coluna nova
+ * e nada de transaction aberta durante a chamada à OpenAI.
+ *
+ * Quem perde devolve `em_curso` SEM chamar o provedor: o renova de novo seria
+ * mandar um refresh_token que o vencedor acabou de trocar.
+ */
+export async function renovarComTravaDeBanco(p: {
+  admin: Admin;
+  orgId: string;
+  credentialId: string;
+  renovar: (tokensAtuais: TokensDoCodex) => Promise<TokensDoCodex>;
+}): Promise<ResultadoDaRenovacao> {
+  if (!(await moduloLigado(p.admin, "login_codex"))) return { ok: false, motivo: "modulo_desligado" };
+
+  const { data: atual } = await p.admin
+    .from("ai_provider_credentials")
+    .select("api_key_encrypted, api_key_iv, api_key_tag, validated_at, updated_at")
+    .eq("id", p.credentialId)
+    .eq("organization_id", p.orgId)
+    .eq("provider", PROVEDOR_POR_ASSINATURA)
+    .maybeSingle();
+  if (!atual) return { ok: false, motivo: "nao_encontrada" };
+
+  const atualizadoEm = typeof atual.updated_at === "string" ? atual.updated_at : null;
+  const limite = new Date(Date.now() - JANELA_DA_TRAVA_MS).toISOString();
+
+  // A APROPRIAÇÃO: só vence quem encontra a linha com `updated_at` antigo.
+  const { data: ganha } = await p.admin
+    .from("ai_provider_credentials")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", p.credentialId)
+    .eq("organization_id", p.orgId)
+    .lt("updated_at", limite)
+    .select("id")
+    .maybeSingle();
+  if (!ganha) return { ok: false, motivo: "em_curso" };
+
+  let renovados: TokensDoCodex;
+  try {
+    const atuais = decryptKey({
+      ciphertext: byteaToBuffer(atual.api_key_encrypted),
+      iv: byteaToBuffer(atual.api_key_iv),
+      tag: byteaToBuffer(atual.api_key_tag),
+    });
+    const json = JSON.parse(atuais) as Partial<TokensDoCodex>;
+    if (typeof json.refresh_token !== "string") return { ok: false, motivo: "falha" };
+    renovados = await p.renovar({
+      access_token: json.access_token ?? "",
+      refresh_token: json.refresh_token,
+      expires_at: typeof json.expires_at === "number" ? json.expires_at : null,
+    });
+  } catch {
+    // A renovação falhou: devolve o relógio de aprovação ao valor lido, para
+    // que a próxima tentativa não espere 30 s por uma trava que ninguém segura.
+    if (atualizadoEm) {
+      await p.admin
+        .from("ai_provider_credentials")
+        .update({ updated_at: atualizadoEm })
+        .eq("id", p.credentialId)
+        .eq("organization_id", p.orgId);
+    }
+    return { ok: false, motivo: "falha" };
+  }
+
+  const gravado = await rotacionarCredencial({
+    admin: p.admin,
+    orgId: p.orgId,
+    userId: "sistema",
+    credentialId: p.credentialId,
+    provider: PROVEDOR_POR_ASSINATURA,
+    apiKey: JSON.stringify(renovados),
+    label: ROTULO_DO_LOGIN_CODEX,
+  });
+  if (!gravado.ok) return { ok: false, motivo: "falha" };
+
+  return { ok: true, tokens: renovados };
 }

@@ -4,23 +4,30 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 
-import { guardarLoginCodex } from "@/lib/ai/credenciais/login-codex";
+import { desconectarLoginCodex, guardarLoginCodex } from "@/lib/ai/credenciais/login-codex";
 import { trocarCodigoPorTokens } from "@/lib/ai/pontos/pkce-da-assinatura";
 import { audit } from "@/lib/audit";
-import { escritaDeAdminOuRecusa } from "@/lib/auth/escritaDeAdminOuRecusa";
+import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
+import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * TROCAR O CÓDIGO COLADO POR TOKENS, e guardá-los cifrados.
+ * TROCAR O CÓDIGO COLADO POR TOKENS E GRAVAR NA CONTA DA EMPRESA.
  *
- * O `code` vem do navegador que parou em `http://localhost:1455/auth/callback`
- * (lista branca do Codex), colado em `/admin/sistema`; o `codeVerifier` é o
- * par que a própria tela gerou. Só platform admin passa daqui — o recurso vale
- * para a instalação inteira, mesmo argumento de `updateModuloDaInstalacao`.
+ * ─── O portão é o da EMPRESA, não o da instalação (#1672, item 6) ──────────
  *
- * O `fetch` é o da plataforma, e este é o ÚNICO caminho que fala com
- * `auth.openai.com`: nenhum teste, nenhum worker e nenhum agente o chama. Nesta
- * instalação o endpoint não foi chamado uma vez sequer — não há credencial
- * nenhuma aqui.
+ * A decisão do mantenedor foi "uma conta ChatGPT por empresa": quem conecta é
+ * o `admin` da empresa, em Credenciais, e a empresa vem da SESSÃO
+ * (`resolveActiveOrg`), nunca do corpo do pedido. O portão antigo,
+ * `escritaDeAdminOuRecusa()` (admin da PLATAFORMA), saiu.
+ *
+ * Não há atalho para admin da plataforma: o revendedor que quer conectar a
+ * conta dele numa empresa entra pelo modo suporte `full`, que já resolve como
+ * `role: "admin"` da empresa em `orgAtivaSemPortao` — e é por ali que
+ * `resolveActiveOrg` passa. O mesmo portão de qualquer outra escrita da empresa.
+ *
+ * Com o interruptor da instalação (`login_codex`) desligado, a gravação
+ * recusa: `guardarLoginCodex` consulta `moduloLigado` e falha fechado.
  */
 const entradaSchema = z.object({
   codigo: z.string().min(1).max(4096),
@@ -32,9 +39,11 @@ export type ConectarLoginCodexResult = { ok: true } | { ok: false; error: string
 export async function conectarLoginCodex(
   input: z.infer<typeof entradaSchema>,
 ): Promise<ConectarLoginCodexResult> {
-  const escrita = await escritaDeAdminOuRecusa();
-  if (!escrita.ok) return escrita;
-  const { user } = escrita.ctx;
+  const authUser = await loadAuthUser();
+  if (!authUser) return { ok: false, error: "unauthenticated" };
+  const activeOrg = await resolveActiveOrg(authUser);
+  if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) return { ok: false, error: "forbidden_role" };
 
   const parsed = entradaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
@@ -51,21 +60,70 @@ export async function conectarLoginCodex(
     return { ok: false, error: "troca_recusada" };
   }
 
-  const gravado = await guardarLoginCodex(tokens, user.id);
+  const gravado = await guardarLoginCodex({
+    admin: createAdminClient(),
+    orgId: activeOrg.orgId,
+    userId: authUser.id,
+    tokens,
+  });
   if (!gravado.ok) return { ok: false, error: gravado.motivo };
 
   const hdrs = await headers();
   await audit({
     action: "ai.login_codex_conectado",
-    actorUserId: user.id,
-    resourceType: "platform_config",
-    resourceId: null,
+    actorUserId: authUser.id,
+    // A EMPRESA passa a levar o rastro (#1672, item 6): são várias contas em
+    // várias empresas, e "quem conectou, em qual empresa, quando" é a pergunta.
+    organizationId: activeOrg.orgId,
+    resourceType: "ai_provider_credential",
+    resourceId: gravado.id,
     metadata: { provedor: "openai-assinatura" },
     requestId: hdrs.get("x-request-id"),
     ip: hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
     userAgent: hdrs.get("user-agent"),
   });
 
-  revalidatePath("/admin/sistema");
+  revalidatePath("/app/ai/credentials");
+  return { ok: true };
+}
+
+export type DesconectarLoginCodexResult = { ok: true } | { ok: false; error: string };
+
+/** DESCONECTAR a conta da empresa — apaga a linha dela. */
+export async function desconectarLoginCodexAgora(): Promise<DesconectarLoginCodexResult> {
+  const authUser = await loadAuthUser();
+  if (!authUser) return { ok: false, error: "unauthenticated" };
+  const activeOrg = await resolveActiveOrg(authUser);
+  if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
+  if (!podeAdministrarEmpresa(authUser, activeOrg)) return { ok: false, error: "forbidden_role" };
+
+  const admin = createAdminClient();
+  const { data: linha } = await admin
+    .from("ai_provider_credentials")
+    .select("id")
+    .eq("organization_id", activeOrg.orgId)
+    .eq("provider", "openai-assinatura")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  const apagou = await desconectarLoginCodex({ admin, orgId: activeOrg.orgId });
+  if (!apagou) return { ok: false, error: "banco" };
+
+  if (linha?.id) {
+    const hdrs = await headers();
+    await audit({
+      action: "ai.login_codex_desconectado",
+      actorUserId: authUser.id,
+      organizationId: activeOrg.orgId,
+      resourceType: "ai_provider_credential",
+      resourceId: linha.id,
+      metadata: { provedor: "openai-assinatura" },
+      requestId: hdrs.get("x-request-id"),
+      ip: hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      userAgent: hdrs.get("user-agent"),
+    });
+  }
+
+  revalidatePath("/app/ai/credentials");
   return { ok: true };
 }

@@ -14295,22 +14295,35 @@ export const DICIONARIO: Traducoes = {
 
   // ─── #1639 — login do Codex por assinatura (fatia do login) ────────────────
   "Login do Codex por assinatura": { es: "Inicio de sesión de Codex por suscripción" },
-  "Conecta a assinatura do ChatGPT (o mesmo login do Codex) como caminho de IA desta instalação, com a chave de API da organização como reserva. Desligado por padrão.": { es: "Conecta la suscripción de ChatGPT (el mismo inicio de sesión de Codex) como vía de IA de esta instalación, con la clave de API de la organización como reserva. Desactivado por defecto." },
-  "Ligado, o painel logo abaixo mostra o link de acesso do Codex e o campo para colar o código que o navegador deixa em localhost:1455. Desligado por padrão: sem este interruptor nada muda, e a reserva de chamada continua sendo a chave de API da organização.": { es: "Activado, el panel justo debajo muestra el enlace de acceso de Codex y el campo para pegar el código que el navegador deja en localhost:1455. Desactivado por defecto: sin este interruptor nada cambia, y la reserva de llamadas sigue siendo la clave de API de la organización." },
+  "Conecta a assinatura do ChatGPT (o mesmo login do Codex): cada empresa conecta a própria conta, em Credenciais, com a chave de API da mesma empresa como reserva. Desligado por padrão.": { es: "Conecta la suscripción de ChatGPT (el mismo inicio de sesión de Codex): cada empresa conecta su propia cuenta, en Credenciales, con la clave de API de la misma organización como reserva. Desactivado por defecto." },
+  "Ligado, cada empresa vê em Credenciais o painel para conectar a própria conta do Codex. Desligado por padrão: sem este interruptor nada aparece para as empresas, e a reserva de chamada continua sendo a chave de API da organização.": { es: "Activado, cada empresa ve en Credenciales el panel para conectar su propia cuenta de Codex. Desactivado por defecto: sin este interruptor nada aparece para las empresas, y la reserva de llamadas sigue siendo la clave de API de la organización." },
   "Conectar a assinatura do Codex": { es: "Conectar la suscripción de Codex" },
-  "Abra o link, entre com a conta que tem a assinatura do Codex, e o navegador fica em localhost:1455 mostrando um código. Cole esse código aqui.": { es: "Abra el enlace, entre con la cuenta que tiene la suscripción de Codex y el navegador queda en localhost:1455 mostrando un código. Pegue ese código aquí." },
+  "Cada empresa conecta a própria conta do ChatGPT. Abra o link, entre com a conta que tem a assinatura do Codex, e o navegador fica em localhost:1455 mostrando um código. Cole esse código aqui.": { es: "Cada empresa conecta su propia cuenta de ChatGPT. Abra el enlace, entre con la cuenta que tiene la suscripción de Codex y el navegador queda en localhost:1455 mostrando un código. Pegue ese código aquí." },
   "Link de acesso": { es: "Enlace de acceso" },
   "Código que o navegador deixou": { es: "Código que dejó el navegador" },
   "Antes de ligar": { es: "Antes de activar" },
   "O client_id e o redirect_uri (http://localhost:1455/auth/callback) são os do Codex, não os nossos, e nada disso é contrato público da OpenAI: os dois podem mudar sem aviso.": { es: "El client_id y el redirect_uri (http://localhost:1455/auth/callback) son los de Codex, no los nuestros, y nada de esto es un contrato público de OpenAI: ambos pueden cambiar sin aviso." },
-  "Este recurso vem desligado por padrão; só quem administra a instalação pode ligá-lo, em Recursos opcionais.": { es: "Este recurso viene desactivado por defecto; solo quien administra la instalación puede activarlo, en Recursos opcionales." },
+  "Este recurso vem desligado por padrão; só quem administra a instalação pode ligá-lo, em Recursos opcionais. Ligado, cada empresa conecta a própria conta aqui.": { es: "Este recurso viene desactivado por defecto; solo quien administra la instalación puede activarlo, en Recursos opcionales. Activado, cada empresa conecta su propia cuenta aquí." },
   "Se a assinatura falhar, a chamada cai na reserva: a chave de API da organização, como sempre.": { es: "Si la suscripción falla, la llamada cae a la reserva: la clave de API de la organización, como siempre." },
   "O código colado não tem cara de código. Cole o endereço inteiro que o navegador mostrou.": { es: "El código pegado no parece un código. Pegue la dirección completa que mostró el navegador." },
   "A OpenAI recusou o código. Ele é de uso único: gere o link de novo e cole o código novo.": { es: "OpenAI rechazó el código. Es de un solo uso: genere el enlace de nuevo y pegue el código nuevo." },
   "Este servidor não tem a chave de cifra (AI_CRED_AES_KEY) configurada, então o login não pode ser guardado.": { es: "Este servidor no tiene la clave de cifrado (AI_CRED_AES_KEY) configurada, así que el inicio de sesión no se puede guardar." },
   "O banco recusou a gravação. Tente de novo em instantes.": { es: "La base de datos rechazó la grabación. Intente de nuevo en un momento." },
   "Não deu para conectar. Tente de novo em instantes.": { es: "No se pudo conectar. Intente de nuevo en un momento." },
-  "Login guardado com cifra. Ligar o caminho do agente é a próxima fatia — enquanto isso, nada muda nas chamadas.": { es: "Inicio de sesión guardado con cifrado. Activar la ruta del agente es la próxima parte; mientras tanto, nada cambia en las llamadas." },
+  "Login guardado com cifra nesta empresa. Ligar o caminho do agente é a próxima fatia — enquanto isso, nada muda nas chamadas.": { es: "Inicio de sesión guardado con cifrado en esta empresa. Activar la ruta del agente es la próxima parte; mientras tanto, nada cambia en las llamadas." },
+
+  // ─── #1639, conta POR EMPRESA (PR #1672) — painel em Credenciais ─────────
+  "Nenhuma conta conectada nesta empresa ainda.": { es: "Ninguna cuenta conectada en esta empresa todavía." },
+  "Conta conectada nesta empresa, guardada com cifra. O token é renovado sozinho antes de vencer.": { es: "Cuenta conectada en esta empresa, guardada con cifrado. El token se renueva solo antes de vencer." },
+  "Ainda sem validação registrada: gere o link de novo e conecte de novo.": { es: "Aún sin validación registrada: genere el enlace de nuevo y conecte otra vez." },
+  "Não deu para desconectar. Tente de novo em instantes.": { es: "No se pudo desconectar. Intente de nuevo en un momento." },
+  "O recurso está desligado nesta instalação. Só quem administra a instalação pode ligá-lo, em Recursos opcionais.": { es: "El recurso está desactivado en esta instalación. Solo quien administra la instalación puede activarlo, en Recursos opcionales." },
+  "Somente o administrador desta empresa pode conectar a conta.": { es: "Solo el administrador de esta empresa puede conectar la cuenta." },
+  "Você não tem uma empresa ativa para gravar esta conta.": { es: "No tiene una empresa activa donde guardar esta cuenta." },
+  "Sessão expirada. Entre de novo.": { es: "Sesión expirada. Entre de nuevo." },
+  "Outra renovação desta conta está em curso (ou o recurso está desligado). Aguarde alguns segundos e tente de novo.": { es: "Otra renovación de esta cuenta está en curso (o el recurso está desactivado). Espere unos segundos e intente de nuevo." },
+  "A OpenAI recusou a renovação do login. Gere o link de novo e conecte a conta outra vez.": { es: "OpenAI rechazó la renovación del inicio de sesión. Genere el enlace de nuevo y conecte la cuenta otra vez." },
+  "Esta credencial guarda o login por assinatura da empresa, não uma chave de API. Use Conectar ou Desconectar na tela de Credenciais.": { es: "Esta credencial guarda el inicio de sesión por suscripción de la empresa, no una clave de API. Use Conectar o Desconectar en la pantalla de Credenciales." },
 };
 
 /**
