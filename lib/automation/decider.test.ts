@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { montarMensagemDaDecisao } from "@/lib/automation/decider";
+import { phoneForDisplay } from "@/lib/channels/phone-variants";
 
 const OPCOES = [
   { id: "quente", rotulo: "Marcar como quente", acao: { type: "add_tag", config: { tags: ["quente"] } } },
@@ -21,7 +22,8 @@ const LINHA_DO_LEAD = {
   owner_user_id: "usuario-id-interno-1",
   pipeline_id: "funil-id-interno-1",
   stage_id: "etapa-id-interno-1",
-  title: "Pedido de orçamento",
+  // A forma real: o título nasce do nome do contato (nascimento-do-lead.ts).
+  title: "Fulana de Tal",
   status: "open",
   value_cents: 120000,
   currency: "BRL",
@@ -76,8 +78,18 @@ describe("montarMensagemDaDecisao: o prompt só leva a lista fixa", () => {
   });
 
   it("leva o que a decisão precisa: a mensagem, o negócio e as etiquetas", () => {
-    for (const valor of ["Dá para parcelar em 10x?", "Pedido de orçamento", "parcelado", "120000", "cliente"]) {
+    for (const valor of ["Dá para parcelar em 10x?", "parcelado", "120000", "BRL", "cliente"]) {
       expect(prompt).toContain(valor);
     }
+  });
+
+  it("não leva o telefone quando ele virou o título do negócio (contato sem nome)", () => {
+    const telefone = phoneForDisplay(LINHA_DO_CONTATO.phone_number);
+    const semNome = montarMensagemDaDecisao({
+      instrucao: "Se quer parcelar, quente; senão, frio.",
+      opcoes: OPCOES,
+      contexto: { event: EVENTO, lead: { ...LINHA_DO_LEAD, title: telefone }, contact: LINHA_DO_CONTATO },
+    });
+    expect(semNome).not.toContain(telefone);
   });
 });

@@ -14168,14 +14168,14 @@ export const DICIONARIO: Traducoes = {
   },
 
   // ─── ação ai_decide (issue #1970) ───
-  "A ação não rodou: o registro de custo de token não estava ligado nesta ação — abra a automação e habilite antes de testar.": {
-    es: "La acción no se ejecutó: el registro de costo de token no estaba activado en esta acción; ábrela en la automatización y actívalo antes de probar.",
+  "A ação não rodou: a regra foi gravada sem declarar o gasto de IA (custo_de_token). Corrija a regra pela API; este passo ainda não tem tela.": {
+    es: "La acción no se ejecutó: la regla se guardó sin declarar el gasto de IA (custo_de_token). Corrija la regla por la API; este paso todavía no tiene pantalla.",
   },
   "A ação não rodou: a instrução ou as opções estão incompletas. Abra a automação e revise o texto e as alternativas.": {
     es: "La acción no se ejecutó: la instrucción o las opciones están incompletas. Abra la automatización y revise el texto y las alternativas.",
   },
-  "A IA devolveu uma opção que não está na lista desta ação, então nada foi executado. Reenvie a execução ou corrija a instrução.": {
-    es: "La IA devolvió una opción que no está en la lista de esta acción, así que no se ejecutó nada. Reenvíe la ejecución o corrija la instrucción.",
+  "A IA devolveu uma opção que não está na lista desta ação, então nada foi executado. Corrija a instrução da regra para deixar as opções mais claras.": {
+    es: "La IA devolvió una opción que no está en la lista de esta acción, así que no se ejecutó nada. Corrija la instrucción de la regla para que las opciones queden más claras.",
   },
   "A opção escolhida aponta para uma ação que esta instalação não tem (pode ter saído em uma atualização). Abra a automação e escolha outra ação.": {
     es: "La opción elegida apunta a una acción que esta instalación no tiene (puede haber salido en una actualización). Abra la automatización y elija otra acción.",

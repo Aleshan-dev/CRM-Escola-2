@@ -85,7 +85,9 @@ function formatarOpcoes(opcoes: readonly OpcaoDeDecisao[]): string {
  */
 const FICHA_DA_DECISAO = {
   evento: ["body_preview", "added_tags", "event_type_name", "status", "lost_reason", "won_reason"],
-  lead: ["title", "status", "value_cents", "currency", "tags", "custom_fields", "source", "won_reason", "lost_reason"],
+  // `title` fica de fora: neste produto o título do negócio nasce do nome do
+  // contato e, sem nome, do telefone (nascimento-do-lead.ts, create-or-move-lead.ts).
+  lead: ["status", "value_cents", "currency", "tags", "custom_fields", "source", "won_reason", "lost_reason"],
   contact: ["tags"],
 } as const;
 
