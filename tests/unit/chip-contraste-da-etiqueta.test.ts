@@ -62,9 +62,10 @@ const PISO_A_OLHO_NU = 0.1;
 
 /**
  * Os cinco tons da captura da #2373, medidos no PNG (`user-attachments/
- * 4e3cf3b5…`): NÃO são os da paleta (a organização tem cor gravada fora dela,
- * que é o caso de uso que a borda aceita de propósito), e é sobre elas que o
- * autor da issue vê o defeito.
+ * 4e3cf3b5…`). São os tons da paleta da v1.73.0 vistos sob outro perfil de cor
+ * (o cinza `#6f6f6f` sai idêntico; a única forma de pôr cor pela tela é a
+ * fileira dos 8 tons), e não cor gravada fora dela. Ficam na amostra porque o
+ * piso vale para qualquer hex, inclusive esses vizinhos.
  */
 const CORES_DA_CAPTURA_DA_ISSUE = ["#4b60d8", "#6f6f6f", "#1aa494", "#fcb540", "#e35537"];
 
@@ -181,6 +182,21 @@ describe("a frente do texto do chip (issue #2373)", () => {
       }
     }
     expect(fora, `verde/vermelha fora do piso (${fora.length}): ${fora.join(" | ")}`).toEqual([]);
+  });
+
+  it("⭐ etiqueta gravada com o tom ANTIGO (#12a594/#e54d2e) também sai com frente #ffffff", () => {
+    // A cor é gravada como hex em `settings.tags[].cor`, não como nome do tom:
+    // quem pintou antes desta troca continua com o hex antigo no banco. Sem o
+    // alias de leitura, essa etiqueta seguiria com texto preto — o chip da
+    // própria autora da #2373 — até alguém escolher a cor de novo.
+    const fora: string[] = [];
+    for (const [antigo, novo] of [["#12a594", "#00655a"], ["#E54D2E", "#cf3716"]] as const) {
+      const estilo = estiloDoChip(antigo);
+      if (estilo?.backgroundColor !== novo || estilo.color !== "#ffffff") {
+        fora.push(`${antigo}: fundo ${String(estilo?.backgroundColor)}, frente ${String(estilo?.color)} (esperado ${novo} + #ffffff)`);
+      }
+    }
+    expect(fora, `etiquetas antigas sem o tom novo (${fora.length}): ${fora.join(" | ")}`).toEqual([]);
   });
 
   it("⭐ QUALQUER cor gravada também passa — o piso não é privilégio da paleta", () => {

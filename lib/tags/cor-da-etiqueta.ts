@@ -53,6 +53,10 @@
  * PERTINÊNCIA À PALETA não é validada em lugar nenhum, de propósito: uma
  * instalação que queira outro tom não precisa de migration — e o banco não deve
  * saber o que é decoração de tela.
+ *
+ * A única exceção é `TONS_SUBSTITUIDOS`: os dois tons antigos da #2373 são
+ * lidos como os novos. Como a borda (`lib/schemas/tags.ts`) também normaliza
+ * por aqui, quem mandar `#12a594` pela API passa a ter `#00655a` gravado.
  */
 import { escolheAFrente } from "@/lib/branding/contraste";
 import { ehHexValido, normalizarHex } from "@/lib/branding/rampa";
@@ -73,6 +77,17 @@ export const PALETA_DE_ETIQUETAS: readonly string[] = [
   "#ab4aba",
   "#6f6f6f",
 ];
+
+/**
+ * Os tons escurecidos na #2373, de → para. A cor é gravada como hex, então a
+ * etiqueta pintada antes da troca continua com o tom antigo no banco; lê-la
+ * aqui como o tom novo dá texto branco a ela sem migration (chip, ponto, rota
+ * de cores e a fileira da tela de Tags passam todos por esta leitura).
+ */
+const TONS_SUBSTITUIDOS: Readonly<Record<string, string>> = {
+  "#12a594": "#00655a",
+  "#e54d2e": "#cf3716",
+};
 
 /** Etiqueta normalizada → cor. A chave é sempre `chaveDaEtiqueta`. */
 export type CoresPorEtiqueta = Readonly<Record<string, string>>;
@@ -98,7 +113,8 @@ export function normalizarCorDeEtiqueta(valor: unknown): string | null {
   const bruto = valor.trim();
   if (bruto === "" || !ehHexValido(bruto)) return null;
   try {
-    return normalizarHex(bruto);
+    const hex = normalizarHex(bruto);
+    return TONS_SUBSTITUIDOS[hex] ?? hex;
   } catch {
     // `ehHexValido` já filtrou; este ramo existe para o dia em que `rampa`
     // mudar de régua — cor malformada degrada para "sem cor", nunca para erro.
