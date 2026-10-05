@@ -66,11 +66,12 @@ describe("contagem cai junto com a lista (critério 3)", () => {
 });
 
 describe("link direto e histórico recusam (defesa em profundidade)", () => {
+  interface EloLeitura {
+    eq(coluna: string, valor: unknown): EloLeitura;
+    maybeSingle(): Promise<{ data: unknown; error: null }>;
+  }
   function banco(conversa: unknown) {
-    const q: {
-      eq: () => typeof q;
-      maybeSingle: () => Promise<{ data: unknown; error: null }>;
-    } = {
+    const q: EloLeitura = {
       eq: () => q,
       async maybeSingle() {
         return { data: conversa, error: null };
