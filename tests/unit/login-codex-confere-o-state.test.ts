@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as PkceDaAssinatura from "@/lib/ai/pontos/pkce-da-assinatura";
+
 /**
  * O `state` DO LOGIN POR ASSINATURA É CONFERIDO ANTES DA TROCA (#1672, triagem).
  *
@@ -47,7 +49,7 @@ const trocar = vi.hoisted(() =>
   })),
 );
 vi.mock("@/lib/ai/pontos/pkce-da-assinatura", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/ai/pontos/pkce-da-assinatura")>()),
+  ...(await importOriginal<typeof PkceDaAssinatura>()),
   trocarCodigoPorTokens: trocar,
 }));
 
