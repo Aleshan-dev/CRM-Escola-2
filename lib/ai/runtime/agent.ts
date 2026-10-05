@@ -348,6 +348,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     /** O endereço do provedor personalizado (#1642) — nasce junto da credencial. */
     let credentialBaseUrl: string | null = null;
     /**
+     * Quem RESPONDE este turno. É o provider da versão, exceto quando a
+     * assinatura não tem login utilizável e a reserva assume: aí a chave é a
+     * `openai` da empresa, e montar o modelo com o provider da versão mandaria
+     * essa chave de API ao endpoint do Codex — que não a aceita. Chave e
+     * provider andam juntos, como no `resolveOrgLlmConfig` do motor.
+     */
+    let providerDoTurno: string = version.provider;
+    /**
      * A RESERVA DA ASSINATURA (#1639), na MESMA escada que o resolvedor do
      * turno usa: a chave `openai` mais recente, ativa e validada da EMPRESA,
      * e na falta dela a chave de plataforma da instalação. Sem nenhuma, `null`
@@ -402,6 +410,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
           );
         }
         credentialApiKey = reserva.apiKey;
+        providerDoTurno = PROVEDOR_DE_RESERVA_DA_ASSINATURA;
       }
     } else if (version.credential_id) {
       try {
@@ -618,7 +627,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       : [];
 
     // 9) Build LM directly against the provider (BYOK credential — see buildModel doc).
-    const model = buildModel(version.provider, credentialApiKey, version.model, credentialBaseUrl);
+    const model = buildModel(providerDoTurno, credentialApiKey, version.model, credentialBaseUrl);
 
     // 10) Cost/token guard. Fires BEFORE the next step is taken.
     let abortReason: string | null = null;
@@ -634,7 +643,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         return true;
       }
       const cost = await computeCostCents({
-        provider: version.provider,
+        provider: providerDoTurno,
         model: version.model,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
@@ -667,7 +676,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     // 12) Aggregate metrics.
     const usage = totalUsage(result.steps as Array<{ usage?: { inputTokens?: number; outputTokens?: number } }>);
     const cost = await computeCostCents({
-      provider: version.provider,
+      provider: providerDoTurno,
       model: version.model,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
