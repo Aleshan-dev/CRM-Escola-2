@@ -926,8 +926,7 @@ export async function sendMessageHandler(
     if (updated) message = updated as unknown as Message;
   } else {
     try {
-      // O que separa mídia de texto é a presença de `media` no envelope — o
-      // `guardServiceEffect` acabou de reler, pelo pg, a fronteira e a operação do
+      // O `guardServiceEffect` de cada corte relê, pelo pg, a fronteira e a operação do
       // escopo de execução. Quando o ctx carrega EXATAMENTE essas mesmas, reler
       // pela REST é a mesma pergunta duas vezes por corte (quatro por bolha). Sem
       // escopo, ou com escopo diferente (UI, MCP, automação), a REST continua
@@ -946,6 +945,7 @@ export async function sendMessageHandler(
         if (ctx.agentOperation && !operacaoJaConferida)
           await assertAgentOperationSupabase(supabase, ctx.agentOperation);
       };
+      // O que separa mídia de texto é a presença de `media` no envelope — o
       // adapter preserva o mesmo branch (e a mesma mensagem de erro de cada
       // método) do outro lado do seam.
       let externalId: string | null;
@@ -1274,7 +1274,13 @@ export async function sendMessageHandler(
     .eq("id", c.contact_id)
     .eq("organization_id", c.organization_id)
     .then(({ error }) => {
-      if (error) logger.warn("messages.send.last_activity_failed", { code: error.code });
+      if (error)
+        logger.warn("messages.send.last_activity_failed", {
+          code: error.code,
+          message: error.message,
+          organization_id: c.organization_id,
+          message_id: message.id,
+        });
     });
 
   }
@@ -1311,7 +1317,13 @@ export async function sendMessageHandler(
       p_organization_id: c.organization_id,
     })
     .then(({ error }) => {
-      if (error) logger.error("messages.send.emit_event_failed", { code: error.code });
+      if (error)
+        logger.error("messages.send.emit_event_failed", {
+          code: error.code,
+          message: error.message,
+          organization_id: c.organization_id,
+          message_id: message.id,
+        });
     });
 
   return message;
