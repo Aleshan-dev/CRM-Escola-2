@@ -12,10 +12,11 @@
  *   - pior separação sob dicromacia:        0,0576   (piso do repo: 0,05)
  *   - pior contraste do texto do chip:      4,75     (piso WCAG: 4,5)
  *
- * A régua do repo é a que decide o texto sobre a cor (`melhorFrenteSobre`), e a
- * mesma régua existe porque sob deuteranopia vermelho e verde colapsam: escolher
- * oito tons a olho reprovaria, e a etiqueta ilegível só apareceria na tela de
- * quem tem a limitação — ou de quem tem a limitação e um cliente olhando.
+ * A régua do repo é a que decide o texto sobre a cor (`escolheAFrente`, com o
+ * piso de 4,5 declarado como contrato — issue #2373), e a mesma régua existe
+ * porque sob deuteranopia vermelho e verde colapsam: escolher oito tons a olho
+ * reprovaria, e a etiqueta ilegível só apareceria na tela de quem tem a
+ * limitação — ou de quem tem a limitação e um cliente olhando.
  *
  * O texto do chip é escolhido pelo sistema, nunca por quem escolhe a cor: a cor
  * é decoração e reforço; o NOME da etiqueta é a informação. Cor nunca é o único
@@ -30,7 +31,7 @@
  * instalação que queira outro tom não precisa de migration — e o banco não deve
  * saber o que é decoração de tela.
  */
-import { melhorFrenteSobre } from "@/lib/branding/contraste";
+import { escolheAFrente } from "@/lib/branding/contraste";
 import { ehHexValido, normalizarHex } from "@/lib/branding/rampa";
 
 /**
@@ -131,9 +132,17 @@ export function coresDoVocabulario(settings: unknown): CoresPorEtiqueta {
 
 /**
  * O estilo do chip quando a etiqueta tem cor: fundo na cor, texto escolhido por
- * `melhorFrenteSobre` e borda da mesma cor (o chip do design system já tem
- * borda; deixá-la no token padrão criaria um aro claro em torno de um fundo
- * escuro — medido na revisão visual da tela de Tags).
+ * `escolheAFrente` (a régua, com piso de 4,5 — issue #2373) e borda da mesma
+ * cor (o chip do design system já tem borda; deixá-la no token padrão criaria
+ * um aro claro em torno de um fundo escuro — medido na revisão visual da tela
+ * de Tags).
+ *
+ * A frente NUNCA vem daqui: só a régua escolhe preto ou branco, e este módulo
+ * se recusa a pintar qualquer cor que `normalizarCorDeEtiqueta` não aceite.
+ * Pintar `#ffffff` fixo (ou deixar o texto herdar `text-text-muted`) é o defeito
+ * da #2373 — "fundo escuro com texto preto" —, e
+ * `tests/unit/chip-contraste-da-etiqueta.test.ts` reprova sob essa sabotagem,
+ * tom por tom, com o nome do tom na falha.
  *
  * `undefined` quando não há cor: aí o chip sai com o token padrão, exatamente o
  * que já existia antes desta fatia.
@@ -144,6 +153,6 @@ export function estiloDoChip(cor: string | null | undefined): React.CSSPropertie
   return {
     backgroundColor: normalizada,
     borderColor: normalizada,
-    color: melhorFrenteSobre(normalizada),
+    color: escolheAFrente(normalizada),
   };
 }
