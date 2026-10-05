@@ -21,40 +21,7 @@ import {
 } from "@/lib/inbox/rascunho-sugerido";
 import { getQueuePositions } from "@/lib/routing/queue";
 import { resolveUserNames } from "./_users";
-import type { McpContext, McpToolDefinition } from "../types";
-
-/**
- * A recusa de pessoal nas leituras de conversa (spec 21, etapa 12).
- *
- * O handler responde 404 tanto para "não existe" quanto para "é de pessoal"
- * (de propósito, para não revelar). Só no caminho do 404 esta leitura
- * diagnóstica distingue os dois — e só ela: fora do 404 nada muda. Sem ela, o
- * modelo receberia "não encontrado" para uma conversa que existe e tentaria de
- * novo por outro caminho.
- */
-const RECUSA_CONTATO_PESSOAL = {
-  permitido: false,
-  motivo: "contato_pessoal",
-  mensagem:
-    "esta conversa é de um contato marcado como pessoal — fora da operação: não leia " +
-    "nem escreva aqui; siga a conversa com quem está falando.",
-} as const;
-
-async function recusaSeConversaDePessoal(
-  ctx: McpContext,
-  conversationId: string,
-): Promise<typeof RECUSA_CONTATO_PESSOAL | null> {
-  const { data } = await ctx.supabase
-    .from("conversations")
-    .select("contact_id, contacts:contact_id(is_personal)")
-    .eq("organization_id", ctx.organizationId)
-    .eq("id", conversationId)
-    .maybeSingle();
-  const pessoal =
-    (data as { contacts?: { is_personal?: boolean } | null } | null)?.contacts?.is_personal ===
-    true;
-  return pessoal ? RECUSA_CONTATO_PESSOAL : null;
-}
+import type { McpToolDefinition } from "../types";
 
 /**
  * Conversa está na fila = sem dono ∧ status de espera.
@@ -225,11 +192,6 @@ export const crmGetConversation: McpToolDefinition<typeof getInputShape> = {
       // não ganha veredito sobre existência. Sem turno, sobe como antes; erro
       // que não é `404` sobe sempre.
       if (!(e instanceof ApiError) || e.status !== 404) throw e;
-      // ...exceto quando a conversa EXISTE e é de pessoal: aí o motivo honesto
-      // é `contato_pessoal`, nos dois ingressos (com ou sem turno). A leitura
-      // diagnóstica só acontece neste 404 — fora dele, nada muda.
-      const recusa = await recusaSeConversaDePessoal(ctx, input.conversation_id);
-      if (recusa) return recusa;
       if (ctx.contatoDoTurno) {
         conv = null;
       } else {
@@ -350,10 +312,6 @@ export const crmGetConversationHistory: McpToolDefinition<typeof historyInputSha
         );
       } catch (e) {
         if (!(e instanceof ApiError) || e.status !== 404) throw e;
-        // 404 aqui também pode ser pessoal (o handler não distingue): o motivo
-        // honesto passa na frente do genérico de fora-da-conversa.
-        const recusa = await recusaSeConversaDePessoal(ctx, input.conversation_id);
-        if (recusa) return recusa;
         conv = null;
       }
       if (!conv || conv.contact_id !== ctx.contatoDoTurno) {
@@ -379,11 +337,6 @@ export const crmGetConversationHistory: McpToolDefinition<typeof historyInputSha
         { limit: input.limit, cursor: input.cursor },
       );
     } catch (e: unknown) {
-      // Sem turno, o 404 do histórico também pode ser pessoal — mesmo
-      // diagnóstico, mesmo motivo honesto. O resto sobe como antes.
-      if (!(e instanceof ApiError) || e.status !== 404) throw e;
-      const recusa = await recusaSeConversaDePessoal(ctx, input.conversation_id);
-      if (recusa) return recusa;
       throw e;
     }
     return {

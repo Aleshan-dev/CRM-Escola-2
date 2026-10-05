@@ -225,54 +225,51 @@ function bancoConversa404(diagnosticoPessoal: boolean | null) {
   } as never;
 }
 
-describe("crm_get_conversation troca o 404 mudo pelo motivo honesto", () => {
+describe("crm_get_conversation não distingue pessoal (404 mudo)", () => {
   const entrada = { conversation_id: CONV };
 
-  it("conversa de pessoal devolve contato_pessoal (com ou sem turno, o motivo é o mesmo)", async () => {
-    for (const turno of [undefined, CONTATO_PESSOAL]) {
-      const ctx = { ...ctxMcp(bancoConversa404(true)), contatoDoTurno: turno };
-      const r = (await crmGetConversation.handler(entrada, ctx as never)) as Record<string, unknown>;
-      expect(r).toMatchObject({ permitido: false, motivo: "contato_pessoal" });
-    }
+  it("conversa de pessoal com turno recebe a MESMA recusa de outra conversa", async () => {
+    const ctx = {
+      ...(ctxMcp(bancoConversa404(true)) as Record<string, unknown>),
+      contatoDoTurno: CONTATO_LIVRE,
+    };
+    const r = (await crmGetConversation.handler(entrada, ctx as never)) as Record<string, unknown>;
+    expect(r).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
   });
 
-  it("uuid que não existe continua 404 sem turno (sem oráculo de existência)", async () => {
-    const r = crmGetConversation.handler(entrada, ctxMcp(bancoConversa404(false)));
-    await expect(r).rejects.toMatchObject({ status: 404 });
+  it("conversa de pessoal sem turno dá o mesmo 404 de uuid inexistente", async () => {
+    const r1 = crmGetConversation.handler(entrada, ctxMcp(bancoConversa404(true)));
+    await expect(r1).rejects.toMatchObject({ status: 404 });
+    const r2 = crmGetConversation.handler(entrada, ctxMcp(bancoConversa404(false)));
+    await expect(r2).rejects.toMatchObject({ status: 404 });
   });
 
   it("uuid que não existe com turno continua fora_da_conversa", async () => {
-    const ctx = { ...ctxMcp(bancoConversa404(null)), contatoDoTurno: CONTATO_LIVRE };
+    const ctx = {
+      ...(ctxMcp(bancoConversa404(null)) as Record<string, unknown>),
+      contatoDoTurno: CONTATO_LIVRE,
+    };
     const r = (await crmGetConversation.handler(entrada, ctx as never)) as Record<string, unknown>;
     expect(r).toMatchObject({ permitido: false, motivo: "fora_da_conversa" });
   });
 });
 
-/** Fake para o histórico sem turno: duas leituras planas + diagnóstico. */
+/** Fake para o histórico sem turno: duas leituras planas (conversa, contato). */
 function bancoHistoricoPessoal() {
+  const linha =
+    (tabela: string) =>
+    (tabela === "conversations" ? [{ contact_id: CONTATO_PESSOAL }] : [{ is_personal: true }]);
   return {
     from: (tabela: string) => ({
-      select: (s: string) => {
-        if (s.includes("contacts:")) {
-          const q: { eq: () => unknown; maybeSingle: () => Promise<{ data: unknown; error: null }> } = {
-            eq: () => q,
-            maybeSingle: async () => ({
-              data: { contact_id: CONTATO_PESSOAL, contacts: { is_personal: true } },
-              error: null,
-            }),
-          };
-          return q;
-        }
+      select: () => {
         const q: {
           eq: () => unknown;
-          limit: () => Promise<{ data: unknown[]; error: null }>;
+          limit: () => unknown;
+          then: (ok: (v: unknown) => unknown) => unknown;
         } = {
           eq: () => q,
-          limit: () =>
-            Promise.resolve({
-              data: tabela === "conversations" ? [{ contact_id: CONTATO_PESSOAL }] : [{ is_personal: true }],
-              error: null,
-            }),
+          limit: () => q,
+          then: (ok) => Promise.resolve(ok({ data: linha(tabela), error: null })),
         };
         return q;
       },
@@ -280,13 +277,13 @@ function bancoHistoricoPessoal() {
   } as never;
 }
 
-describe("crm_get_conversation_history recusa pessoal sem turno", () => {
-  it("histórico de pessoal devolve contato_pessoal em vez do 404 mudo", async () => {
-    const r = (await crmGetConversationHistory.handler(
+describe("crm_get_conversation_history não distingue pessoal (404 mudo)", () => {
+  it("histórico de pessoal sem turno dá 404 como uuid inexistente", async () => {
+    const r = crmGetConversationHistory.handler(
       { conversation_id: CONV, limit: 20 },
       ctxMcp(bancoHistoricoPessoal()),
-    )) as Record<string, unknown>;
-    expect(r).toMatchObject({ permitido: false, motivo: "contato_pessoal" });
+    );
+    await expect(r).rejects.toMatchObject({ status: 404 });
   });
 });
 
@@ -492,7 +489,7 @@ describe("abrir conversa com pessoal recusa antes de nascer (tool + ponto único
 
   it("por contact_id: recusa sem abrir", async () => {
     const r = (await crmStartConversationAndSend.handler(
-      { channel_session_id: SESSAO, contact_id: CONTATO_PESSOAL, body: "oi" },
+      { channel_session_id: SESSAO, contact_id: CONTATO_PESSOAL, type: "text", body: "oi" },
       ctxMcp(bancoAbertura()),
     )) as Record<string, unknown>;
     expect(r).toMatchObject({ permitido: false, motivo: "contato_pessoal" });
@@ -500,7 +497,7 @@ describe("abrir conversa com pessoal recusa antes de nascer (tool + ponto único
 
   it("por telefone de pessoal: recusa sem abrir", async () => {
     const r = (await crmStartConversationAndSend.handler(
-      { channel_session_id: SESSAO, phone_number: "+5511999999999", body: "oi" },
+      { channel_session_id: SESSAO, phone_number: "+5511999999999", type: "text", body: "oi" },
       ctxMcp(bancoAbertura()),
     )) as Record<string, unknown>;
     expect(r).toMatchObject({ permitido: false, motivo: "contato_pessoal" });
