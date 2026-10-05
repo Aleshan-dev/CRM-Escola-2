@@ -9,6 +9,7 @@ import { trocarCodigoPorTokens } from "@/lib/ai/pontos/pkce-da-assinatura";
 import { audit } from "@/lib/audit";
 import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { supportWriteError } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -44,6 +45,8 @@ export async function conectarLoginCodex(
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
   if (!podeAdministrarEmpresa(authUser, activeOrg)) return { ok: false, error: "forbidden_role" };
+  // Suporte em leitura (ou já encerrado) não grava nem apaga a conta da empresa.
+  if (supportWriteError(authUser.support)) return { ok: false, error: "somente_leitura" };
 
   const parsed = entradaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
@@ -96,6 +99,8 @@ export async function desconectarLoginCodexAgora(): Promise<DesconectarLoginCode
   const activeOrg = await resolveActiveOrg(authUser);
   if (!activeOrg) return { ok: false, error: "forbidden_tenant" };
   if (!podeAdministrarEmpresa(authUser, activeOrg)) return { ok: false, error: "forbidden_role" };
+  // Suporte em leitura (ou já encerrado) não grava nem apaga a conta da empresa.
+  if (supportWriteError(authUser.support)) return { ok: false, error: "somente_leitura" };
 
   const admin = createAdminClient();
   const { data: linha } = await admin

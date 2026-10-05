@@ -52,9 +52,8 @@
  * lado dos que já existem"). Não é um dos ids nativos e não reaproveita `openai`:
  * a credencial de um não vale para o outro, e a reserva depende de serem dois.
  */
-// O vocabulário mora em `./provedores.ts` (é de lá que deriva o tipo que
-// junta as credenciais de chave); reexportado aqui para quem já importava
-// de onde a política nasceu.
+// O vocabulário mora em `./provedores.ts` (é dele que a união de provedores
+// com chave deriva); reexportado aqui para quem já importava de onde a política nasceu.
 import { PROVEDOR_POR_ASSINATURA } from "./provedores";
 
 export { PROVEDOR_POR_ASSINATURA };

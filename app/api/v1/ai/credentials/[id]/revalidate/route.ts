@@ -74,6 +74,7 @@ export async function POST(
       admin,
       orgId: activeOrg.orgId,
       credentialId: id,
+      userId: authUser.id,
       renovar: (atuais) => renovarPorRefreshToken({ refreshToken: atuais.refresh_token }),
     });
     if (renovado.ok) {
