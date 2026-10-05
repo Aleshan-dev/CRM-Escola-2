@@ -219,6 +219,19 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     return fail("internal_error", "Erro ao atualizar agent.", 500, { requestId });
   }
 
+  // Pausar e alterar o agente que atende clientes, por token ou pela sessão,
+  // deixa rastro com quem fez: o id do TOKEN quando a chamada veio por Bearer.
+  void audit({
+    action: update.paused_at ? "ai_agent.paused" : "ai_agent.updated",
+    actorUserId: actor.type === "user" ? actor.id : null,
+    actorApiTokenId: authz.apiTokenId ?? null,
+    organizationId,
+    resourceType: "ai_agent",
+    resourceId: id,
+    requestId,
+    metadata: { fields: Object.keys(update), via: authz.via },
+  });
+
   return ok(updated, { requestId });
 }
 
