@@ -158,6 +158,8 @@ interface ContactRow {
   phone_number: string | null;
   tags: string[] | null;
   is_blocked: boolean;
+  /** Spec 21: espelha a coluna (o veto de envio e o esconderijo entram na fatia 2). */
+  is_personal: boolean;
   source: string | null;
   consent: Record<string, unknown> | null;
   is_anonymized: boolean;
@@ -208,7 +210,7 @@ export async function getLeadContext(
   knobs: LeadContextKnobs,
 ): Promise<LeadContextResult> {
   const { rows: contactRows } = await db.query<ContactRow>(
-    `select name, display_name, email, phone_number, tags, is_blocked, source, consent, is_anonymized
+    `select name, display_name, email, phone_number, tags, is_blocked, is_personal, source, consent, is_anonymized
      from contacts where organization_id = $1 and id = $2`,
     [input.tenantId, input.leadId],
   );
