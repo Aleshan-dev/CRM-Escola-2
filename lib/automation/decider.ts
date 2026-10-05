@@ -43,7 +43,7 @@ export interface EntradaDaDecisao {
   instrucao: string;
   /** O conjunto FINITO de opções (o schema garante 2 a 6, ids únicos). */
   opcoes: readonly OpcaoDeDecisao[];
-  /** O contexto do evento que disparou a regra — o "caso" que a IA lê. */
+  /** O contexto do evento que disparou a regra — sai projetado por `fichaDaDecisao`, nunca inteiro. */
   contexto: Record<string, unknown>;
 }
 
@@ -62,6 +62,51 @@ const INSTRUCAO_FIXA =
 
 function formatarOpcoes(opcoes: readonly OpcaoDeDecisao[]): string {
   return opcoes.map((o) => `- id: ${o.id} — ${o.rotulo} (ação: ${o.acao.type})`).join("\n");
+}
+
+/**
+ * A FICHA que vai ao provedor de LLM — lista FIXA, nunca o contexto inteiro.
+ *
+ * `buildContext` (lib/automation/engine.ts) hidrata `lead` e `contact` com
+ * `select("*")`: serializar isso mandava para fora da instalação e-mail,
+ * telefone, ids internos, `organization_id` e o CPF cifrado. É o mesmo defeito
+ * que `lib/automation/dados-do-formulario.ts` (`CAMPOS_DO_CONTATO`) e a projeção
+ * do `call_webhook` já corrigiram, com a mesma receita: itera os campos
+ * PERMITIDOS, não os presentes — coluna nova amanhã não vaza sozinha.
+ *
+ * A lista é mais curta que a daqueles dois porque o uso é outro: eles escrevem
+ * ao cliente ou entregam ao integrador; aqui a IA só ESCOLHE uma opção, e nome,
+ * e-mail e telefone não mudam escolha nenhuma.
+ *
+ * ponytail: `custom_fields` vai inteiro — é o dado de negócio que a instrução
+ * do operador costuma citar ("quer parcelar?"), e é o que o operador cadastrou.
+ * Teto: um campo personalizado com documento dentro sai junto; o caminho é
+ * filtrar pelos campos do funil quando alguém pedir.
+ */
+const FICHA_DA_DECISAO = {
+  evento: ["body_preview", "added_tags", "event_type_name", "status", "lost_reason", "won_reason"],
+  lead: ["title", "status", "value_cents", "currency", "tags", "custom_fields", "source", "won_reason", "lost_reason"],
+  contact: ["tags"],
+} as const;
+
+function projetar(origem: unknown, campos: readonly string[]): Record<string, unknown> | undefined {
+  if (!origem || typeof origem !== "object") return undefined;
+  const linha = origem as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const campo of campos) if (linha[campo] !== undefined && linha[campo] !== null) out[campo] = linha[campo];
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Exportada para o teste de vazamento olhar a ficha sem montar o prompt. */
+export function fichaDaDecisao(contexto: Record<string, unknown>): Record<string, unknown> {
+  const ficha: Record<string, unknown> = {};
+  const evento = projetar(contexto.event, FICHA_DA_DECISAO.evento);
+  const negocio = projetar(contexto.lead, FICHA_DA_DECISAO.lead);
+  const contato = projetar(contexto.contact, FICHA_DA_DECISAO.contact);
+  if (evento) ficha.evento = evento;
+  if (negocio) ficha.negocio = negocio;
+  if (contato) ficha.contato = contato;
+  return ficha;
 }
 
 function formatarContexto(contexto: Record<string, unknown>): string {
@@ -91,7 +136,7 @@ export function montarMensagemDaDecisao(entrada: EntradaDaDecisao): string {
     formatarOpcoes(entrada.opcoes),
     "",
     "## Contexto do evento",
-    formatarContexto(entrada.contexto),
+    formatarContexto(fichaDaDecisao(entrada.contexto)),
   ].join("\n");
 }
 
