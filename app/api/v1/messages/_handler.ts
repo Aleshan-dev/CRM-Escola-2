@@ -269,6 +269,28 @@ export async function listMessagesHandler(
   conversationId: string,
   q: ListMessagesQuery,
 ): Promise<ListMessagesResult> {
+  // Pessoal não é alcançável nem pelo histórico (spec 21, etapa 7): a conversa
+  // sumiu da lista e o link direto dá 404, então o histórico recusa junto —
+  // defesa em profundidade, com o mesmo 404 mudo para não revelar a conversa.
+  const { data: dona } = await supabase
+    .from("conversations")
+    .select("contact_id, contacts:contact_id(is_personal)")
+    .eq("id", conversationId)
+    .eq("organization_id", ctx.organization_id)
+    .maybeSingle();
+  const ehPessoal =
+    (dona as unknown as { contacts?: { is_personal?: boolean } | null } | null)?.contacts
+      ?.is_personal === true;
+  if (ehPessoal) {
+    throw new ApiError(
+      404,
+      "not_found",
+      undefined,
+      ctx.requestId,
+      traduzir("Conversa não encontrada.", ctx.idioma ?? "pt-BR"),
+    );
+  }
+
   // A CONSULTA VAI DO MAIS NOVO PARA O MAIS VELHO — de propósito.
   //
   // Antes era `ascending: true`: a primeira página trazia as `limit` mensagens
