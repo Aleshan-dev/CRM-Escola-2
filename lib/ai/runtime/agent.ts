@@ -522,6 +522,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       capacidadesLigadas: await capacidadesDaOrganizacao(admin, run.organization_id),
       handoffSignal,
       ...(servidorExterno ? { servidorMcpExterno: servidorExterno } : {}),
+      ...(run.contact_id ? { contatoDoTurno: run.contact_id } : {}),
     });
 
     // 8) Load history with budget.
