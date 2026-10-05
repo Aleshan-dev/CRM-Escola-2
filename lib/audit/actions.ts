@@ -1014,6 +1014,13 @@ export const AUDIT_ACTIONS = [
   // A identidade da Página/WABA que a Meta exige no Purchase de clique-para-WhatsApp
   // (#2098): gravada pela tela de Conversões, em `organizations.settings.conversions`.
   "conversions.meta_identity_updated",
+
+  // Contato pessoal (spec 21): marcar e desmarcar, no padrão de
+  // `contact.blocked` / `contact.unblocked`. Eventos NOVOS de propósito — nunca
+  // reutilizar os de bloqueio, que significam descadastro/STOP (direito do
+  // titular), não decisão operacional de esconder da operação.
+  "contact.marked_personal",
+  "contact.unmarked_personal",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
