@@ -4,6 +4,7 @@ import { z } from "zod";
 import { encryptWebhookSecret, decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { metadataInicialDoCanal } from "@/lib/ai/elegibilidade/pre-go-live";
 import { resolverSaudeDaConexaoRemovida } from "@/lib/channels/health";
+import { logger } from "@/lib/logger";
 import { inboxSupported, SOCIAL_PROVIDER } from "./catalog";
 import { listSocialAccounts, socialRequest, SocialError } from "./client";
 
@@ -249,7 +250,12 @@ export async function disconnectSocialAccount(
   // Only accounts listed under this profile: the key may reach other profiles' accounts.
   if (removeAccount && listed)
     await deleteAtProvider(integration.key, `accounts/${encodeURIComponent(accountId)}`);
-  if (!channel) return { channel_id: null, account_removed: removeAccount && listed };
+  if (!channel)
+    return {
+      channel_id: null,
+      account_removed: removeAccount && listed,
+      avisos_fechados: "sem_mudanca" as const,
+    };
   const now = new Date().toISOString();
   const { error } = await db
     .from("channel_sessions")
@@ -264,10 +270,26 @@ export async function disconnectSocialAccount(
     .eq("id", channel.id);
   if (error) throw new SocialError("Não foi possível arquivar o canal. Tente novamente.", 500);
   // Best-effort: the channel is already out; an open health alert must not block that.
-  await resolverSaudeDaConexaoRemovida(db, {
-    id: channel.id,
-    organization_id: org,
-    status: "STOPPED",
-  }).catch(() => undefined);
-  return { channel_id: channel.id, account_removed: removeAccount && listed };
+  // But the failure is not swallowed: it goes to the log and, via the route's audit
+  // spread, to the audit metadata — same contract as channel-sessions/[id].
+  let avisosFechados: "resolvido" | "sem_mudanca" | "falhou";
+  try {
+    avisosFechados = await resolverSaudeDaConexaoRemovida(db, {
+      id: channel.id,
+      organization_id: org,
+      status: "STOPPED",
+    });
+  } catch (err) {
+    avisosFechados = "falhou";
+    logger.warn("Falha ao fechar os avisos de saúde da conexão social removida", {
+      channel_session_id: channel.id,
+      organization_id: org,
+      erro: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return {
+    channel_id: channel.id,
+    account_removed: removeAccount && listed,
+    avisos_fechados: avisosFechados,
+  };
 }

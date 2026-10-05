@@ -1,10 +1,11 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const h = vi.hoisted(() => ({ fetch: vi.fn(), health: vi.fn() }));
+const h = vi.hoisted(() => ({ fetch: vi.fn(), health: vi.fn(), warn: vi.fn() }));
 vi.mock("@/lib/webhooks/secrets", () => ({
   decryptWebhookSecret: async () => "provider-key",
   encryptWebhookSecret: async () => "enc",
 }));
 vi.mock("@/lib/channels/health", () => ({ resolverSaudeDaConexaoRemovida: h.health }));
+vi.mock("@/lib/logger", () => ({ logger: { warn: h.warn, info: vi.fn(), error: vi.fn() } }));
 vi.mock("../zernio/credentials", () => ({ zernioBaseUrl: () => "https://zernio.test" }));
 import { disconnectSocialAccount } from "./store";
 import { SocialError } from "./client";
@@ -72,6 +73,7 @@ it("removes the webhook and the account, then archives the channel with a new UR
   expect(await disconnectSocialAccount(db, org, account, true)).toEqual({
     channel_id: "ch-1",
     account_removed: true,
+    avisos_fechados: "resolvido",
   });
   expect(deletes()).toEqual(["webhooks/settings?webhookId=wh-1", `accounts/${account}`]);
   expect(updates).toHaveLength(1);
@@ -127,7 +129,27 @@ it("archives a channel whose account left the profile without deleting that acco
   expect(await disconnectSocialAccount(db, org, gone, true)).toEqual({
     channel_id: "ch-1",
     account_removed: false,
+    avisos_fechados: "resolvido",
   });
   expect(deletes()).toEqual(["webhooks/settings?webhookId=wh-1"]);
   expect(updates).toHaveLength(1);
+});
+
+it("logs and reports a health-alert failure instead of swallowing it, without undoing the archive", async () => {
+  provider({});
+  h.health.mockRejectedValue(new Error("ler os avisos abertos: 500"));
+  const { db, updates } = fakeDb([channel]);
+  expect(await disconnectSocialAccount(db, org, account, false)).toMatchObject({
+    channel_id: "ch-1",
+    avisos_fechados: "falhou",
+  });
+  expect(updates).toHaveLength(1);
+  expect(h.warn).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({
+      channel_session_id: "ch-1",
+      organization_id: org,
+      erro: "ler os avisos abertos: 500",
+    }),
+  );
 });
