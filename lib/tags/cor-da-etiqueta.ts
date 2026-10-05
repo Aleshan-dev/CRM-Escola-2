@@ -8,9 +8,32 @@
  * gosto — foi ESCOLHIDA POR BUSCA, com as duas réguas que já existem neste repo
  * (`lib/branding/contraste.ts`), maximizando o pior par:
  *
- *   - pior separação a olho nu (OKLab):     0,1195   (piso do repo: 0,10)
+ *   - pior separação a olho nu (OKLab):     0,1192   (piso do repo: 0,10)
  *   - pior separação sob dicromacia:        0,0576   (piso do repo: 0,05)
  *   - pior contraste do texto do chip:      4,75     (piso WCAG: 4,5)
+ *
+ * ─── Verde-água e Vermelho com texto BRANCO (issue #2373) ───────────────────
+ *
+ * Nos tons originais o WCAG 2 escolhia o PRETO para o verde (6,835) e para o
+ * vermelho (5,433) — ambos passavam do piso, e ainda assim a autora da #2373
+ * escreveu "fundo escuro e texto preto, quase ilegíveis". O mantainer mediu os
+ * mesmos pares no APCA (rascunho do WCAG 3, |Lc|, medida DELE, implementação
+ * própria 0.0.98G) e o branco vence: 62 e 70 contra 47 e 39. A escolha da
+ * régua era o defeito, não a cor.
+ *
+ * O branco, porém, só passa de 4,5 num tom mais escuro (luz relativa ≤
+ * 0,17912, onde `max(branco, preto)` ≥ 4,582671). Então os dois tons foram
+ * ESCURECIDOS por busca em OKLCH — mesmo matiz, croma limitada pela gama,
+ * varrendo a luz relativa e escolhendo o tom mais claro que mantém os dois
+ * pisos de separação — e não inventados a olho:
+ *
+ *   - `#12a594` → `#00655a` (luz 0,2918 → 0,1005): frente `#ffffff`, 6,979
+ *   - `#e54d2e` → `#cf3716` (luz 0,2216 → 0,1606): frente `#ffffff`, 4,987
+ *
+ * O pior par continua acima dos dois pisos (0,1192 a olho nu, 0,0576 sob
+ * dicromacia) e o pior contraste de texto da paleta continua em 4,751, no roxo
+ * — que não mudou. Nomes iguais, fileira igual: quem tinha "Verde-água" e
+ * "Vermelho" continua com as mesmas etiquetas, agora legíveis.
  *
  * A régua do repo é a que decide o texto sobre a cor (`escolheAFrente`, com o
  * piso de 4,5 declarado como contrato — issue #2373), e a mesma régua existe
@@ -43,8 +66,8 @@ import { ehHexValido, normalizarHex } from "@/lib/branding/rampa";
 export const PALETA_DE_ETIQUETAS: readonly string[] = [
   "#ffe629",
   "#ffb224",
-  "#e54d2e",
-  "#12a594",
+  "#cf3716",
+  "#00655a",
   "#0091ff",
   "#3e63dd",
   "#ab4aba",

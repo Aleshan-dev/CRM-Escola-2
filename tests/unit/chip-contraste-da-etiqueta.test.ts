@@ -1,6 +1,7 @@
 /**
- * O CHIP DA ETIQUETA SOB A RÉGUA — o piso de TEXTO recalculado tom a tom e o
- * caminho ÚNICO de render (issue #2373: "fundo escuro com texto preto").
+ * O CHIP DA ETIQUETA SOB A RÉGUA — o piso de TEXTO recalculado tom a tom, a
+ * frente BRANCA em verde-água e vermelho, e o caminho ÚNICO de render
+ * (issue #2373: "fundo escuro e texto preto, quase ilegíveis").
  *
  * ─── Por que este arquivo, já existindo `tags-cor-de-etiqueta.test.ts` ───────
  *
@@ -9,24 +10,32 @@
  * (frente `#ffffff` fixa, texto herdando `text-text-muted`) deixa o irmão
  * inteiro verde e a tela continua ilegível — é o defeito que a issue descreve,
  * e ele vive no caminho de render, não na função. Aqui a frente sai de
- * `estiloDoChip`, é a mesma que `escolheAFrente` escolheria, e cada tom reprova
- * COM O PRÓPRIO NOME na mensagem.
+ * `estiloDoChip` e cada tom reprova COM O PRÓPRIO NOME na mensagem.
+ *
+ * ─── Por que só símbolos que já existiam na `main` ──────────────────────────
+ *
+ * Este arquivo roda na `main` de hoje sem nenhum patch (nada importa
+ * `escolheAFrente`, que é do PR). É de propósito: é o que permite a prova que
+ * a issue pede — rodar ESTE arquivo contra a `main` e ver o teste de frente
+ * branca VERMELHO, com os dois tons nomeados. Se o teste só existisse no patch,
+ * ele provaria que o patch se sustenta, não que o defeito é real.
  *
  * Três coisas que só este arquivo segura:
  *
- *  1. **O piso vale para QUALQUER cor gravada, não só para a paleta.**
+ *  1. **Verde-água e vermelho com TEXTO BRANCO.** O WCAG 2 escolhe preto nesses
+ *     tons (6,835 e 5,433) e é exatamente essa escolha que a autora da issue vê
+ *     como "quase ilegível"; o mantainer mediu o mesmo par no APCA (rascunho do
+ *     WCAG 3, |Lc|), que favorece o branco (62 e 70 contra 47 e 39) — medida
+ *     dele, implementação própria 0.0.98G. Como o branco só passa de 4,5 num
+ *     tom mais escuro, os dois tons foram escurecidos na paleta.
+ *  2. **O piso vale para QUALQUER cor gravada**, não só para a paleta:
  *     `organizations.settings.tags` é JSON editável à mão e a borda aceita
- *     qualquer `#rrggbb` de propósito ("a pertinência à paleta não é validada
- *     em lugar nenhum"). Quem tem cor fora da paleta — inclusive a da
- *     captura da #2373, medida pixel a pixel — precisa do mesmo piso.
- *  2. **O caminho único de render.** O chip aparece em oito arquivos; se um
- *     nono passar `style=` ao chip, ou pintar a cor da etiqueta fora de
- *     `estiloDoChip`, a frente volta a ser escolhida por alguém que não é a
- *     régua. O levantamento está LISTADO aqui de propósito: é ele que a issue
- *     pede ("levantar todos os pontos de render"), e um ponto novo reprova
- *     até que o levantamento seja atualizado.
- *  3. **O pior par é recalculado**, não lido do comentário da paleta: a olho nu
- *     (OKLab cru) e sob dicromacia, com o PAR NOMEADO quando reprova.
+ *     qualquer `#rrggbb` de propósito. Quem tem cor fora da paleta — inclusive a
+ *     da captura da issue, medida pixel a pixel — precisa do mesmo piso.
+ *  3. **O caminho único de render**, por CASO ESTRUTURAL e não por lista fixa:
+ *     nenhum uso do chip pode passar `style=` ou classe de cor, e
+ *     `estiloDoChip` só pode ser importado pelo próprio chip. Uma tela nova que
+ *     use o chip é aceita automaticamente; uma que pinte cor sozinha reprova.
  *
  * Os tons saem com nome lido do `NOME_DO_TOM` do painel (texto, não import:
  * teste de lib não importa `@/app`), para que a falha diga "Âmbar" e não só
@@ -41,7 +50,7 @@ import {
   PISO_DE_SEPARACAO_SIMULADA,
   PISOS,
   deltaESimulado,
-  escolheAFrente,
+  melhorFrenteSobre,
   razaoDeContraste,
 } from "@/lib/branding/contraste";
 import { deltaEOklab } from "@/lib/branding/rampa";
@@ -55,8 +64,7 @@ const PISO_A_OLHO_NU = 0.1;
  * Os cinco tons da captura da #2373, medidos no PNG (`user-attachments/
  * 4e3cf3b5…`): NÃO são os da paleta (a organização tem cor gravada fora dela,
  * que é o caso de uso que a borda aceita de propósito), e é sobre elas que o
- * autor da issue vê o defeito. Toda cor da captura passa hoje — este teste
- * transforma "passa" em contrato.
+ * autor da issue vê o defeito.
  */
 const CORES_DA_CAPTURA_DA_ISSUE = ["#4b60d8", "#6f6f6f", "#1aa494", "#fcb540", "#e35537"];
 
@@ -97,7 +105,43 @@ function varreduraDeSrgb(): string[] {
   return saida;
 }
 
+/** Verde-água e Vermelho: os dois tons da reprodução da issue. */
+function tonsDaReproducao(nomes: Record<string, string>): string[] {
+  return PALETA_DE_ETIQUETAS.filter(
+    (tom) => /^verde/i.test(nomes[tom] ?? "") || /^vermelh/i.test(nomes[tom] ?? ""),
+  );
+}
+
 describe("a frente do texto do chip (issue #2373)", () => {
+  it("⭐ VERDE-ÁGUA E VERMELHO SÃO TEXTO BRANCO — o defeito da #2373", () => {
+    // O WCAG 2 escolhe preto nesses dois tons (é o que aparece na captura) e é
+    // essa escolha que a autora da issue lê como "quase ilegível"; o mantainer
+    // mediu os mesmos pares no APCA (0.0.98G, medida dele) e o branco vence
+    // (62 e 70 contra 47 e 39). Este teste é VERMELHO na `main` de hoje, porque
+    // lá o branco fica a 3,072 e 3,866 — abaixo do piso de 4,5 — e por isso os
+    // dois tons foram ESCURECIDOS na paleta até o branco passar.
+    const nomes = nomesDosTons();
+    const alvos = tonsDaReproducao(nomes);
+    expect(
+      alvos.length,
+      "paleta sem tom verde/vermelho — a reprodução da issue não existe mais",
+    ).toBeGreaterThanOrEqual(2);
+
+    const fora: string[] = [];
+    for (const tom of alvos) {
+      const nome = nomes[tom] ?? tom;
+      const frente = estiloDoChip(tom)?.color;
+      const razao = razaoDeContraste(frente ?? "#000000", tom);
+      if (frente !== "#ffffff") {
+        fora.push(`${nome} (${tom}): chip saiu com frente ${frente ?? "ausente"}, esperado #ffffff`);
+      }
+      if (razao < PISOS.texto) {
+        fora.push(`${nome} (${tom}): frente ${frente ?? "ausente"} dá contraste ${razao.toFixed(3)}, abaixo do piso ${PISOS.texto}`);
+      }
+    }
+    expect(fora, `${fora.length} reproduções do defeito: ${fora.join(" | ")}`).toEqual([]);
+  });
+
   it("⭐ cada tom tem NOME, e a frente do chip sai da régua com contraste >= 4,5", () => {
     const nomes = nomesDosTons();
     // Nome ausente = círculo mudo na fileira E falha sem nome na mensagem.
@@ -110,8 +154,8 @@ describe("a frente do texto do chip (issue #2373)", () => {
       const nome = nomes[tom] ?? tom;
       const estilo = estiloDoChip(tom);
       const frente = estilo?.color;
-      if (frente !== escolheAFrente(tom)) {
-        forasDoPiso.push(`${nome} (${tom}): frente ${frente ?? "ausente"} não é a da régua (${escolheAFrente(tom)})`);
+      if (frente !== melhorFrenteSobre(tom)) {
+        forasDoPiso.push(`${nome} (${tom}): frente ${frente ?? "ausente"} não é a da régua (${melhorFrenteSobre(tom)})`);
         continue;
       }
       const razao = razaoDeContraste(frente, tom);
@@ -124,9 +168,7 @@ describe("a frente do texto do chip (issue #2373)", () => {
 
   it("⭐ verde e vermelha passam obrigatoriamente — os dois tons da reprodução", () => {
     const nomes = nomesDosTons();
-    const daReproducao = PALETA_DE_ETIQUETAS.filter(
-      (tom) => /^verde/i.test(nomes[tom] ?? "") || /^vermelh/i.test(nomes[tom] ?? ""),
-    );
+    const daReproducao = tonsDaReproducao(nomes);
     expect(daReproducao.length, "paleta sem tom verde/vermelho — a reprodução da issue não existe mais").toBeGreaterThanOrEqual(2);
 
     const fora: string[] = [];
@@ -166,8 +208,8 @@ describe("a frente do texto do chip (issue #2373)", () => {
       fora,
       `${fora.length} de ${amostras.length} cores gravadas fora do piso (pior: ${piorCor} a ${pior.toFixed(3)}): ${fora.slice(0, 8).join(" | ")}`,
     ).toEqual([]);
-    // O piso teórico de `max(branco, preto)`: 4,582671 em L = 0,17912.
-    expect(pior, "o piso caiu abaixo do mínimo teórico — `escolheAFrente` deixou de escolher o melhor par").toBeGreaterThanOrEqual(4.58);
+    // O piso teórico de `max(branco, preto)`: 4,582671 em L (WCAG) = 0,17912.
+    expect(pior, "o piso caiu abaixo do mínimo teórico — a régua deixou de escolher o melhor par").toBeGreaterThanOrEqual(4.58);
   });
 
   it("⭐ o pior par da paleta continua separável — recalculado, a olho nu E sob dicromacia", () => {
@@ -203,39 +245,29 @@ describe("a frente do texto do chip (issue #2373)", () => {
 });
 
 describe("o caminho único de render do chip", () => {
-  /**
-   * O LEVANTAMENTO PEDIDO PELA ISSUE. Oito arquivos, dez usos — todos pelo
-   * componente; nenhum pinta cor sozinho. Somar aqui é legítimo (a tela nova
-   * usa o chip), mas é decisão revisável: o teste falha até alguém ler o
-   * caminho novo e declarar.
-   */
-  const LEVANTAMENTO = [
-    "app/app/contacts/[id]/_client.tsx",
-    "app/app/settings/tags/_painel.tsx",
-    "components/contacts/ContactsTable.tsx",
-    "components/inbox/CRMSidePanel.tsx",
-    "components/inbox/ContactTagsEditor.tsx",
-    "components/inbox/ConversationListItem.tsx",
-    "components/inbox/ConversationTagsEditor.tsx",
-    "components/inbox/InboxFilters.tsx",
-  ].sort();
-
-  it("todo render do chip é este levantamento — e nenhum passa `style` ao chip", () => {
-    const comChip: string[] = [];
+  // CASO ESTRUTURAL, não lista fixa: o levantamento de hoje (oito arquivos,
+  // dez usos) fica no PR como documentação, mas um ponto novo de render é
+  // aceito sem mexer no teste — o que reprova é pintar fora da régua, não
+  // existir. Lista fixa aqui transformaria tela nova em ruído vermelho.
+  it("nenhum uso do chip passa `style=` ou classe de cor — a frente vem da régua", () => {
+    let usos = 0;
     for (const arquivo of arquivosDaUi()) {
       const texto = readFileSync(join(raiz, arquivo), "utf8");
       if (!texto.includes("<ChipDeEtiqueta")) continue;
-      comChip.push(arquivo);
       // `<ChipDeEtiqueta ... >` com estilo próprio sobrescreveria a frente que a
       // régua calculou — é o defeito da #2373 pela porta dos fundos.
       for (const uso of texto.match(/<ChipDeEtiqueta[^>]*>/g) ?? []) {
+        usos += 1;
         expect(uso, `${arquivo} passou estilo ao chip: a frente vem da régua, não de quem o usa`).not.toContain(
           "style=",
         );
-        expect(uso, `${arquivo} apagou a frente com uma classe de cor`).not.toMatch(/\btext-(black|white|foreground|muted)/);
+        expect(uso, `${arquivo} apagou a frente com uma classe de cor`).not.toMatch(
+          /\btext-(black|white|foreground|muted)/,
+        );
       }
     }
-    expect(comChip.sort(), "o levantamento dos pontos de render mudou (issue #2373)").toEqual(LEVANTAMENTO);
+    // Varredura vazia seria um teste verde que não mede nada.
+    expect(usos, "nenhum uso de <ChipDeEtiqueta> encontrado — a varredura parou de funcionar").toBeGreaterThan(0);
   });
 
   it("`estiloDoChip` é importado só pelo chip — ninguém mais pinta cor de etiqueta", () => {

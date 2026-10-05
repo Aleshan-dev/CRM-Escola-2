@@ -85,8 +85,8 @@ const TETO_DA_LISTA = 500;
 const NOME_DO_TOM: Record<string, string> = {
   "#ffe629": "Amarelo",
   "#ffb224": "Âmbar",
-  "#e54d2e": "Vermelho",
-  "#12a594": "Verde-água",
+  "#cf3716": "Vermelho",
+  "#00655a": "Verde-água",
   "#0091ff": "Azul",
   "#3e63dd": "Índigo",
   "#ab4aba": "Roxo",
