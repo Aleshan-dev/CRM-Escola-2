@@ -440,3 +440,81 @@ export async function POST(_req: NextRequest, ctx: Context): Promise<Response> {
 
   return ok({ contact: marcado, effects: efeitos }, { requestId });
 }
+
+export async function DELETE(_req: NextRequest, ctx: Context): Promise<Response> {
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
+
+  const requestId = randomUUID();
+  const { id } = await ctx.params;
+
+  const authz = await requireRole("manager", { requestId, resource: "contacts" });
+  if (!authz.ok) return authz.response;
+  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+
+  if (!z.uuid().safeParse(id).success) {
+    return fail("validation_failed", t("Contato inválido."), 422, { requestId });
+  }
+
+  const admin = createAdminClient();
+  const { data: contato, error: leituraErro } = await admin
+    .from("contacts")
+    .select("id, display_name, is_personal")
+    .eq("organization_id", authz.org.orgId)
+    .eq("id", id)
+    .maybeSingle();
+  if (leituraErro) {
+    return fail("internal_error", t("Não foi possível desmarcar o contato como pessoal."), 500, {
+      requestId,
+    });
+  }
+  if (!contato) return fail("not_found", t("Contato não encontrado."), 404, { requestId });
+
+  // Idempotente na prova: quem já não era pessoal não gera nova auditoria.
+  if ((contato as { is_personal?: boolean }).is_personal !== true) {
+    return ok({ contact: contato }, { requestId });
+  }
+
+  const { data: desmarcado, error: updateErro } = await admin
+    .from("contacts")
+    .update({ is_personal: false })
+    .eq("organization_id", authz.org.orgId)
+    .eq("id", id)
+    .select("id, display_name, is_personal")
+    .maybeSingle();
+  if (updateErro || !desmarcado) {
+    return fail("internal_error", t("Não foi possível desmarcar o contato como pessoal."), 500, {
+      requestId,
+    });
+  }
+
+  // NADA mais (D8): desmarcar NÃO reativa follow-up, campanha nem prospecção —
+  // o que o marcar cancelou continua cancelado, e tudo volta a APARECER por
+  // filtro (decisão 2 da spec). As mensagens nunca foram tocadas, então a
+  // volta encontra o histórico inteiro.
+  await audit({
+    action: "contact.unmarked_personal",
+    actorUserId: authz.user.id,
+    organizationId: authz.org.orgId,
+    resourceType: "contact",
+    resourceId: id,
+    requestId,
+    metadata: { contact_id: id, origem: "tela_do_contato" },
+  });
+
+  const leadId = await negocioAbertoDoContato(admin, authz.org.orgId, id);
+  if (leadId) {
+    await registraNaTimeline(admin, {
+      orgId: authz.org.orgId,
+      contactId: id,
+      leadId,
+      tipo: "contact_unmarked_personal",
+      motivo: "Marca de pessoal retirada pela equipe",
+      atorUserId: authz.user.id,
+      requestId,
+      origem: "contacts/[id]/personal.DELETE",
+    });
+  }
+
+  return ok({ contact: desmarcado }, { requestId });
+}
