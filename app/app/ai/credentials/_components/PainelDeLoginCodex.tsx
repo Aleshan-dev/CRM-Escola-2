@@ -70,6 +70,7 @@ export function PainelDeLoginCodex({
     forbidden_role: "Somente o administrador desta empresa pode conectar a conta.",
     forbidden_tenant: "Você não tem uma empresa ativa para gravar esta conta.",
     unauthenticated: "Sessão expirada. Entre de novo.",
+    somente_leitura: "Acompanhamento somente leitura ou encerrado.",
   };
 
   function conectar() {

@@ -88,7 +88,7 @@ export async function guardarLoginCodex(p: {
   const segredo = JSON.stringify(p.tokens);
   // O `provider` entra DENTRO do literal do argumento, e não numa variável
   // intermediária: sem contexto, o TypeScript alargaria o literal para `string`
-  // e a chamada perderia o tipo `ProvedorComChave`.
+  // e a chamada perderia o tipo da união de provedores com chave.
   const comum = {
     admin: p.admin,
     orgId: p.orgId,
