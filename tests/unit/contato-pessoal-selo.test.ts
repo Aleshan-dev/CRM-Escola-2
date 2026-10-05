@@ -30,6 +30,13 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("@/hooks/i18n/useLocaleDeData", () => ({ useLocaleDeData: () => undefined }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+// O Link real precisa de contexto de roteador para prefetch; aqui ele é só
+// âncora — o que está sob teste é o selo, não a navegação.
+vi.mock("next/link", () => ({
+  default: ({ children, href }: { children: ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 vi.mock("@/hooks/contacts/useDeleteContact", () => ({
   useDeleteContact: () => ({ mutateAsync: vi.fn(), isPending: false }),
   mensagemDeBloqueioPorVinculo: () => null,
