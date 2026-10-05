@@ -181,7 +181,8 @@ export async function guardarCredencial(p: PedidoDeGuardar): Promise<ResultadoDe
 export interface PedidoDeRotacionar {
   admin: ReturnType<typeof createAdminClient>;
   orgId: string;
-  userId: string;
+  /** `null` só na renovação automática do login por assinatura: a coluna é uuid. */
+  userId: string | null;
   credentialId: string;
   provider: ProvedorComChave;
   /** Presente = trocar a chave. Ausente = manter a atual. Plaintext: nunca logado. */

@@ -31,8 +31,10 @@ vi.hoisted(() => {
 import { guardarCredencial, rotacionarCredencial } from "@/lib/ai/credenciais/guardar";
 import {
   guardarLoginCodex,
+  lerLoginCodex,
   renovarComTravaDeBanco,
 } from "@/lib/ai/credenciais/login-codex";
+import { audit } from "@/lib/audit";
 import { CredentialUnavailableError, loadCredential } from "@/lib/ai/credentials";
 import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
 import { resolveOrgLlmConfig } from "@/lib/agent-engine/edge/llm/credentials";
@@ -217,8 +219,8 @@ describe("a trava de renovação está NO BANCO (item 8)", () => {
     };
 
     const [a, b] = await Promise.all([
-      renovarComTravaDeBanco({ admin: fake as never, orgId: org, credentialId: credId, renovar }),
-      renovarComTravaDeBanco({ admin: fake as never, orgId: org, credentialId: credId, renovar }),
+      renovarComTravaDeBanco({ admin: fake as never, orgId: org, credentialId: credId, userId: null, renovar }),
+      renovarComTravaDeBanco({ admin: fake as never, orgId: org, credentialId: credId, userId: null, renovar }),
     ]);
 
     expect(chamadas).toBe(1);
@@ -238,6 +240,7 @@ describe("a trava de renovação está NO BANCO (item 8)", () => {
       admin: fake as never,
       orgId: org,
       credentialId: credId,
+      userId: null,
       renovar: async (atuais) => {
         chamadas += 1;
         return atuais;
@@ -246,5 +249,53 @@ describe("a trava de renovação está NO BANCO (item 8)", () => {
     expect(r).toEqual({ ok: false, motivo: "modulo_desligado" });
     expect(chamadas).toBe(0);
     expect(fake.linha!.updated_at).toBe(new Date(fake.linha!.updated_at as string).toISOString());
+  });
+
+  it("a auditoria leva quem pediu; a renovação automática leva null, nunca um texto", async () => {
+    // `actor_user_id` é uuid: o "sistema" de antes fazia o registro falhar a
+    // cada revalidação, calado, porque a falha de audit não bloqueia.
+    for (const userId of [user, null]) {
+      vi.mocked(audit).mockClear();
+      const fake = admin();
+      fake.linha = linhaCifrada();
+      const r = await renovarComTravaDeBanco({
+        admin: fake as never,
+        orgId: org,
+        credentialId: credId,
+        userId,
+        renovar: async (atuais) => ({ ...atuais, access_token: "at-novo" }),
+      });
+      expect(r.ok).toBe(true);
+      expect(vi.mocked(audit).mock.calls.map(([e]) => e.actorUserId)).toEqual([userId]);
+    }
+  });
+});
+
+describe("lerLoginCodex: o módulo desligado cala a leitura", () => {
+  function linhaValida() {
+    const c = encryptKey(JSON.stringify(tokens));
+    return {
+      id: credId,
+      organization_id: org,
+      provider: PROVEDOR_POR_ASSINATURA,
+      is_active: true,
+      validated_at: new Date().toISOString(),
+      api_key_encrypted: bufToBytea(c.ciphertext),
+      api_key_iv: bufToBytea(c.iv),
+      api_key_tag: bufToBytea(c.tag),
+    };
+  }
+
+  it("ligado, devolve o par gravado (controle: a linha é legível)", async () => {
+    const fake = admin();
+    fake.linha = linhaValida();
+    expect(await lerLoginCodex({ admin: fake as never, orgId: org })).toEqual(tokens);
+  });
+
+  it("desligado, devolve null com a MESMA linha no banco", async () => {
+    estado.modulo = false;
+    const fake = admin();
+    fake.linha = linhaValida();
+    expect(await lerLoginCodex({ admin: fake as never, orgId: org })).toBeNull();
   });
 });

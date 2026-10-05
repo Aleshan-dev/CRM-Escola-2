@@ -192,6 +192,8 @@ export async function renovarComTravaDeBanco(p: {
   admin: Admin;
   orgId: string;
   credentialId: string;
+  /** Quem pediu (o botão de revalidar). `null` = renovação automática, sem usuário. */
+  userId: string | null;
   renovar: (tokensAtuais: TokensDoCodex) => Promise<TokensDoCodex>;
 }): Promise<ResultadoDaRenovacao> {
   if (!(await moduloLigado(p.admin, "login_codex"))) return { ok: false, motivo: "modulo_desligado" };
@@ -249,7 +251,7 @@ export async function renovarComTravaDeBanco(p: {
   const gravado = await rotacionarCredencial({
     admin: p.admin,
     orgId: p.orgId,
-    userId: "sistema",
+    userId: p.userId,
     credentialId: p.credentialId,
     provider: PROVEDOR_POR_ASSINATURA,
     apiKey: JSON.stringify(renovados),
