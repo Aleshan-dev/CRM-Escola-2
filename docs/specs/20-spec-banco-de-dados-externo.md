@@ -110,6 +110,17 @@ o filtro e entregava até 100 linhas para o modelo oferecer "as mais próximas"
 entregaria os registros de outras pessoas. No recorte, o vazio fica vazio e a
 resposta ensina o modelo a repetir com um trecho menor do termo.
 
+**Na conversa, só as linhas do cliente (migration 0558).** A conexão guarda
+`customer_key_column` + `customer_key_kind` (`phone`|`email`), configurados em
+**Dados externos › Editar › Cliente nas conversas**. Com `ctx.contatoDoTurno`, a
+`crm_query_external_data` lê o telefone/e-mail do contato no CRM (organização +
+id do turno) e acrescenta `coluna in (...)` aos filtros do modelo — parametrizado,
+somado com `and`, sem o modelo escolher o valor. Sem a coluna configurada, sem o
+dado no cadastro ou com a tabela sem a coluna, a consulta na conversa é recusada
+(`cliente_nao_identificavel`, `cliente_sem_identificador`,
+`tabela_sem_identificador_do_cliente`). Fora do turno, nada muda. Prova:
+`lib/mcp/tools/dados-externos.test.ts`.
+
 ## Segurança
 
 1. **SSRF/TCP:** o `pg` não passa pelo egress HTTP; a guarda de `guardas.ts` é a
