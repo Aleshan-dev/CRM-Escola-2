@@ -1,5 +1,13 @@
 ---
-tipo: feat
+impacto: capacidade_nova
+secao: adicionado
+titulo: O Jev passa a conferir se o que o agente afirma sobre o negócio está no material consultado
 ---
 
-Terceira camada no `before_send`: antes de enviar, o que a resposta afirma SOBRE O NEGÓCIO (horário, preço, endereço, característica) é conferido nas evidências consultadas no turno — a mesma evidência que já alimenta a F4-02. Frase fora da base ou em contradição com ela vira veto com erro de ensino; afirmação que está no material segue em paz (a guarda de promessa F4-01/F4-02 não muda). Perguntas, saudações e links saem por regra simples antes da requisição; sem evidência consultada a camada não roda e grava "não conferido"; UMA requisição por turno; tarefa nova `afirmacao_de_fato` no seam do Jev, nascendo em observação.
+Antes de cada resposta do agente sair, o Jev pode conferir as afirmações de fato que ela faz sobre o negócio (horário, preço, endereço, o que o lugar tem ou não tem) contra o material que o agente consultou naquele turno. Uma frase como "o check-in é a partir das 12h", quando o material diz 14h, é marcada como contradição; "temos piscina aquecida", quando o material não fala de piscina, é marcada como fora da base. Perguntas, saudações e links ficam de fora da conferência, e quando o agente não consultou material nenhum no turno, a conferência não roda.
+
+**Nasce em observação e não muda nada para o cliente.** O Jev vem desligado por padrão. Ligado, esta conferência só anota o que encontrou, na tarefa nova "Conferir afirmações de fato na resposta", no cartão do Jev, e a mensagem segue como hoje: nesta versão a tarefa não oferece "Deixar o Jev decidir". A guarda de promessa ("faço de graça", "entrego amanhã") não muda.
+
+**Custo:** com o Jev ligado, no máximo uma chamada a ele por turno do agente que tenha consultado material, e ela entra no Uso de IA e soma no consumo do mês. Uma reescrita da mesma resposta reaproveita a conferência e não paga de novo. A chamada acontece antes de o envio reservar a vez do número, junto da conferência de promessa, e não prende a fila do WhatsApp.
+
+Contribuição de @webtecnica (#2231).

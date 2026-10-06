@@ -52,6 +52,11 @@ export const DICIONARIO: Traducoes = {
     { es: "Se le preguntó a Jev si lo que la respuesta afirma sobre el negocio está escrito en las evidencias consultadas en este turno." },
   "O Jev não respondeu: a mensagem foi como estava, sem a conferência de fato.":
     { es: "Jev no respondió: el mensaje salió como estaba, sin la verificación de hechos." },
+  "Confere se o que o assistente afirma sobre o negócio (horário, preço, endereço) está no material que ele consultou para responder.":
+    { es: "Verifica si lo que el asistente afirma sobre el negocio (horario, precio, dirección) está en el material que consultó para responder." },
+  "Liga-se no cartão do Jev, em Provedores de IA.": { es: "Se activa en la tarjeta de Jev, en Proveedores de IA." },
+  "Vem desligada. Nesta versão ela só anota o que encontrou e não barra nenhuma mensagem; ligada, custa +1 consulta ao Jev por resposta.":
+    { es: "Viene desactivada. En esta versión solo anota lo que encontró y no bloquea ningún mensaje; activada, cuesta +1 consulta a Jev por respuesta." },
   // Roteador do Jev sob demanda e resultados.
   "Como o roteador consulta as IAs": { es: "Cómo consulta el enrutador a las IA" },
   "Modo do roteador salvo.": { es: "Se guardó el modo del enrutador." },

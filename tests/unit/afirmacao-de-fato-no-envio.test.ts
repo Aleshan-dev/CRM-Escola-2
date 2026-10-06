@@ -20,6 +20,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type pg from "pg";
 
 import {
   LIMIAR_AFIRMACAO,
@@ -34,6 +35,7 @@ import {
   BEFORE_SEND_GATES,
   evaluateBeforeSend,
   factualClaimGate,
+  runBeforeSend,
   semanticPromiseGate,
   type GateContext,
 } from "@/lib/agent-engine/guardrails/before-send";
@@ -551,5 +553,84 @@ describe("nada da candidata vaza para log ou para a linha de observação", () =
     if (veredito.pass) throw new Error("devia vetar");
     expect(veredito.detail).toBeDefined();
     expect(JSON.stringify(veredito.detail)).not.toContain("piscina");
+  });
+});
+
+describe("o estado da tarefa decide se o veredito veta", () => {
+  // A tarefa nasce em observação: um `contradiz` só é anotado em
+  // jev_observacoes e a mensagem segue. Só `decidindo` veta.
+  const contradiz = { claim_0: 0.9, supported_0: 0.1, contradicts_0: 0.95 };
+
+  it("observando: um 'contradiz' PASSA — só anota", async () => {
+    const r = await conferirAfirmacoes(
+      adminFalso(banco()),
+      entrada("observando", "O check-in é a partir das 12h."),
+      { ...DEPS, fetchImpl: fetchCom(contradiz).fetchImpl },
+    );
+    expect(r.veredito).toBe("contradiz");
+    expect(r.estado).toBe("observando");
+    expect(factualClaimGate.evaluate(gateContexto(r)).pass).toBe(true);
+  });
+
+  it("decidindo: o mesmo 'contradiz' VETA", async () => {
+    const r = await conferirAfirmacoes(
+      adminFalso(banco()),
+      entrada("decidindo", "O check-in é a partir das 12h."),
+      { ...DEPS, fetchImpl: fetchCom(contradiz).fetchImpl },
+    );
+    expect(r.estado).toBe("decidindo");
+    expect(factualClaimGate.evaluate(gateContexto(r)).pass).toBe(false);
+  });
+});
+
+describe("a conferência roda FORA da transação do envio (#2121)", () => {
+  // Ela grava llm_calls por OUTRA conexão do pool. Dentro da transação, com o
+  // pg_advisory_xact_lock do número na mão, fechava o mesmo ciclo de esperas
+  // que o #2121 tirou da F4-02 (#2363). Mesma régua de posição de
+  // promessa-semantica-fora-do-lock.test.ts: a ORDEM dos eventos num pool fingido.
+  function poolFalso(eventos: string[]): pg.Pool {
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        const s = String(sql).toLowerCase().trim();
+        if (s.includes("pg_advisory_xact_lock")) eventos.push("lock");
+        if (s === "begin") eventos.push("begin");
+        if (s === "commit") eventos.push("commit");
+        return { rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    return {
+      connect: vi.fn(async () => {
+        eventos.push("connect");
+        return client;
+      }),
+      query: vi.fn().mockResolvedValue({ rows: [{ id: "trace-1" }] }),
+    } as unknown as pg.Pool;
+  }
+
+  it("quando o Jev é chamado, nenhuma conexão foi tomada e nenhum lock está em posse", async () => {
+    const eventos: string[] = [];
+    const r = await runBeforeSend({
+      pool: poolFalso(eventos),
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      tenantId: "00000000-0000-4000-8000-000000000001",
+      leadId: "00000000-0000-4000-8000-000000000002",
+      jobId: "00000000-0000-4000-8000-000000000003",
+      channelSessionId: "00000000-0000-4000-8000-000000000004",
+      body: "O check-in é a partir das 12h.",
+      optedOutThisTurn: false,
+      crmDailyLimit: null,
+      now: new Date("2026-09-17T12:00:00.000Z"),
+      rng: () => 0,
+      sleep: async () => {},
+      gates: [],
+      send: async () => ({ kind: "sent", idempotencyKey: "k", messageId: "m" }),
+      conferirAfirmacoes: async () => {
+        eventos.push("conferiu");
+        return null;
+      },
+    });
+    expect(r.status).toBe("sent");
+    expect(eventos).toEqual(["conferiu", "connect", "begin", "lock", "commit"]);
   });
 });
