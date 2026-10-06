@@ -109,6 +109,7 @@ describe("form origin authorization", () => {
     'update public.webhook_lead_captures set fields=fields || \'{"ai_service_consent":"true"}\'',
     'update public.webhook_lead_captures set fields=fields || \'{"submission_status":"partial"}\'',
     'update public.webhook_lead_captures set fields=fields || \'{"ai_service_consent_version":" "}\'',
+    "update public.webhook_lead_captures set fields=fields || '{\"ai_service_consent_version\":1}'",
   ])("denies unsafe or incomplete input: %s", (change) => {
     // Isolated database, only this suite's synthetic records.
     sql(change + ";");

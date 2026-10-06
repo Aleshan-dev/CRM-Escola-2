@@ -25,6 +25,7 @@ as $function$
           and w.outcome = 'criado' and w.request_id = p_request_id
           and w.received_at > now() - interval '5 minutes'
           and w.fields ->> 'submission_status' = 'completed'
+          and jsonb_typeof(w.fields -> 'ai_service_consent_version') = 'string'
           and length(trim(w.fields ->> 'ai_service_consent_version')) between 1 and 120
   ), revoked as (
     update public.contacts c
@@ -58,5 +59,5 @@ as $function$
     returning c.id
   ) select exists(select 1 from authorized);
 $function$;
-revoke all on function public.fn_authorize_ai_form_capture(uuid, uuid, uuid, uuid, uuid) from public, anon, authenticated;
+revoke execute on function public.fn_authorize_ai_form_capture(uuid, uuid, uuid, uuid, uuid) from public, anon, authenticated;
 grant execute on function public.fn_authorize_ai_form_capture(uuid, uuid, uuid, uuid, uuid) to service_role;

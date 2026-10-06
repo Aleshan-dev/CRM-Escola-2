@@ -232,7 +232,7 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
 
           <section className="space-y-2 rounded-sm border border-border p-3">
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="authorize-ai-on-capture" className="text-sm font-medium text-text">
+              <label htmlFor="authorize-ai-on-capture" className="block text-sm font-medium text-text">
                 {t("Autorizar IA para leads deste formulário")}
               </label>
               <Switch id="authorize-ai-on-capture" checked={Boolean(autorizaIA)}
