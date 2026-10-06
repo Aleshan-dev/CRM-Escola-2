@@ -5,16 +5,20 @@
  *
  * O que este arquivo cobre, nas duas pontas do fatiamento:
  *
- *  1. REGISTRO: a gravação em `organizations.settings.mcp_externo` com merge
- *     em d ois níveis (o mesmo bolso de `conversions` no PR #2197) e a leitura
- *     que valida endpoint e chave. Sem migration — `settings` é jsonb e a linha
- *     já existe para toda organização.
+ *  1. REGISTRO: a gravação em `organizations.settings.mcp_externo` — SÓ o
+ *     endpoint, com merge em dois níveis (o mesmo bolso de `conversions` no PR
+ *     #2197). A CHAVE não mora mais aqui: vai cifrada para as colunas
+ *     `mcp_externo_chave_*` (migration 0573), porque a RLS do `settings`
+ *     entregava o jsonb a todo membro, inclusive viewer.
  *  2. INVOCAÇÃO: um servidor Streamable HTTP de mentira, no processo, falando
  *     o contrato MCP (`initialize` / `tools/list` / `tools/call`) — é a prova
  *     de que a chamada sai com a chave no cabeçalho e volta com a frase. Nenhum
- *     teste daqui depende de rede: o ERP real nunca é contatado.
- *  3. TURNO: com registro, `pickToolsFromMcp` entrega a ferramenta remota ao
- *     modelo; sem registro, o catálogo compilado é exatamente o de antes.
+ *     teste daqui depende de rede: o ERP real nunca é contatado. A saída passa
+ *     pelo guard anti-SSRF (item 4), que este arquivo injeta só para o stub do
+ *     `127.0.0.1` conviver com ele.
+ *  3. TURNO: com registro E escolha do agente, `pickToolsFromMcp` entrega a
+ *     ferramenta remota ao modelo; sem escolha, sem servidor ou sem registro,
+ *     o catálogo compilado é exatamente o de antes (itens 6 e 7).
  *
  * O stub devolve a MESMA frase medida na issue (`POST /api/bot/ferramentas/achar
  * → 200 {"frase":"Achei 5 ou mais produtos ...`), porque é o contrato que o
@@ -29,12 +33,22 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 const auditSpy = vi.fn();
 vi.mock("@/lib/audit", () => ({ audit: (e: unknown) => auditSpy(e) }));
 
+// A chave de cifragem da instalação tem de existir ANTES de `lib/env.ts` ser
+// carregado — é ela que a descoberta usa para ABRIR a chave das colunas.
+vi.hoisted(() => {
+  process.env.AI_CRED_AES_KEY = "iBc1Z2gYaAH4rEHs1dHQ2dvNQ6t4OfrdE1/Y6OSvtZY=";
+});
+
 import { pickToolsFromMcp } from "@/lib/ai/runtime/tools";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
-import { chamarFerramentaRemota, listarFerramentasDoServidor } from "./chamada";
+import { chamarFerramentaRemota, fetchDeSaida, listarFerramentasDoServidor } from "./chamada";
 import { carregarServidorMcpExterno } from "./carregar";
-import { lerServidorMcpExterno, mesclarServidorMcpExterno } from "./registro";
+import { lerEndpointMcpExterno, mesclarServidorMcpExterno } from "./registro";
+import { cifrarChaveMcpExterno } from "./segredo";
+import { toolIdRemoto } from "./ids";
+import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
+import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
 
 const ORG = "bcc12320-f555-4fef-8d90-38a0ac5950e0";
 const CHAVE = "chave-do-erp-123";
@@ -152,6 +166,24 @@ beforeEach(() => {
 
 const servidor = () => ({ endpoint: base, chave: CHAVE });
 
+/**
+ * O guard anti-SSRF (item 4) com a ÚNICA exceção de que este teste precisa: o
+ * ERP de mentira mora em `127.0.0.1`, faixa PRIVADA que o guard recusa de
+ * propósito. Aqui só o loopback é deixado passar — a allowlist do host
+ * cadastrado, o `redirect: "manual"` e a ordem das três peças continuam os de
+ * produção, e o teste logo abaixo prova o que acontece sem esta injeção.
+ */
+function fetchDoStub() {
+  return fetchDeSaida(base, {
+    conferirUrl: (url) => {
+      if (!url.startsWith(base)) assertSafeOutboundUrl(url);
+    },
+    conferirIp: async (host) => {
+      if (host !== "127.0.0.1") await assertDestinoResolvidoSeguro(host);
+    },
+  });
+}
+
 // ─── Registro ───────────────────────────────────────────────────────────────
 
 describe("registro em organizations.settings.mcp_externo (#2147)", () => {
@@ -255,7 +287,7 @@ describe("descoberta das ferramentas anunciadas (#2147)", () => {
 
 describe("invocação da ferramenta remota (#2147)", () => {
   it("lista as ferramentas do servidor com a chave no cabeçalho", async () => {
-    const ferramentas = await listarFerramentasDoServidor(servidor());
+    const ferramentas = await listarFerramentasDoServidor(servidor(), { fetch: fetchDoStub() });
     expect(ferramentas.map((f) => f.name)).toEqual(["erp_achar"]);
     expect(autorizacoesRecebidas.at(-1)).toBe(`Bearer ${CHAVE}`);
   });
@@ -263,7 +295,7 @@ describe("invocação da ferramenta remota (#2147)", () => {
   it("chama e devolve a frase medida na issue, com os dados junto", async () => {
     const resultado = await chamarFerramentaRemota(servidor(), "erp_achar", {
       consulta: "pelicula iphone 15",
-    });
+    }, { fetch: fetchDoStub() });
 
     expect(resultado.texto).toBe(FRASE);
     expect(resultado.dados).toEqual(DADOS);
@@ -276,8 +308,33 @@ describe("invocação da ferramenta remota (#2147)", () => {
 
   it("o 403 do ERP sobe como erro — a permissão continua morando no servidor", async () => {
     await expect(
-      chamarFerramentaRemota(servidor(), "erp_achar", { consulta: "comissao" }),
+      chamarFerramentaRemota(servidor(), "erp_achar", { consulta: "comissao" }, { fetch: fetchDoStub() }),
     ).rejects.toThrow(/403/);
+  });
+});
+
+// ─── O guard de saída (item 4) ──────────────────────────────────────────────
+
+describe("a saída do processo passa pelo guard anti-SSRF (#2147, item 4)", () => {
+  it("sem nenhuma opção injetada, o loopback NÃO sai — o default é o guard", async () => {
+    await expect(
+      chamarFerramentaRemota(servidor(), "erp_achar", { consulta: "oi" }),
+    ).rejects.toThrow(/unsafe_url|private_host/);
+    expect(autorizacoesRecebidas, "saiu byte antes da conferência").toEqual([]);
+  });
+
+  it("literal de metadados da nuvem é recusado no pedaço textual, sem rede", async () => {
+    const guard = fetchDeSaida("https://erp.loja/mcp");
+    await expect(guard("http://169.254.169.254/latest/meta-data/")).rejects.toThrow(
+      /unsafe_url/,
+    );
+  });
+
+  it("host fora do cadastrado falha fechado, antes do DNS", async () => {
+    // O guard injetado SÓ relaxa o loopback; um host diferente do registrado
+    // continua caindo na allowlist.
+    const guard = fetchDeSaida(base, { conferirUrl: () => {} });
+    await expect(guard("https://fora-da-allowlist.loja/mcp")).rejects.toThrow(/egress|fora/i);
   });
 });
 

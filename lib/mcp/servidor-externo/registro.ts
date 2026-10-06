@@ -52,32 +52,71 @@ function ehEndpointValido(endpoint: unknown): endpoint is string {
     return false;
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-  return url.username === "" && url.password === "";
+  if (url.username !== "" || url.password !== "") return false;
+  // SEGREDO NO ENDEREÇO (item 5): `?token=` e `#...` seriam gravados no bolso,
+  // levados para o `api_audit_log` (append-only) e para o log de erro. Recusar
+  // aqui é a única porta que não depende de lembrar em cada consumidor.
+  if (url.search !== "" || url.hash !== "") return false;
+  return true;
 }
 
 /**
- * O servidor registrado, ou `null` — inclusive quando o bolso existe mas está
+ * O HOST do endpoint — a única parte que pode ir para log, para auditoria e
+ * para a tela. `https://erp.loja:8443/mcp?token=x` vira `erp.loja:8443`, sem
+ * caminho, sem query e sem fragmento.
+ *
+ * Devolve a própria string quando não dá para parsear: quem chama já validou,
+ * e um `endpoint` malformado logado inteiro é melhor do que um "undefined"
+ * escondendo o motivo.
+ */
+export function hostDoEndpoint(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return endpoint;
+  }
+}
+
+/**
+ * O ENDEREÇO registrado, ou `null` — inclusive quando o bolso existe mas está
  * malformado. NUNCA lança: quem chama é o caminho quente do turno, e uma
  * configuração ruim não pode derrubar a virada de turno.
+ *
+ * A CHAVE não vem daqui: ela é coluna cifrada e é aberta por
+ * `abrirChaveMcpExterno`, em `segredo.ts`.
  */
-export function lerServidorMcpExterno(settings: unknown): ServidorMcpExterno | null {
+export function lerEndpointMcpExterno(settings: unknown): string | null {
   if (typeof settings !== "object" || settings === null) return null;
   const bruto = (settings as Record<string, unknown>)[BOLSO_MCP_EXTERNO];
   if (typeof bruto !== "object" || bruto === null) return null;
-  const { endpoint, chave } = bruto as Record<string, unknown>;
+  const { endpoint } = bruto as Record<string, unknown>;
   if (!ehEndpointValido(endpoint)) return null;
-  if (typeof chave !== "string" || chave.trim() === "") return null;
-  return { endpoint: endpoint.trim(), chave };
+  return endpoint.trim();
+}
+
+/**
+ * A prova textual anti-SSRF do ENDEREÇO no cadastro (item 4): recusa literal
+ * privado, IPv6 literal e `http://` em produção, antes de qualquer gravação.
+ *
+ * Lança `unsafe_url:*` — quem converte em erro de formulário é a action, que
+ * conhece o vocabulário da tela.
+ */
+export function conferirEndpointSeguro(endpoint: string): void {
+  if (!ehEndpointValido(endpoint)) throw new Error("unsafe_url:invalid");
+  assertSafeOutboundUrl(endpoint);
 }
 
 /**
  * Merge em dois níveis: lê, troca SÓ `mcp_externo` e grava o objeto inteiro de
  * volta — os outros bolsos de `settings` saem daqui como entraram.
  *
- * VAZIO APAGA (o contrato de formulário do PR #2197): endpoint ou chave em
- * branco removem a chave inteira, porque deixar `{}` seria um registro que a
- * leitura enxerga como presente e o turno recusa — metade ligada, sem ninguém
- * para dizer qual metade.
+ * VAZIO APAGA (o contrato de formulário): endpoint ou chave em branco removem a
+ * chave inteira, porque deixar `{}` seria um registro que a leitura enxerga como
+ * presente e o turno recusa — metade ligada, sem ninguém para dizer qual metade.
+ *
+ * A `chave` da entrada NÃO é gravada aqui: este função devolve só o jsonb, e o
+ * segredo segue cifrado para as colunas (`segredo.ts`). A entrada continua
+ * recebendo a chave porque é ela que decide apagar ou não.
  */
 export function mesclarServidorMcpExterno(
   settings: unknown,

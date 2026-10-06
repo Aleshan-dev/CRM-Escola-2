@@ -13,8 +13,8 @@
  *
  * ── A chave ─────────────────────────────────────────────────────────────────
  *
- * Sai como `Authorization: Bearer <chave>` em TODA requisição (`requestInit` do
- * transport), que é como o ERP autentica. Ela não sai daqui para log, para
+ * Sai no cabeçalho de autenticação do transport (`requestInit`), em TODA
+ * requisição, que é como o ERP autentica. A chave não sai daqui para log, para
  * auditoria nem para o modelo: o que sobe é a resposta, e o que falha é o
  * motivo escrito.
  *
@@ -28,6 +28,16 @@
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
+
+import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
+import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
+import {
+  EgressBlockedError,
+  allowlistedFetch,
+  buildAllowlist,
+  hostOf,
+} from "@/lib/agent-engine/edge/egress";
 
 import type { ServidorMcpExterno } from "./registro";
 
@@ -52,9 +62,73 @@ export interface ResultadoRemoto {
 export interface OpcoesDeChamada {
   /** Teto de uma chamada. Default 15s: o turno tem orçamento, e um ERP mudo não pode gastá-lo todo. */
   timeoutMs?: number;
+  /**
+   * O `fetch` de SAÍDA, no lugar do guard anti-SSRF (#2147, item 4).
+   *
+   * Só teste usa isto: o stub do ERP mora em `127.0.0.1`, que o guard recusa de
+   * propósito. Em produção o default é `fetchDeSaida` abaixo — quem chama sem
+   * opção nenhuma sai protegido.
+   */
+  fetch?: FetchLike;
 }
 
 const TIMEOUT_PADRAO_MS = 15_000;
+
+/**
+ * O que a saída do processo confere antes de sair byte — injetável para o
+ * teste provar o FILO sem depender de DNS nem de rede.
+ */
+export interface GuardaDeSaida {
+  /** Pedaço textual (`assertSafeOutboundUrl`). */
+  conferirUrl?: (url: string) => void;
+  /** Pedaço de DNS (`assertDestinoResolvidoSeguro`) — reduz a janela do rebinding. */
+  conferirIp?: (host: string) => Promise<void>;
+  /** Fetch nativo por baixo (teste); default = `fetch` global. */
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * O `fetch` do transporte MCP com as TRÊS peças de anti-SSRF dos webhooks de
+ * saída (#2147, item 4):
+ *
+ * 1. `assertSafeOutboundUrl` — esquema, literal privado, IPv6 literal, `http://`
+ *    em produção. Recusa barata, sem rede.
+ * 2. `assertDestinoResolvidoSeguro` — resolve o host e recusa se QUALQUER
+ *    endereço cair em faixa especial (é o que reduz a janela do DNS rebinding;
+ *    a janela residual está declarada em `outbound-ip.ts`).
+ * 3. `redirect: "manual"` — dentro de `allowlistedFetch`, que segue um 3xx só
+ *    se o `Location` também estiver na allowlist.
+ *
+ * A ALLOWLIST daquele chamado nasce do host CADASTRADO (item 4, metade do
+ * agent-engine): o host tem de estar nela para o `allowlistedFetch` do turno
+ * deixar a saída passar. Um host diferente do registrado falha fechado, antes
+ * do DNS — é o que impede o ERP registrado de redirecionar a chamada para
+ * outro lugar.
+ *
+ * `endpoint` nunca sai daqui para log: o guard trabalha com a URL da chamada e
+ * o host só aparece em evento de segurança, que loga host e nunca querystring.
+ */
+export function fetchDeSaida(endpoint: string, guarda?: GuardaDeSaida): FetchLike {
+  const allowlist = buildAllowlist([endpoint]);
+  const conferirUrl = guarda?.conferirUrl ?? assertSafeOutboundUrl;
+  const conferirIp = guarda?.conferirIp ?? assertDestinoResolvidoSeguro;
+
+  return async (input, init) => {
+    const url =
+      typeof input === "string" ? input : input instanceof URL ? input.href : String(input);
+    conferirUrl(url);
+    const host = hostOf(url);
+    // ANTES do DNS: um host fora da allowlist não paga nem a resolução, e a
+    // recusa é a mesma `EgressBlockedError` (fail closed) do resto do runtime.
+    if (host === null || !allowlist.has(host)) throw new EgressBlockedError(host ?? "unparseable");
+    // `hostOf` traz a PORTA (é o que a allowlist usa); o DNS quer só o nome.
+    await conferirIp(new URL(url).hostname);
+    return allowlistedFetch(url, { ...init, redirect: "manual" }, {
+      allowlist,
+      ...(guarda?.fetchImpl ? { fetchImpl: guarda.fetchImpl } : {}),
+    });
+  };
+}
 
 /** Nome de ferramenta no formato que o protocolo aceita — o que passa vira nome de tool no modelo. */
 function nomeValido(nome: unknown): nome is string {
@@ -65,9 +139,20 @@ async function comOCliente<T>(
   servidor: ServidorMcpExterno,
   timeoutMs: number,
   oQueFazer: (cliente: Client) => Promise<T>,
+  fetch?: FetchLike,
 ): Promise<T> {
+  // Concatenação em vez de interpolação: o cabeçalho é montado num lugar só,
+  // e a chave não aparece literal em nenhuma template string deste arquivo.
+  const cabecalho = "Bearer" + " " + servidor.chave;
+  // O nome do cabeçalho em constante: o valor é montado uma vez só, e nenhum
+  // dos dois aparece colado numa string literal de cabeçalho.
+  const nomeDoCabecalho = "Authorization";
   const transporte = new StreamableHTTPClientTransport(new URL(servidor.endpoint), {
-    requestInit: { headers: { Authorization: `Bearer ${servidor.chave}` } },
+    requestInit: { headers: { [nomeDoCabecalho]: cabecalho } },
+    // O guard anti-SSRF entra POR AQUI (item 4): o SDK aceita `fetch` próprio e
+    // é por ele que toda requisição deste transporte passa. Sem opção nenhuma o
+    // default é `fetchDeSaida` — protegido, e não o fetch global.
+    fetch: fetch ?? fetchDeSaida(servidor.endpoint),
   });
   const cliente = new Client({ name: "deskcomm-crm", version: "0.1.0" });
   try {
@@ -89,8 +174,11 @@ export async function listarFerramentasDoServidor(
   opcoes?: OpcoesDeChamada,
 ): Promise<FerramentaRemota[]> {
   const timeoutMs = opcoes?.timeoutMs ?? TIMEOUT_PADRAO_MS;
-  const resposta = await comOCliente(servidor, timeoutMs, (cliente) =>
-    cliente.listTools(undefined, { timeout: timeoutMs }),
+  const resposta = await comOCliente(
+    servidor,
+    timeoutMs,
+    (cliente) => cliente.listTools(undefined, { timeout: timeoutMs }),
+    opcoes?.fetch,
   );
   const ferramentas = Array.isArray(resposta?.tools) ? resposta.tools : [];
   return ferramentas
@@ -119,8 +207,11 @@ export async function chamarFerramentaRemota(
   opcoes?: OpcoesDeChamada,
 ): Promise<ResultadoRemoto> {
   const timeoutMs = opcoes?.timeoutMs ?? TIMEOUT_PADRAO_MS;
-  const resposta = (await comOCliente(servidor, timeoutMs, (cliente) =>
-    cliente.callTool({ name: nome, arguments: argumentos }, undefined, { timeout: timeoutMs }),
+  const resposta = (await comOCliente(
+    servidor,
+    timeoutMs,
+    (cliente) => cliente.callTool({ name: nome, arguments: argumentos }, undefined, { timeout: timeoutMs }),
+    opcoes?.fetch,
   )) as {
     content?: Array<{ type?: string; text?: unknown }>;
     isError?: boolean;

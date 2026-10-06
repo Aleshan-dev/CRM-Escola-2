@@ -81,27 +81,49 @@ function shapeDaFerramenta(ferramenta: FerramentaRemota): Record<string, z.ZodTy
 }
 
 /**
- * As ferramentas remotas a acrescentar ao turno, já convertidas.
+ * As ferramentas remotas ESCOLHIDAS pelo agente, já convertidas.
  *
  * `nomesOcupados` é o catálogo COMPILADO inteiro (`allTools`), não só o que
  * está montado neste turno: a comparação é "isto já existe no produto?", e
  * quem não foi montado agora continua existindo amanhã.
+ *
+ * `escolhas` vem de `tool_ids` (`item 6`): sem escolha não há ferramenta
+ * remota, mesmo com servidor registrado e anunciando dez (item 7, desligado
+ * por padrão). Uma escolha cujo servidor não anuncia mais aquele nome é
+ * registrada no log e ignorada — trocar de ERP não pode virar tool fantasma.
  */
 export function definirFerramentasRemotas(
   servidor: ServidorMcpExterno,
   ferramentas: readonly FerramentaRemota[],
   nomesOcupados: ReadonlySet<string>,
+  escolhas: readonly EscolhaRemota[],
+  // JUNTA DE TESTE, mesmo sentido do `fetchImpl` de `allowlistedFetch`: o stub
+  // do ERP mora em `127.0.0.1`, faixa que o guard anti-SSRF recusa. Quem chama
+  // em produção NÃO passa isto, e a saída é `fetchDeSaida` (item 4).
+  opcoes?: OpcoesDeChamada,
 ): McpToolDefinition[] {
   const definicoes: McpToolDefinition[] = [];
+  const anunciadas = new Map(ferramentas.map((f) => [f.name, f]));
 
-  for (const ferramenta of ferramentas) {
+  for (const escolha of escolhas) {
+    const ferramenta = anunciadas.get(escolha.nome);
+    if (!ferramenta) {
+      logger.warn("ferramenta remota escolhida pelo agente nao foi anunciada pelo servidor — desconsiderada", {
+        endpoint: hostDoEndpoint(servidor.endpoint),
+        ferramenta: escolha.nome,
+      });
+      continue;
+    }
     if (nomesOcupados.has(ferramenta.name)) {
       logger.warn("ferramenta do servidor MCP externo colide com o catalogo compilado — mantida a compilada", {
-        endpoint: servidor.endpoint,
+        endpoint: hostDoEndpoint(servidor.endpoint),
         ferramenta: ferramenta.name,
       });
       continue;
     }
+
+    // LEITURA só com as duas metades do item 8 — ver o cabeçalho deste arquivo.
+    const ehLeitura = escolha.leitura && ferramenta.somenteLeitura === true;
 
     definicoes.push({
       name: ferramenta.name,
