@@ -16,6 +16,10 @@
  *  - Não gasta token sem registro. O schema exige `custo_de_token: true`
  *    (literal, não booleano opiniável) e esta ação confere de novo aqui: sem o
  *    registro explícito, `skipped` com motivo, e o modelo nem é consultado.
+ *  - Não roda com o interruptor da EMPRESA desligado (#2367). O freio por
+ *    empresa mora antes de tudo aqui: com ele desligado, nenhum `ai_decide` de
+ *    nenhuma regra consulta o modelo, e o motivo fica no run. Ver
+ *    `lib/automation/ai-decide-da-org.ts` (padrão LIGADO).
  *  - Não decide sozinha quem recebe. O `postponeUntil` das ações-alvo (janela
  *    do número, cap diário, espaçamento) roda ANTES da chamada de modelo: se
  *    QUALQUER opção adiaria, o evento inteiro adia — a mesma régua
@@ -28,10 +32,23 @@
 import { getAction, registerAction } from "@/lib/automation/actions";
 import type { ActionCtx, ActionResultDetail } from "@/lib/automation/types";
 import type { OpcaoDeDecisao } from "@/lib/automation/decider";
+import { aiDecideLigado } from "@/lib/automation/ai-decide-da-org";
 import { decidirAcao } from "@/lib/agent-engine/agent/decisao-de-acao";
 import { logger } from "@/lib/logger";
 
 const TIPO = "ai_decide";
+
+/**
+ * O freio POR EMPRESA, lido a cada execução (#2367).
+ *
+ * `false` = desligado. Ausente (`undefined`, falha de leitura) = segue como
+ * antes: o default é LIGADO, e uma rede ruim não pode parar regra que já
+ * decidia. A leitura é uma consulta de uma coluna, feita por quem executa —
+ * mesma conta de `orgTemAutomatico` na fila.
+ */
+async function freioDaEmpresa(ctx: ActionCtx): Promise<boolean> {
+  return (await aiDecideLigado(ctx.admin, ctx.organizationId)) !== false;
+}
 
 interface OpcaoCrua {
   id?: unknown;
@@ -82,6 +99,10 @@ function contatoDoContexto(ctx: ActionCtx): string | null {
  * quando a escolha certa seria uma ação sem janela — menor que o contrário.
  */
 async function postponeUntil(ctx: ActionCtx, config: Record<string, unknown>): Promise<string | null> {
+  // Com o freio da empresa acionado (#2367) este passo não roda: adiar o EVENTO
+  // INTEIRO por causa de uma ação que será pulada atrasaria as demais regras do
+  // mesmo gatilho sem motivo nenhum.
+  if (!(await freioDaEmpresa(ctx))) return null;
   const opcoes = lerOpcoes(config);
   if (!opcoes) return null; // config inválida falha no execute, não adia
   for (const opcao of opcoes) {
@@ -94,6 +115,17 @@ async function postponeUntil(ctx: ActionCtx, config: Record<string, unknown>): P
 }
 
 async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise<ActionResultDetail> {
+  // ─── O freio POR EMPRESA (#2367) ──────────────────────────────────────────
+  // Antes de qualquer outra checagem, inclusive a do custo: com o interruptor
+  // desligado o que o operador precisa ler no run é QUEM desligou (a empresa
+  // inteira), não uma recusa de gravação da regra — que o mandaria editar a
+  // regra em vez de procurar o interruptor. E é o único ponto em que a
+  // recusa acontece ANTES da chamada de modelo: daqui para baixo, nada
+  // consulta a IA.
+  if (!(await freioDaEmpresa(ctx))) {
+    return { type: TIPO, status: "skipped", detail: { reason: "ai_decide_desligado_na_empresa" } };
+  }
+
   // O registro EXPLÍCITO do custo (#1970) — sem ele, nem pergunta à IA.
   if (config.custo_de_token !== true) {
     return { type: TIPO, status: "skipped", detail: { reason: "custo_de_token_nao_registrado" } };

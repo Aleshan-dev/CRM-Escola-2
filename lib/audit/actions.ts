@@ -1038,6 +1038,13 @@ export const AUDIT_ACTIONS = [
   // titular), não decisão operacional de esconder da operação.
   "contact.marked_personal",
   "contact.unmarked_personal",
+
+  // O interruptor POR EMPRESA do passo `ai_decide` das automações (#2367):
+  // gravado em `organizations.settings.automacoes.ai_decide` pela tela
+  // Configurações → Automações. Sem esta linha, desligar o freio de toda a
+  // empresa (e religá-lo) ficaria sem rastro — e é ele que decide se alguma
+  // regra consulta o modelo.
+  "settings.automation_ai_decide_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

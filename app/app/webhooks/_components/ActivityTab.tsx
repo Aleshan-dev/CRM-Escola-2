@@ -148,6 +148,10 @@ const MOTIVO_DA_PARADA: Record<string, string> = {
     "A IA devolveu uma opção que não está na lista desta ação, então nada foi executado. Corrija a instrução da regra para deixar as opções mais claras.",
   acao_alvo_desconhecida:
     "A opção escolhida aponta para uma ação que esta instalação não tem (pode ter saído em uma atualização). Abra a automação e escolha outra ação.",
+  /* #2367 — o interruptor POR EMPRESA: o quinto motivo que nasce no mesmo arquivo,
+     e o único que a tela pode consertar por aqui (o caminho está na própria frase). */
+  ai_decide_desligado_na_empresa:
+    "A ação não rodou: o interruptor desta empresa desligou todos os passos a IA decide, então o modelo não foi consultado e nada foi executado. Ligue o interruptor em Configurações, na tela Automações.",
   /* vêm do decider (lib/automation/decider.ts) pelo mesmo `decisao.motivo`. */
   resposta_vazia: "A IA não devolveu nenhuma escolha entre as opções desta ação. Tente de novo ou corrija a instrução.",
   sem_json: "A IA respondeu fora do formato esperado e nada foi executado. Tente de novo em alguns minutos.",
