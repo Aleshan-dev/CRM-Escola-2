@@ -65,7 +65,10 @@ describe("o que os handlers fazem com este ator", () => {
 });
 
 describe("o papel do token", () => {
-  const papel = (scopes: string[]) => deriveActor(scopes, TOKEN_ID).role;
+  const papel = (scopes: string[]) => {
+    const ator = deriveActor(scopes, TOKEN_ID);
+    return "role" in ator ? ator.role : undefined;
+  };
 
   it("gerente E administrador marcados: vale o administrador, em qualquer ordem", () => {
     // A ordem da tela de tokens grava `role:manager` antes de `role:admin`; o
