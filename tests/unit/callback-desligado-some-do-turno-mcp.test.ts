@@ -49,7 +49,7 @@ async function idsEntreguesAoModelo(followup: unknown): Promise<string[]> {
   const agentConfig = { agentId: "agente-1", toolIds: TOOLS, pipelineIds: [], followup };
   const out = await buildMcpTurnTools(
     { supabase: supabaseSemServidorExterno as never },
-    { organizationId: "org-1", jobId: "job-1" },
+    { organizationId: "org-1", jobId: "job-1", contactId: null },
     agentConfig as never,
     { warn: vi.fn() } as never,
   );

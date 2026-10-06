@@ -1031,6 +1031,19 @@ export const AUDIT_ACTIONS = [
   // por isso vai com `organization_id` e `resource_id` = uuid da org. A CHAVE
   // do servidor nunca entra aqui: o metadata traz endpoint e forma.
   "org.mcp_externo_registrado",
+  // #1639, fatia do login: o código colado em /admin/sistema virou tokens e foi
+  // guardado cifrado. Sem esta linha, "quem conectou a assinatura, e quando"
+  // ficaria sem rastro — e é a conta que passa a pagar as chamadas.
+  "ai.login_codex_conectado",
+  // A conta da empresa foi desconectada pela própria tela de Credenciais.
+  "ai.login_codex_desconectado",
+
+  // Contato pessoal (spec 21): marcar e desmarcar, no padrão de
+  // `contact.blocked` / `contact.unblocked`. Eventos NOVOS de propósito — nunca
+  // reutilizar os de bloqueio, que significam descadastro/STOP (direito do
+  // titular), não decisão operacional de esconder da operação.
+  "contact.marked_personal",
+  "contact.unmarked_personal",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

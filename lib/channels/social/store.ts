@@ -224,6 +224,59 @@ async function deleteAtProvider(key: string, path: string) {
   }
 }
 /**
+ * Apaga no provedor a assinatura cujo id o CRM nunca chegou a gravar (issue #2364).
+ *
+ * ─── Como a assinatura fica órfã ────────────────────────────────────────────
+ *
+ * `connectSocialInbox` só escreve `metadata.social_webhook_id` DEPOIS de criar
+ * a assinatura no Zernio. Se a gravação falhar (ou a conexão morrer no meio),
+ * o canal vira `FAILED` com a assinatura viva lá fora e nenhuma referência a
+ * ela aqui. Daí `disconnectSocialAccount` não apagava nada: arquivava a linha,
+ * rotacionava o token, e a assinatura seguia mandando evento para uma URL que
+ * agora resolve 404 — para sempre, sem erro do nosso lado.
+ *
+ * ─── Por que a reconciliação é pela URL ─────────────────────────────────────
+ *
+ * É o mesmo casamento que `connectSocialInbox` já faz contra duplicação: a
+ * assinatura certa é a que aponta para o `webhook_path_token` DESTA linha — o
+ * token que ainda está válido, porque o arquivamento só o rotaciona depois
+ * (daí esta função rodar ANTES do patch). Casa-se pelo SUFIXO do caminho e não
+ * pela origem completa: a instância pode ter mudado de domínio desde a conexão
+ * e a assinatura continua apontando para o token certo.
+ *
+ * Só roda quando o id NÃO existe — quem já tem `social_webhook_id` continua
+ * pelo caminho normal de baixo, que não muda.
+ *
+ * `webhooks/settings` fora do ar ou num formato que não dá para ler LANÇA, como
+ * o resto das chamadas de provedor desta função: a linha fica intacta e a
+ * desconexão pode ser tentada de novo. Silenciar aqui seria trocar a assinatura
+ * viva por uma assinatura viva sem ninguém saber.
+ */
+async function apagarAssinaturaSemId(
+  db: SupabaseClient,
+  org: string,
+  channelId: string,
+  key: string,
+) {
+  const { data, error } = await db
+    .from("channel_sessions")
+    .select("webhook_path_token")
+    .eq("organization_id", org)
+    .eq("id", channelId)
+    .maybeSingle();
+  if (error)
+    throw new SocialError("Não foi possível ler o canal para reconciliar o webhook.", 500);
+  const token = data?.webhook_path_token;
+  if (typeof token !== "string" || token.length === 0) return;
+  const caminho = `/api/v1/webhooks/channel/${token}`;
+  const lista = z
+    .object({ webhooks: z.array(z.object({ _id: z.string(), url: z.string() })) })
+    .parse(await socialRequest(key, "webhooks/settings"));
+  const achada = lista.webhooks.find((w) => w.url.endsWith(caminho));
+  if (!achada) return;
+  await deleteAtProvider(key, `webhooks/settings?webhookId=${encodeURIComponent(achada._id)}`);
+}
+/**
  * Stops the inbox for one account and, with `removeAccount`, disconnects it from the provider.
  * Provider calls run first: if one fails the channel stays intact and the action can be retried.
  * Conversations are kept; the channel is archived, never deleted (issue #1314).
@@ -247,6 +300,10 @@ export async function disconnectSocialAccount(
       integration.key,
       `webhooks/settings?webhookId=${encodeURIComponent(webhookId)}`,
     );
+  // SEM id gravado: a assinatura existe (ou pode existir) no provedor e só dá
+  // para achar pela URL — issue #2364. Roda antes do patch de arquivamento,
+  // quando o token desta linha ainda é o que o provedor tem na assinatura.
+  else if (channel) await apagarAssinaturaSemId(db, org, channel.id, integration.key);
   // Only accounts listed under this profile: the key may reach other profiles' accounts.
   if (removeAccount && listed)
     await deleteAtProvider(integration.key, `accounts/${encodeURIComponent(accountId)}`);
