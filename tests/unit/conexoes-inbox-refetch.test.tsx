@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *      trivialmente verde);
  *   2. a chave muda com dado na tela → a lista anterior segue lá, sem
  *      skeleton, e a resposta nova entra por cima (é este que reprova sem o
- *      `placeholderData: keepPreviousData`);
+ *      `placeholderData` do hook);
  *   3. refetch que FALHA com dado na tela → a lista é preservada, o erro não
  *      a substitui (reprova sem a guarda do `isError` no componente).
  *
@@ -242,5 +242,44 @@ describe("a lista do inbox não volta ao skeleton num refetch (#2366)", () => {
     expect(screen.queryByText(/Sem conversas por aqui/)).not.toBeInTheDocument();
     expect(esqueleto()).toBe(0);
     expect(estado().carregando).toBe("false");
+  });
+});
+
+/**
+ * O OUTRO LADO DO MESMO CONSERTO: a lista anterior só fica na tela quando a
+ * troca de chave é o `automatico-ativo` respondendo. Trocar de aba ou de busca
+ * é pedir OUTRA lista — mostrar a anterior enquanto a nova carrega põe na tela
+ * linhas que não são da aba, clicáveis e (na Fila) numeradas como se fossem.
+ * Os dois casos reprovam com `placeholderData: keepPreviousData` puro.
+ */
+describe("troca de aba ou de busca NÃO reaproveita a lista anterior (#2366)", () => {
+  it("Todas → Fila: enquanto a Fila carrega, volta o skeleton e as linhas de Todas saem", async () => {
+    const { pintar } = montar({});
+    await entregar(0, ["todas-1", "todas-2"]);
+    await waitFor(() => expect(screen.getByText("todas-1")).toBeInTheDocument());
+
+    pintar({ comando: ["aguardando"] });
+    await waitFor(() => expect(chamadas).toHaveLength(2));
+
+    expect(screen.queryByText("todas-1"), "linha da aba anterior na aba nova").not.toBeInTheDocument();
+    expect(esqueleto()).toBeGreaterThan(0);
+
+    await entregar(1, ["fila-1"]);
+    await waitFor(() => expect(screen.getByText("fila-1")).toBeInTheDocument());
+    expect(screen.queryByText("todas-1")).not.toBeInTheDocument();
+  });
+
+  it("busca nova DENTRO da Fila: o resultado da busca anterior não fica na tela", async () => {
+    // Os dois lados são a Fila e o `comando` é o mesmo: só a busca mudou. É o
+    // caso que separa "é a Fila" de "só o automático mudou".
+    const { pintar } = montar({ comando: ["aguardando"], search: "maria" });
+    await entregar(0, ["maria-1"]);
+    await waitFor(() => expect(screen.getByText("maria-1")).toBeInTheDocument());
+
+    pintar({ comando: ["aguardando"], search: "joao" });
+    await waitFor(() => expect(chamadas).toHaveLength(2));
+
+    expect(screen.queryByText("maria-1"), "resultado da busca anterior").not.toBeInTheDocument();
+    expect(esqueleto()).toBeGreaterThan(0);
   });
 });

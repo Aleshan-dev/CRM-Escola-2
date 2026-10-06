@@ -117,8 +117,8 @@ export function ConversationList({
   //
   // `isLoading` só é verdadeiro sem dado nenhum na tela: o refetch em voo
   // mantém a resposta anterior, e a troca de chave (quando o automatico-ativo
-  // responde) herda a lista anterior pelo `placeholderData: keepPreviousData`
-  // do hook. `items.length === 0` declara a regra em palavras — o preço de
+  // responde) herda a lista anterior pelo `placeholderData` do hook — só essa
+  // troca: aba ou busca nova é outra lista, e volta ao skeleton. `items.length === 0` declara a regra em palavras — o preço de
   // reconstruí-la aqui é o defeito inteiro desta issue.
   if (q.isLoading && items.length === 0) {
     return (
