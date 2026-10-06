@@ -379,6 +379,40 @@ export const TAREFA_DA_URGENCIA = {
     "Lê a última mensagem do cliente quando o teto de envio adiou a resposta, só se a regra de urgência de hoje não viu nela um risco à segurança ou à saúde — e conta as mensagens com esse risco que ela não reconheceu. Ele nunca passa a conversa nem responde.",
 } as const satisfies TarefaDoJev;
 
+/**
+ * A chamada da conferência de fato (#2231): afirmação de fato da RESPOSTA do
+ * assistente, conferida contra a evidência consultada no turno. É ponto no
+ * registro (o Jev é chamado por ela, e a credencial do ponto é a que resolve),
+ * e `soObserva` nesta versão — o cartão não oferece "Deixar o Jev decidir" e a
+ * rota recusa `decidindo`, porque o que falta não é pergunta, é escolha: a
+ * saída depois de N vetos no mesmo turno (frase segura ou passar para humano)
+ * ainda não foi decidida. Um `decidindo` gravado por outra versão vale
+ * `observando` (`estadoSobOAceite`), que é o que esta faz.
+ */
+export const AFIRMACAO_DE_FATO = {
+  purpose: "afirmacao_de_fato",
+  rotulo: "Conferir afirmações de fato na resposta",
+  porQue: "O Jev foi perguntado se o que a resposta afirma sobre o negócio está escrito nas evidências consultadas neste turno.",
+  porQueNaFalha: "O Jev não respondeu: a mensagem foi como estava, sem a conferência de fato.",
+} as const;
+
+export const TAREFA_DA_AFIRMACAO_DE_FATO = {
+  id: "afirmacao_de_fato",
+  ponto: "afirmacao_de_fato",
+  primitiva: "noul",
+  alcance: "mensagem",
+  familia: "novo",
+  soObserva:
+    "Nesta versão a conferência de fato só observa: ela grava o que teria sido corrigido, mas nenhum envio é barrado. Deixar o Jev decidir sozinho só depois que você vir no cartão quantas mensagens teriam sido corrigidas.",
+  concordancia: {
+    antes: "dias, a conferência de fato e o envio de hoje concordaram em",
+    depois: "respostas — as duas deixaram passar a mesma afirmação.",
+  },
+  rotulo: "Conferir afirmações de fato na resposta",
+  oQueFaz:
+    "Lê a resposta que o assistente vai enviar e confere, nas evidências consultadas neste turno, se o que ele afirma sobre o negócio está escrito ali — ou se o material diz o contrário.",
+} as const satisfies TarefaDoJev;
+
 export const TAREFAS_DO_JEV: readonly TarefaDoJev[] = [
   TAREFA_DO_CLIMA,
   TAREFA_DA_MANIPULACAO,
@@ -388,6 +422,7 @@ export const TAREFAS_DO_JEV: readonly TarefaDoJev[] = [
   TAREFA_DO_FOLLOWUP,
   TAREFA_DA_CONFERENCIA_DE_CAMPO,
   TAREFA_DA_URGENCIA,
+  TAREFA_DA_AFIRMACAO_DE_FATO,
 ];
 
 /**
