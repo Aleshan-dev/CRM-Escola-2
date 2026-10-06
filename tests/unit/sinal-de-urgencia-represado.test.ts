@@ -323,3 +323,73 @@ describe("inbound-turn: só no ramo represado, e só depois da regex dizer não"
     expect(bloco).toContain("await rescheduleJob(");
   });
 });
+
+/**
+ * COLUNA → PARÂMETRO, lido no SQL que vai ao banco. O dublê do pool aceita
+ * qualquer coisa, então "o params contém 'sim'" passava com o `job_id` de
+ * `llm_calls` recebendo o id da MENSAGEM ($5) — que a FK
+ * `llm_calls_job_id_fkey → job_queue(id)` recusa no banco real, desfazendo a
+ * CTE inteira (observação e custo perdidos, só um `logger.warn`). Aqui cada
+ * coluna é casada com o seu placeholder.
+ */
+describe("registrarUrgenciaDoJev: cada coluna recebe o parâmetro certo", () => {
+  function colunasDo(sql: string, tabela: string, params: unknown[]): Record<string, unknown> {
+    const m = new RegExp(`insert into public\\.${tabela}\\s*\\(([^)]*)\\)\\s*values\\s*\\(([^)]*)\\)`).exec(sql);
+    expect(m, `o insert em ${tabela} existe no SQL`).not.toBeNull();
+    const colunas = m![1]!.split(",").map((c) => c.trim());
+    const valores = m![2]!.split(",").map((v) => v.trim());
+    expect(valores).toHaveLength(colunas.length);
+    return Object.fromEntries(
+      colunas.map((c, i) => {
+        const p = /^\$(\d+)$/.exec(valores[i]!);
+        return [c, p ? params[Number(p[1]) - 1] : valores[i]];
+      }),
+    );
+  }
+
+  const urgencia: UrgenciaDoJev = {
+    estado: "observando",
+    risco_agora: 0.96,
+    hipotetico: 0.04,
+    percebeu: true,
+    modelo: "jev-1.13.0",
+    tokensDeEntrada: 210,
+    tokensDeSaida: 4,
+    latenciaMs: 300,
+  };
+
+  async function gravar(jobId: string | null) {
+    const { pool, consultas } = poolCom(LIGADO);
+    await registrarUrgenciaDoJev(pool, {
+      organizationId: "org-1",
+      contactId: "contato-1",
+      conversationId: "conversa-1",
+      messageId: "mensagem-1",
+      jobId,
+      urgencia,
+    });
+    const { sql, params } = consultas.find((q) => q.sql.includes("llm_calls"))!;
+    return { llm: colunasDo(sql, "llm_calls", params), obs: colunasDo(sql, "jev_observacoes", params) };
+  }
+
+  it("llm_calls: job_id é o JOB, nunca a mensagem; contact_id é o contato", async () => {
+    const { llm } = await gravar("job-1");
+    expect(llm.organization_id).toBe("org-1");
+    expect(llm.contact_id).toBe("contato-1");
+    expect(llm.job_id, "a FK de job_id aponta para job_queue").toBe("job-1");
+    expect(llm.model).toBe("typesafe/jev-1.13.0");
+  });
+
+  it("jev_observacoes: message_id é a mensagem e job_id é o job", async () => {
+    const { obs } = await gravar("job-1");
+    expect(obs.message_id).toBe("mensagem-1");
+    expect(obs.job_id).toBe("job-1");
+    expect(obs.conversation_id).toBe("conversa-1");
+  });
+
+  it("sem job (nulo), job_id vai nulo nas duas — e não vira o id da mensagem", async () => {
+    const { llm, obs } = await gravar(null);
+    expect(llm.job_id).toBeNull();
+    expect(obs.job_id).toBeNull();
+  });
+});
