@@ -14,8 +14,10 @@
  *   - o que depende continua depois de quem o alimenta (playbook depois da
  *     prospecção; o contexto inteiro depois do contato; o histórico depois da
  *     conversa resolvida);
- *   - nunca mais de 4 consultas em voo por turno: o pool do worker tem 10
- *     conexões para até 8 jobs simultâneos.
+ *   - nunca mais de 4 consultas em voo por turno. É o formato das trilhas, não
+ *     um encaixe no pool: 8 turnos juntos pedem até 32 leituras sobre as 10
+ *     conexões do default do pg, e o pg enfileira o excesso. O teto guarda que
+ *     o paralelismo não cresça sem alguém decidir DB_POOL_MAX junto.
  *
  * O turno roda de verdade (`runAgentTurn`) até a primeira chamada de modelo, que
  * para por falta de configuração de LLM na org — é o ponto de parada desejado:

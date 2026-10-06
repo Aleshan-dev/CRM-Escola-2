@@ -2313,9 +2313,11 @@ async function executarTurnoDoAgente(
   // nenhuma está sob lock ou transação, e a única dependência entre elas — o
   // playbook precisa do contexto de prospecção — fica dentro da mesma trilha.
   // Em série eram 8 RTTs ao Supabase remoto antes de o modelo começar; assim são
-  // 2 (a trilha mais funda). O teto é 4 consultas em voo por turno, porque o
-  // pool do worker tem 10 conexões (default do pg) para até 8 jobs simultâneos
-  // — por isso trilhas de duas leituras em vez de oito de uma.
+  // 2 (a trilha mais funda). As 4 consultas em voo por turno são o formato das
+  // trilhas, não um encaixe no pool: com QUEUE_MAX_CONCURRENCY=8 turnos abrindo
+  // juntos, o pico chega a 32 leituras sobre 10 conexões (default do pg, knob
+  // DB_POOL_MAX). O pg enfileira e nenhuma destas leituras segura conexão, então
+  // o pior caso é espera de fila no pico, não erro nem deadlock.
   const [playbook, [skills, currentInboundText], orgMemory, [previous, leadState]] =
     await Promise.all([
       (async () => {

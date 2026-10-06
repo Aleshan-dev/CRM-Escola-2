@@ -233,8 +233,11 @@ export async function getLeadContext(
   // Daqui em diante tudo depende só do contato, e nada depende entre si além da
   // conversa (histórico e desfechos precisam do id dela). Cada `await` em série
   // era um RTT ao Supabase remoto antes do modelo responder; em paralelo, o turno
-  // paga o mais lento. Teto de 4 consultas em voo por contexto: o pool do worker
-  // tem 10 conexões (default do pg) para até 8 jobs simultâneos.
+  // paga o mais lento. São no máximo 4 consultas em voo por contexto, e isso é o
+  // formato das leituras, não um encaixe no pool: com vários chamadores juntos
+  // (os turnos do worker, e também os rascunhos de resposta fora dele) a demanda
+  // passa das 10 conexões do default do pg (knob DB_POOL_MAX). O pg enfileira e
+  // nenhuma destas leituras segura conexão: o pior caso é espera, não erro.
   //
   // Conversa: a do job quando informada (fonte confiável); senão a 1:1 mais
   // recente do contato. Grupos NUNCA (regra dura nº 12).
