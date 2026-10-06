@@ -4579,7 +4579,7 @@ export const DICIONARIO: Traducoes = {
     },
   "Nos últimos {dias} dias, o Jev percebeu {n} mensagens represadas pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
     {
-      es: "En los últimos {dias} días, Jev ha percibido {n} mensajes retenidos por el límite de envío con un riesgo que la regla de urgência de hoy no reconoció.",
+      es: "En los últimos {dias} días, Jev ha percibido {n} mensajes retenidos por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
     },
   // O "por quê" da chamada da urgência em IA › Execuções (`SINAL_DE_URGENCIA`).
   "Perceber risco de segurança na mensagem represada": {
