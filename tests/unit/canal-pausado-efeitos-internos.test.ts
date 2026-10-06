@@ -204,6 +204,22 @@ describe("consumidor 1 — push no celular", () => {
     expect(r.status).toBe("ok");
     expect(enviarPushDaOrg).toHaveBeenCalledTimes(1);
   });
+
+  // O grupo é o irmão que a primeira passada não viu: `message.group_received`
+  // traz o MESMO payload (com `channel_session_id`) e cai em `handleGroupInbound`,
+  // não em `handleInbound`. A inbox esconde o grupo do canal pausado também.
+  it("grupo em canal pausado → skipped e NENHUM push sai", async () => {
+    const r = await webPushInboundHandler.handle(evento({ event_type: "message.group_received" }));
+    expect(r).toMatchObject({ status: "skipped", detail: "canal_desativado" });
+    expect(enviarPushDaOrg).not.toHaveBeenCalled();
+  });
+
+  it("grupo em canal ligado → o push sai", async () => {
+    canal.desativado = false;
+    const r = await webPushInboundHandler.handle(evento({ event_type: "message.group_received" }));
+    expect(r.status).toBe("ok");
+    expect(enviarPushDaOrg).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("consumidor 2 — fluxo de follow-up", () => {

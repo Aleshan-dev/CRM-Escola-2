@@ -90,6 +90,11 @@ async function handleInbound(row: EventRow): Promise<HandlerResult> {
  * está falando. Título fixo, igual em toda organização.
  */
 async function handleGroupInbound(row: EventRow): Promise<HandlerResult> {
+  // Canal DESATIVADO (#2329): a mesma régua de `handleInbound` — a inbox
+  // esconde o grupo do canal pausado também, e o payload é o mesmo.
+  if (await canalDoEventoDesativado(createAdminClient(), row.organization_id, row.payload)) {
+    return { consumer_key: WEB_PUSH_INBOUND_KEY, status: "skipped", detail: "canal_desativado" };
+  }
   const conversationId =
     (typeof row.payload.conversation_id === "string" ? row.payload.conversation_id : null) ?? null;
   const previewRaw = row.payload.body_preview;
