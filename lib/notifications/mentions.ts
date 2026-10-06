@@ -133,7 +133,10 @@ export function partesDoCorpo(body: string): ParteDoCorpo[] {
  */
 export function embutirMencoes(texto: string, mencoes: readonly MencaoEscolhida[]): string {
   let saida = texto;
-  for (const mencao of mencoes) {
+  // Nome mais longo primeiro: com "Ana" e "Ana Lima" escolhidas, "@Ana" casaria
+  // dentro de "@Ana Lima" e o token da Ana cairia em cima da Ana Lima.
+  const maisLongoPrimeiro = [...mencoes].sort((a, b) => b.nome.trim().length - a.nome.trim().length);
+  for (const mencao of maisLongoPrimeiro) {
     const nome = mencao.nome.trim();
     if (!nome || !mencao.id.trim()) continue;
     const re = new RegExp(`@${escaparRegex(nome)}(?![\\p{L}\\p{N}])`, "iu");

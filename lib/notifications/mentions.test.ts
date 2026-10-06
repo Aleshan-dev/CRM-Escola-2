@@ -101,6 +101,15 @@ describe("embutirMencoes", () => {
     expect(saida).toContain(`@[Carlos Dias](mencao:${carlos.id})`);
   });
 
+  it("nome contido em outro: escolher Ana antes de Ana Lima não põe o token da Ana em cima da Ana Lima", () => {
+    // Na ordem de escolha, `@Ana` casaria dentro de `@Ana Lima`: a Ana Lima
+    // perdia a menção por id e o `@Ana` que sobrava avisava todas as Anas.
+    const soAna = { id: "id-da-outra-ana", nome: "Ana" };
+    const saida = embutirMencoes("@Ana Lima falou com @Ana", [soAna, ana]);
+    expect(saida).toBe(`@[Ana Lima](mencao:${ana.id}) falou com @[Ana](mencao:${soAna.id})`);
+    expect(tokensDeMencao(saida)).toEqual([]);
+  });
+
   it("a MESMA pessoa escolhida duas vezes vira duas menções", () => {
     const saida = embutirMencoes("@Ana Lima fala com @Ana Lima", [ana, ana]);
     expect(saida.match(/mencao:id-da-ana/g)).toHaveLength(2);
