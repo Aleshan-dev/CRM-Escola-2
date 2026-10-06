@@ -12,12 +12,19 @@
  *
  * **LIGADO.** O #2228 publicou o passo e as regras gravadas depois dele decidem
  * sem ninguém precisar ligar nada; desligar a empresa inteira por omissão
- * seria quebrar regra que já existe (critério 4 da issue).
+ * seria quebrar regra que já existe (o padrão pedido na issue).
  *
- * **`undefined` = não deu para saber**, e quem chama trata como LIGADO. Dizer
- * "esta empresa tem o passo desligado" por causa de um erro de leitura faria
- * toda regra parar no primeiro empecilho de rede — a mentira cara, ao contrário.
- * `aiDecideLigado` só devolve `false` para um `false` gravado.
+ * **`undefined` = não deu para saber.** `aiDecideLigado` só devolve `false`
+ * para um `false` gravado — e o chamador NÃO trata o `undefined` como ligado:
+ * o `execute` do `ai_decide` não consulta o modelo e grava
+ * `ai_decide_interruptor_ilegivel`, um motivo próprio (a tela não pode dizer
+ * "a empresa desligou" quando o que houve foi erro de leitura). O interruptor é
+ * um "não" explícito do operador, e na dúvida sobre agir, não se age
+ * (`docs/doctrine/sistema-vivo/04-fronteira-de-autoridade.md` §4.5). O preço:
+ * numa empresa LIGADA, aquele evento perde a decisão — o motor não reexecuta.
+ * O mesmo lado da escolha de `lib/ai/elegibilidade/consulta-supabase.ts`;
+ * o lado oposto (falhar ABERTO para não calar o agente diante de quem espera)
+ * é o do orçamento em `lib/agent-engine/edge/llm/run-model-call.ts`.
  *
  * **Nunca lança.** Mesma regra das leituras de estado de
  * `lib/recursos-opcionais/estado.ts`: uma fonte que falha (cliente sem
@@ -45,7 +52,13 @@ export async function aiDecideLigado(
       .eq("id", organizationId)
       .maybeSingle();
 
-    if (error) return undefined;
+    if (error) {
+      logger.warn("ai_decide: não deu para ler o interruptor da empresa — o passo não decide agora", {
+        organizationId,
+        detalhe: error.message,
+      });
+      return undefined;
+    }
 
     const settings = (data as { settings?: unknown } | null)?.settings;
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) return AI_DECIDE_PADRAO;
@@ -56,7 +69,7 @@ export async function aiDecideLigado(
     // quando o operador DESLIGA — nunca por omissão nem por valor ilegível.
     return typeof bruto === "boolean" ? bruto : AI_DECIDE_PADRAO;
   } catch (erro) {
-    logger.warn("ai_decide: não deu para ler o interruptor da empresa — segue ligado", {
+    logger.warn("ai_decide: não deu para ler o interruptor da empresa — o passo não decide agora", {
       organizationId,
       detalhe: erro instanceof Error ? erro.message : String(erro),
     });

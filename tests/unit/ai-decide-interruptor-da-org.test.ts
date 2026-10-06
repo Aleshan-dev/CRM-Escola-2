@@ -9,10 +9,18 @@
  *     frase é lida do próprio mapa da tela, não de memória).
  *  2. LIGADO (controle positivo): o modelo É consultado. Sem este caso, um
  *     teste que só afirma "não chamou" passaria para qualquer defeito que
- *     impedisse a chamada — inclusive a falha de leitura que o leitor
- *     converte em "segue ligado".
+ *     impedisse a chamada — inclusive uma leitura que falhasse (que, desde a
+ *     triagem, também não consulta o modelo: ver o caso ILEGÍVEL).
  *  3. PADRÃO: sem a chave gravada, LIGADO — é o estado de uma empresa que
- *     nunca mexeu no interruptor depois do #2228 (critério 4).
+ *     nunca mexeu no interruptor depois do #2228 (o padrão pedido na issue).
+ *
+ * E duas que vieram na triagem:
+ *
+ *  4. ILEGÍVEL: erro ao LER o interruptor não consulta o modelo, e o run grava
+ *     um motivo PRÓPRIO — o operador pode ter desligado, e a tela não pode
+ *     dizer "a empresa desligou" quando o que houve foi erro de leitura.
+ *  5. ADIAMENTO: o `postponeUntil` só pula as janelas com o `false` GRAVADO;
+ *     no ilegível elas seguem, para nunca mandar fora da janela.
  *
  * A chamada de modelo é mockada (`decisao-de-acao`), mesmo desenho do irmão
  * `lib/automation/actions/ai-decide.test.ts`: o que se testa aqui é o
@@ -24,7 +32,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/agent-engine/agent/decisao-de-acao", () => ({ decidirAcao: vi.fn() }));
 
-import { getAction } from "@/lib/automation/actions";
+import { getAction, registerAction } from "@/lib/automation/actions";
 import type { ActionCtx } from "@/lib/automation/types";
 import { decidirAcao } from "@/lib/agent-engine/agent/decisao-de-acao";
 import { DICIONARIO } from "@/lib/i18n/dicionario";
@@ -38,6 +46,7 @@ const decidir = vi.mocked(decidirAcao);
 const ORG = "11111111-1111-4111-8111-111111111111";
 const REGRA = "22222222-2222-4222-8222-222222222222";
 const MOTIVO = "ai_decide_desligado_na_empresa";
+const MOTIVO_ILEGIVEL = "ai_decide_interruptor_ilegivel";
 
 const CONFIG = {
   custo_de_token: true,
@@ -126,13 +135,13 @@ describe("interruptor da empresa DESLIGADO: o modelo não é consultado", () => 
     });
   });
 
-  it("o motivo tem FRASE na aba Atividade e essa frase tem espanhol", () => {
+  it.each([MOTIVO, MOTIVO_ILEGIVEL])("o motivo %s tem FRASE na aba Atividade e essa frase tem espanhol", (motivo) => {
     const mapa = lerMapaDeMotivos(
       join(__dirname, "..", ".."),
       "app/app/webhooks/_components/ActivityTab.tsx",
     );
-    const frase = mapa.get(MOTIVO);
-    expect(frase, `o motivo ${MOTIVO} não tem frase no mapa MOTIVO_DA_PARADA`).toBeTruthy();
+    const frase = mapa.get(motivo);
+    expect(frase, `o motivo ${motivo} não tem frase no mapa MOTIVO_DA_PARADA`).toBeTruthy();
     expect(frase!.trim().length, "frase curta demais: a tela mostraria nada").toBeGreaterThan(10);
     expect(
       DICIONARIO[frase!]?.es,
@@ -160,23 +169,76 @@ describe("interruptor da empresa LIGADO (controle positivo)", () => {
 
     expect(decidir, "settings sem a chave tem de manter o padrão ligado").toHaveBeenCalledTimes(1);
   });
+});
 
-  it("falha de leitura não desliga: segue consultando o modelo", async () => {
-    const comErro = {
-      from() {
-        const b: Record<string, unknown> = {};
-        b.select = () => b;
-        b.eq = () => b;
-        b.maybeSingle = async () => ({ data: null, error: { message: "rede" } });
-        return b;
-      },
-    } as unknown as ActionCtx["admin"];
+/** Leitura que devolve `error` do supabase (rede, permissão). */
+const adminComErro = {
+  from() {
+    const b: Record<string, unknown> = {};
+    b.select = () => b;
+    b.eq = () => b;
+    b.maybeSingle = async () => ({ data: null, error: { message: "rede" } });
+    return b;
+  },
+} as unknown as ActionCtx["admin"];
 
-    await executor().execute(ctx(comErro), structuredClone(CONFIG));
+/** Client sem `from`: a leitura LANÇA, e o leitor converte em "não deu para saber". */
+const adminQueLanca = {} as ActionCtx["admin"];
+
+describe("interruptor da empresa ILEGÍVEL: na dúvida sobre agir, não age", () => {
+  it.each([
+    ["erro devolvido pela leitura", adminComErro],
+    ["exceção na leitura", adminQueLanca],
+  ])("%s: não consulta o modelo e grava um motivo PRÓPRIO", async (_caso, admin) => {
+    const resultado = await executor().execute(ctx(admin), structuredClone(CONFIG));
 
     expect(
       decidir,
-      "erro de leitura não pode virar freio — o default é ligado",
-    ).toHaveBeenCalledTimes(1);
+      "o modelo foi consultado sem saber se o operador desligou o interruptor",
+    ).not.toHaveBeenCalled();
+    expect(resultado).toEqual({
+      type: "ai_decide",
+      status: "skipped",
+      detail: { reason: MOTIVO_ILEGIVEL },
+    });
+  });
+});
+
+describe("pré-checagem do motor (postponeUntil) com o interruptor", () => {
+  const ADIA_ATE = "2026-10-07T09:00:00.000Z";
+  const postpone = vi.fn(async () => ADIA_ATE);
+  // Tipo próprio deste arquivo: o registro é um mapa só, sem remoção, e não
+  // pode trocar o executor de uma ação real.
+  registerAction({
+    type: "teste_janela_do_interruptor",
+    postponeUntil: postpone,
+    execute: async () => ({ type: "teste_janela_do_interruptor", status: "success" }),
+  });
+  const CONFIG_COM_JANELA = {
+    ...CONFIG,
+    opcoes: [
+      CONFIG.opcoes[0],
+      { id: "janela", rotulo: "Ação com janela", acao: { type: "teste_janela_do_interruptor", config: {} } },
+    ],
+  };
+
+  beforeEach(() => postpone.mockClear());
+
+  it("DESLIGADO: não adia o evento por um passo que não vai rodar", async () => {
+    const ate = await executor().postponeUntil!(
+      ctx(adminComSettings(SETTINGS_DESLIGADO)),
+      structuredClone(CONFIG_COM_JANELA),
+    );
+
+    expect(ate).toBeNull();
+    expect(postpone, "com o freio desligado a janela da ação-alvo nem é consultada").not.toHaveBeenCalled();
+  });
+
+  it("ILEGÍVEL: as janelas seguem valendo — nunca manda fora da janela", async () => {
+    const ate = await executor().postponeUntil!(ctx(adminComErro), structuredClone(CONFIG_COM_JANELA));
+
+    expect(ate).toBe(ADIA_ATE);
+    expect(postpone).toHaveBeenCalledTimes(1);
+    expect(decidir, "adiado não pode gastar token").not.toHaveBeenCalled();
   });
 });

@@ -38,18 +38,6 @@ import { logger } from "@/lib/logger";
 
 const TIPO = "ai_decide";
 
-/**
- * O freio POR EMPRESA, lido a cada execução (#2367).
- *
- * `false` = desligado. Ausente (`undefined`, falha de leitura) = segue como
- * antes: o default é LIGADO, e uma rede ruim não pode parar regra que já
- * decidia. A leitura é uma consulta de uma coluna, feita por quem executa —
- * mesma conta de `orgTemAutomatico` na fila.
- */
-async function freioDaEmpresa(ctx: ActionCtx): Promise<boolean> {
-  return (await aiDecideLigado(ctx.admin, ctx.organizationId)) !== false;
-}
-
 interface OpcaoCrua {
   id?: unknown;
   rotulo?: unknown;
@@ -101,8 +89,10 @@ function contatoDoContexto(ctx: ActionCtx): string | null {
 async function postponeUntil(ctx: ActionCtx, config: Record<string, unknown>): Promise<string | null> {
   // Com o freio da empresa acionado (#2367) este passo não roda: adiar o EVENTO
   // INTEIRO por causa de uma ação que será pulada atrasaria as demais regras do
-  // mesmo gatilho sem motivo nenhum.
-  if (!(await freioDaEmpresa(ctx))) return null;
+  // mesmo gatilho sem motivo nenhum. Só o `false` GRAVADO pula as janelas: no
+  // ilegível elas seguem, porque o `execute` pode ler `true` logo depois — e,
+  // sem a pré-checagem, mandaria fora da janela.
+  if ((await aiDecideLigado(ctx.admin, ctx.organizationId)) === false) return null;
   const opcoes = lerOpcoes(config);
   if (!opcoes) return null; // config inválida falha no execute, não adia
   for (const opcao of opcoes) {
@@ -122,8 +112,16 @@ async function execute(ctx: ActionCtx, config: Record<string, unknown>): Promise
   // regra em vez de procurar o interruptor. E é o único ponto em que a
   // recusa acontece ANTES da chamada de modelo: daqui para baixo, nada
   // consulta a IA.
-  if (!(await freioDaEmpresa(ctx))) {
-    return { type: TIPO, status: "skipped", detail: { reason: "ai_decide_desligado_na_empresa" } };
+  //
+  // Só segue com o `true` lido. Falha de leitura (`undefined`) NÃO consulta o
+  // modelo: o interruptor é um "não" explícito do operador, e na dúvida sobre
+  // agir, não se age (docs/doctrine/sistema-vivo/04-fronteira-de-autoridade.md
+  // §4.5). O motivo é próprio, para a tela não dizer "a empresa desligou"
+  // quando o que houve foi um erro de leitura.
+  const interruptor = await aiDecideLigado(ctx.admin, ctx.organizationId);
+  if (interruptor !== true) {
+    const reason = interruptor === false ? "ai_decide_desligado_na_empresa" : "ai_decide_interruptor_ilegivel";
+    return { type: TIPO, status: "skipped", detail: { reason } };
   }
 
   // O registro EXPLÍCITO do custo (#1970) — sem ele, nem pergunta à IA.
