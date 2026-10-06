@@ -374,7 +374,7 @@ export function ScheduleDialog({
               size="sm"
               disabled={!podeCopiar}
               title={
-                podeCopiar
+                podeCopiar || windows.length === 0
                   ? undefined
                   : t("Limite de 50 janelas por atendente: remova algumas antes de copiar.")
               }

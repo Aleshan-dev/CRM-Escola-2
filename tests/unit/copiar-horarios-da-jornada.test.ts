@@ -87,6 +87,13 @@ describe("copiarParaDiasUteis", () => {
     expect(copiarParaDiasUteis([])).toEqual([]);
   });
 
+  it("sem nenhuma janela o botão fica desligado — não há o que copiar", () => {
+    // Ligado aqui seria um clique que não faz nada, e o comentário da tela
+    // promete o contrário ("desligado quando não há o que copiar").
+    expect(podeCopiarParaDiasUteis([])).toBe(false);
+    expect(podeCopiarParaDiasUteis([MANHA])).toBe(true);
+  });
+
   it("não passa do limite de 50 janelas que a rota aceita", () => {
     const muitas: ScheduleWindow[] = Array.from({ length: 11 }, (_, i) => ({
       dow: 1,

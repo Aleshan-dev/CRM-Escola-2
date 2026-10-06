@@ -61,9 +61,13 @@ export function copiarParaDiasUteis(windows: ScheduleWindow[]): ScheduleWindow[]
   return [...preservadas, ...copiadas];
 }
 
-/** Cabe no limite da rota? Se não, o botão fica desligado em vez de dar erro ao salvar. */
+/**
+ * Há o que copiar, e cabe no limite da rota? Se não, o botão fica desligado —
+ * sem janela nenhuma o clique não faria nada, e passar do limite viraria erro
+ * ao salvar.
+ */
 export function podeCopiarParaDiasUteis(windows: ScheduleWindow[]): boolean {
-  return copiarParaDiasUteis(windows).length <= LIMITE_DE_JANELAS;
+  return windows.length > 0 && copiarParaDiasUteis(windows).length <= LIMITE_DE_JANELAS;
 }
 
 /**
