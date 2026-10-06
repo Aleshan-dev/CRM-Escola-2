@@ -59,11 +59,29 @@ describe("sessaoDoWebhook", () => {
     expect(decifrar).not.toHaveBeenCalled();
   });
 
-  it("não guarda segredo que não decifrou", async () => {
+  it("guarda sessão sem credencial (placeholder '\\x00', decifrar devolve null): 10 eventos = 1 consulta", async () => {
+    // O estado de TODA sessão WAHA criada pelo produto — ver a migration 0240.
     const { carregar, decifrar } = dublês(linha, null);
-    await sessaoDoWebhook("nome:org_x", carregar, decifrar);
+    for (let i = 0; i < 10; i++) {
+      const r = await sessaoDoWebhook("nome:org_x", carregar, decifrar, 1_000 + i);
+      expect(r).toEqual({ ok: true, valor: { session: linha, segredo: null } });
+    }
+    expect(carregar).toHaveBeenCalledTimes(1);
+    expect(decifrar).toHaveBeenCalledTimes(1);
+  });
+
+  it("não guarda quando a decifragem LANÇA (erro do RPC) — a próxima tenta de novo", async () => {
+    const carregar = vi.fn(async () => ({ data: linha, error: null }));
+    const decifrar = vi.fn(async (): Promise<string | null> => {
+      throw new Error("rpc fora");
+    });
+    expect(await sessaoDoWebhook("nome:org_x", carregar, decifrar)).toEqual({
+      ok: true,
+      valor: { session: linha, segredo: null },
+    });
     await sessaoDoWebhook("nome:org_x", carregar, decifrar);
     expect(carregar).toHaveBeenCalledTimes(2);
+    expect(decifrar).toHaveBeenCalledTimes(2);
   });
 
   it("esquecer força a próxima leitura do banco (segredo trocado)", async () => {

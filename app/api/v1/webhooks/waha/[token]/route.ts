@@ -115,12 +115,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
         () => base().maybeSingle(),
       ),
     async (ciphertext) => {
-      try {
-        const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext });
-        return !dec.error && typeof dec.data === "string" ? dec.data : null;
-      } catch {
-        return null;
-      }
+      // Erro do RPC LANÇA (falha passageira, não guardada); `null` é "não há credencial".
+      const dec = await admin.rpc("fn_decrypt_oauth", { ciphertext });
+      if (dec.error) throw new Error(dec.error.message);
+      return typeof dec.data === "string" ? dec.data : null;
     },
   );
 

@@ -24,9 +24,16 @@
  *
  * ═══ O que NÃO entra na memória ═══
  *
- * Erro de consulta e "não encontrado". Guardar a ausência faria um canal recém-
- * criado ignorar seus primeiros eventos por 30 s; guardar o erro estenderia uma
- * falha passageira do banco.
+ * Erro de consulta, "não encontrado" e decifragem que LANÇOU. Guardar a ausência
+ * faria um canal recém-criado ignorar seus primeiros eventos por 30 s; guardar o
+ * erro estenderia uma falha passageira do banco.
+ *
+ * Segredo `null` com o RPC tendo RESPONDIDO entra, sim: é o estado permanente de
+ * toda sessão WAHA, que nasce com `webhook_secret_encrypted = '\x00'` e que
+ * `fn_decrypt_oauth` devolve como NULL de propósito (migration 0240). Sem guardar
+ * esse caso, a memória nunca guardaria nada numa instalação criada pelo produto.
+ * É seguro: o segredo só confere assinatura, e um evento assinado que falha já
+ * chama `esquecerSessaoDoWebhook` — o seguinte relê do banco.
  */
 
 export const TTL_MS = 30_000;
@@ -45,7 +52,7 @@ export interface LinhaDaSessao {
 
 export interface SessaoComSegredo<T extends LinhaDaSessao = LinhaDaSessao> {
   session: T;
-  /** Segredo decifrado; `null` quando não há ou a decifragem falhou. */
+  /** Segredo decifrado; `null` quando não há credencial ou a decifragem falhou. */
   segredo: string | null;
 }
 
@@ -60,7 +67,8 @@ const memoria = new Map<string, { valor: SessaoComSegredo; expiraEm: number }>()
  * da memória quando ainda vale, do banco quando não.
  *
  * `carregar` e `decifrar` são injetados: a regra de cache fica testável sem
- * banco, e cada rota mantém a sua consulta (por nome ou por token).
+ * banco, e cada rota mantém a sua consulta (por nome ou por token). `decifrar`
+ * devolve `null` quando não há credencial e LANÇA quando a decifragem falhou.
  */
 export async function sessaoDoWebhook<T extends LinhaDaSessao>(
   chave: string,
@@ -78,15 +86,19 @@ export async function sessaoDoWebhook<T extends LinhaDaSessao>(
   if (error) return { ok: false, erro: error.message };
   if (!data) return { ok: true, valor: null };
 
-  const valor: SessaoComSegredo<T> = { session: data, segredo: await decifrar(data.webhook_secret_encrypted) };
-  // Segredo que não decifrou não vai para a memória: a próxima chamada tenta de novo.
-  if (valor.segredo !== null) {
-    if (memoria.size >= MAX_ENTRADAS) {
-      const maisAntiga = memoria.keys().next().value;
-      if (maisAntiga !== undefined) memoria.delete(maisAntiga);
-    }
-    memoria.set(chave, { valor, expiraEm: agora + TTL_MS });
+  let segredo: string | null;
+  try {
+    segredo = await decifrar(data.webhook_secret_encrypted);
+  } catch {
+    // Decifragem que falhou (erro do RPC) não vai para a memória: a próxima chamada tenta de novo.
+    return { ok: true, valor: { session: data, segredo: null } };
   }
+  const valor: SessaoComSegredo<T> = { session: data, segredo };
+  if (memoria.size >= MAX_ENTRADAS) {
+    const maisAntiga = memoria.keys().next().value;
+    if (maisAntiga !== undefined) memoria.delete(maisAntiga);
+  }
+  memoria.set(chave, { valor, expiraEm: agora + TTL_MS });
   return { ok: true, valor };
 }
 
