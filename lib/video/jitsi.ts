@@ -67,7 +67,7 @@ export function servidorDeVideo(): string | null {
  *    marca. Por isso o prefixo é neutro e `lib/video/jitsi.ts` NÃO entra em
  *    `MARCA_CONGELADA` (a lista só encolhe).
  *
- * O uuid vem de `randomId()` e não de `crypto.randomUUID()` cru: este módulo
+ * O uuid vem de `randomId()` e não de `crypto.randomUUID` cru: este módulo
  * roda no navegador (o botão o importa), e o navegador só expõe `randomUUID`
  * em contexto seguro (https ou localhost). No self-host em `http://IP` a
  * chamada crua lança `TypeError` e o diálogo nunca abre (medido no Chromium,
