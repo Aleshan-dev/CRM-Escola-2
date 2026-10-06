@@ -37,6 +37,26 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // A conferência de fato (#2231): a terceira camada do before_send.
+  "Conferir afirmações de fato na resposta": { es: "Verificar las afirmaciones de hecho de la respuesta" },
+  "Lê a resposta que o assistente vai enviar e confere, nas evidências consultadas neste turno, se o que ele afirma sobre o negócio está escrito ali — ou se o material diz o contrário.":
+    { es: "Lee la respuesta que el asistente va a enviar y verifica, en las evidencias consultadas en este turno, si lo que afirma sobre el negocio está escrito allí — o si el material dice lo contrario." },
+  "Nesta versão a conferência de fato só observa: ela grava o que teria sido corrigido, mas nenhum envio é barrado. Deixar o Jev decidir sozinho só depois que você vir no cartão quantas mensagens teriam sido corrigidas.":
+    { es: "En esta versión la verificación de hechos solo observa: registra lo que se habría corregido, pero no bloquea ningún envío. Dejar que Jev decida solo después de que veas en la tarjeta cuántos mensajes se habrían corregido." },
+  "dias, a conferência de fato e o envio de hoje concordaram em": { es: "días, la verificación de hechos y el envío actual coincidieron en" },
+  "respostas — as duas deixaram passar a mesma afirmação.":
+    { es: "respuestas — las dos dejaron pasar la misma afirmación." },
+  "O agente diz ao cliente um horário, um preço ou um endereço que não está em nenhum material, e a pessoa vai até a loja ou à recepção por algo que não é verdade.":
+    { es: "El agente le dice al cliente un horario, un precio o una dirección que no está en ningún material, y la persona va a la tienda o a recepción por algo que no es verdad." },
+  "O Jev foi perguntado se o que a resposta afirma sobre o negócio está escrito nas evidências consultadas neste turno.":
+    { es: "Se le preguntó a Jev si lo que la respuesta afirma sobre el negocio está escrito en las evidencias consultadas en este turno." },
+  "O Jev não respondeu: a mensagem foi como estava, sem a conferência de fato.":
+    { es: "Jev no respondió: el mensaje salió como estaba, sin la verificación de hechos." },
+  "Confere se o que o assistente afirma sobre o negócio (horário, preço, endereço) está no material que ele consultou para responder.":
+    { es: "Verifica si lo que el asistente afirma sobre el negocio (horario, precio, dirección) está en el material que consultó para responder." },
+  "Liga-se no cartão do Jev, em Provedores de IA.": { es: "Se activa en la tarjeta de Jev, en Proveedores de IA." },
+  "Vem desligada. Nesta versão ela só anota o que encontrou e não barra nenhuma mensagem; ligada, custa +1 consulta ao Jev por resposta.":
+    { es: "Viene desactivada. En esta versión solo anota lo que encontró y no bloquea ningún mensaje; activada, cuesta +1 consulta a Jev por respuesta." },
   // Roteador do Jev sob demanda e resultados.
   "Como o roteador consulta as IAs": { es: "Cómo consulta el enrutador a las IA" },
   "Modo do roteador salvo.": { es: "Se guardó el modo del enrutador." },
@@ -1634,6 +1654,13 @@ export const DICIONARIO: Traducoes = {
   },
   // ─── Shell persistente (sidebar, topbar, ⌘K, menu do usuário) ───
   "Navegação principal": { es: "Navegación principal" },
+  // A barra de abas do celular: o rótulo acessível dela e o da aba que abre a
+  // gaveta com o resto dos destinos.
+  "Navegação rápida": { es: "Navegación rápida" },
+  Mais: { es: "Más" },
+  // O estado de carregando da tela de Desempenho, que passou a usar o mesmo
+  // molde de vazio/erro das outras telas.
+  "Carregando o desempenho": { es: "Cargando el rendimiento" },
   "Expandir sidebar": { es: "Expandir barra lateral" },
   "Recolher sidebar": { es: "Contraer barra lateral" },
   Versão: { es: "Versión" },
@@ -14537,6 +14564,36 @@ export const DICIONARIO: Traducoes = {
   "canais já estavam reativados": { es: "canales ya estaban reactivados" },
   "canal arquivado fica de fora": { es: "canal archivado queda fuera" },
   "canais arquivados ficam de fora": { es: "canales archivados quedan fuera" },
+  // ─── Videochamada (Jitsi Meet, #2440) ───
+  Videochamada: { es: "Videollamada" },
+  "Sala de videochamada": { es: "Sala de videollamada" },
+  "A sala abre em uma aba nova: é lá que o navegador pede câmera e microfone.": {
+    es: "La sala se abre en una pestaña nueva: ahí el navegador pide cámara y micrófono.",
+  },
+  "Envie o link pelo chat e o contato entra pelo celular, sem instalar nada. A sala vale só para esta chamada.": {
+    es: "Envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada. La sala vale solo para esta llamada.",
+  },
+  "Abrir sala em nova aba": { es: "Abrir sala en pestaña nueva" },
+  "Videochamada (Jitsi Meet)": {
+    es: "Videollamada (Jitsi Meet)",
+  },
+  "Abrir sala de vídeo no header da conversa: o contato entra pelo link no chat, sem instalar nada.": {
+    es: "Abrir sala de vídeo en el encabezado de la conversación: el contacto entra por el enlace en el chat, sin instalar nada.",
+  },
+  "No arquivo de ambiente, JITSI_SERVER_URL apontando para a origem da sala (ex.: https://meet.jit.si). Vazio = o botão Vídeo não aparece.": {
+    es: "En el archivo de ambiente, JITSI_SERVER_URL apuntando al origen de la sala (p. ej. https://meet.jit.si). Vacío = el botón Vídeo no aparece.",
+  },
+  "Link da videochamada copiado.": { es: "Enlace de la videollamada copiado." },
+  "Link da videochamada enviado na conversa.": {
+    es: "Enlace de la videollamada enviado en la conversación.",
+  },
+  "Não consegui copiar o link. Selecione e copie da barra de endereço.": {
+    es: "No pude copiar el enlace. Selecciona y copia desde la barra de direcciones.",
+  },
+  "Não consegui enviar o link. Copie e cole na conversa.": {
+    es: "No pude enviar el enlace. Cópialo y pégalo en la conversación.",
+  },
+  "Enviar link na conversa": { es: "Enviar enlace a la conversación" },
 };
 
 /**
