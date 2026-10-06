@@ -11,13 +11,21 @@
  * vez de matar o turno. Um segundo caminho seria uma porta dos fundos onde
  * nada disso valeria.
  *
- * ── Por que só leitura, nesta fatia ─────────────────────────────────────────
+ * ── Como uma remota é classificada (item 8) ────────────────────────────────
  *
- * O pedido da issue é preço, estoque e situação de OS: leitura. Uma escrita
- * remota passaria pelo escopo de funil (`ALVO_DE_FUNIL` é uma allowlist —
- * escrita sem classificação é recusada por desenho), e classificar ferramentas
- * que ainda não existem aqui seria inventar regra. Quem registra um servidor
- * hoje ganha leitura; escrita é fatia de outro turno, atrás de decisão.
+ * Duas metades, e as duas são necessárias:
+ *
+ * 1. o servidor anuncia `annotations.readOnlyHint === true` (declaração dele,
+ *    capturada em `somenteLeitura` por `listarFerramentasDoServidor`);
+ * 2. quem administra marcou a ferramenta como LEITURA no `tool_ids` do agente
+ *    (`mcp_externo:leitura:<nome>`), que é a escolha do item 6.
+ *
+ * Só com as duas a ferramenta sai com `category: "read"`. O resto sai como
+ * `write`, e uma escrita num turno com contato cai na conferência de escopo de
+ * `pickToolsFromMcp` — recusada com `escrita_sem_escopo_do_turno` — em vez de
+ * passar por fora dela. `readOnlyHint` sozinho não basta: um servidor que se
+ * diga "readOnly" num `cancelar_pedido` estaria escolhendo sozinho atravessar
+ * a regra da conversa.
  *
  * ── Por que o nome colide com o compilado e o remoto perde ──────────────────
  *

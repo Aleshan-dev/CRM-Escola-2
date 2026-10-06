@@ -20,9 +20,9 @@ import { McpAuthError, ensureRole, ensureScope } from "@/lib/mcp/auth";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import { logger } from "@/lib/logger";
 import { allTools, getToolByName } from "@/lib/mcp/tools";
+import { escolhasRemotas } from "@/lib/mcp/servidor-externo/ids";
 import { definirFerramentasRemotas } from "@/lib/mcp/tools/externo";
-import type { FerramentaRemota } from "@/lib/mcp/servidor-externo/chamada";
-import type { ServidorMcpExterno } from "@/lib/mcp/servidor-externo/registro";
+import type { ServidorMcpExternoMontado } from "@/lib/mcp/servidor-externo/carregar";
 import { catalogEntry, deCapacidadeDesligada, deModuloDesligado } from "@/lib/mcp/tools/catalog";
 import type { CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
 import type { ModuloOpcional } from "@/lib/instalacao/modulos";
@@ -87,10 +87,7 @@ export interface PickToolsInput {
    * `carregarServidorMcpExterno`, ANTES daqui — descobrir é rede e este montador
    * é síncrono.
    */
-  servidorMcpExterno?: {
-    servidor: ServidorMcpExterno;
-    ferramentas: readonly FerramentaRemota[];
-  };
+  servidorMcpExterno?: ServidorMcpExternoMontado;
 }
 
 /**
@@ -577,27 +574,50 @@ export function pickToolsFromMcp(input: PickToolsInput): Record<string, Tool> {
     }
   }
 
-  // ── Servidor MCP externo registrado pela instalação (#2147) ──────────────
+  // ── Ferramentas remotas ESCOLHIDAS pelo agente (#2147, itens 6, 7 e 8) ───
   //
   // Depois de tudo: as remotas somam às compiladas e nunca substituem nenhuma
   // (o nome colidindo é descartado lá em `definirFerramentasRemotas`, com o
   // motivo no log). Passam pelo MESMO `wrapMcpTool`, então auditoria, papel,
-  // escopo e a devolução de texto em vez de exceção valem para elas.
+  // escopo e a devolução de texto em vez de exceção valem para elas — e é
+  // passando por ele que uma remota classificada como ESCRITA cai na
+  // conferência de escopo do turno logo acima (`escrita_sem_escopo_do_turno`)
+  // em vez de atravessá-la.
   //
-  // Fora dos filtros de `tool_ids`, módulo e capacidade de ORGANIZAÇÃO por
-  // desenho: quem registra o servidor é a instalação, o endereço não vem de
-  // pacote nenhum e o catálogo compilado não sabe que essas ferramentas
-  // existem — filtrá-las por chave que só existe dentro dele as deixaria
-  // invisíveis para sempre.
+  // A ESCOLHA é do `tool_ids` da versão, com prefixo estável `mcp_externo:`
+  // (item 6, `servidor-externo/ids.ts`) — não do cadastro: registrar o servidor
+  // não dá ferramenta a agente nenhum. DESLIGADO POR PADRÃO (item 7): sem
+  // servidor, ou com servidor mas sem id remoto escolhido, este bloco não
+  // monta nada, e o turno é o catálogo de sempre sem rede nenhuma.
+  //
+  // Fora dos filtros de módulo e capacidade de ORGANIZAÇÃO por desenho: quem
+  // registra o servidor é a instalação, o endereço não vem de pacote nenhum e
+  // o catálogo compilado não sabe que essas ferramentas existem — filtrá-las
+  // por chave que só existe dentro dele as deixaria invisíveis para sempre.
   if (input.servidorMcpExterno) {
-    const ocupados = new Set(allTools.map((t) => t.name));
-    const remotas = definirFerramentasRemotas(
-      input.servidorMcpExterno.servidor,
-      input.servidorMcpExterno.ferramentas,
-      ocupados,
-    );
-    for (const def of remotas) {
-      result[def.name] = wrapMcpTool(def, input);
+    const escolhas = escolhasRemotas(input.toolIds);
+    if (escolhas.length > 0) {
+      const ocupados = new Set(allTools.map((t) => t.name));
+      const remotas = definirFerramentasRemotas(
+        input.servidorMcpExterno.servidor,
+        input.servidorMcpExterno.ferramentas,
+        ocupados,
+        escolhas,
+        // Junta de teste (ver `ServidorMcpExternoMontado.fetch`): em produção
+        // isto vem vazio e a saída usa o guard anti-SSRF.
+        input.servidorMcpExterno.fetch ? { fetch: input.servidorMcpExterno.fetch } : undefined,
+      );
+      for (const def of remotas) {
+        // ESCOLHA (b), item 8, em dois níveis. O primeiro é
+        // `carregarServidorMcpExterno`, que não carrega servidor nenhum para
+        // turno com contato — este é o de defesa: se um chamador futuro
+        // passar as duas coisas, a LEITURA remota não monta (o servidor não
+        // recebe o contato do turno e poderia devolver dado de outro cliente)
+        // e a ESCRITA monta para ser RECUSADA logo acima por
+        // `escrita_sem_escopo_do_turno`, nunca executada.
+        if (input.contatoDoTurno && def.category === "read") continue;
+        result[def.name] = wrapMcpTool(def, input);
+      }
     }
   }
 

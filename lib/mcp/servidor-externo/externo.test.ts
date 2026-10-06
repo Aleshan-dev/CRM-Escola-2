@@ -392,18 +392,25 @@ describe("o turno do agente enxerga e chama a ferramenta remota (#2147)", () => 
     expect(montadas.erp_achar).toBeUndefined();
   });
 
-  it("com registro a ferramenta remota aparece ao lado das compiladas e executa contra o servidor", async () => {
+  it("com registro E ESCOLHA do agente a remota aparece ao lado das compiladas e executa", async () => {
     const supabase = bancoDeMentira();
     const montadas = pickToolsFromMcp({
       supabase: supabase as never,
       ctx: contexto(supabase),
       auth,
-      toolIds: ["crm_search_products"],
+      // Item 6: a remota só entra pelo `tool_ids` do agente, com o prefixo.
+      toolIds: ["crm_search_products", toolIdRemoto("erp_achar", "leitura")],
       handoffToolEnabled: false,
       handoffSignal: { triggered: false },
       servidorMcpExterno: {
         servidor: { endpoint: base, chave: CHAVE },
-        ferramentas: await listarFerramentasDoServidor({ endpoint: base, chave: CHAVE }),
+        ferramentas: await listarFerramentasDoServidor(
+          { endpoint: base, chave: CHAVE },
+          { fetch: fetchDoStub() },
+        ),
+        // Junta de teste: sem ela o guard recusaria o loopback, que é
+        // justamente o que o teste logo acima prova que ele faz.
+        fetch: fetchDoStub(),
       },
     });
 
