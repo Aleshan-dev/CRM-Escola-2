@@ -1660,6 +1660,13 @@ export const DICIONARIO: Traducoes = {
   },
   // ─── Shell persistente (sidebar, topbar, ⌘K, menu do usuário) ───
   "Navegação principal": { es: "Navegación principal" },
+  // A barra de abas do celular: o rótulo acessível dela e o da aba que abre a
+  // gaveta com o resto dos destinos.
+  "Navegação rápida": { es: "Navegación rápida" },
+  Mais: { es: "Más" },
+  // O estado de carregando da tela de Desempenho, que passou a usar o mesmo
+  // molde de vazio/erro das outras telas.
+  "Carregando o desempenho": { es: "Cargando el rendimiento" },
   "Expandir sidebar": { es: "Expandir barra lateral" },
   "Recolher sidebar": { es: "Contraer barra lateral" },
   Versão: { es: "Versión" },
@@ -4597,6 +4604,44 @@ export const DICIONARIO: Traducoes = {
   "Perceber pedidos do cliente": {
     es: "Detectar pedidos del cliente",
   },
+  // O sinal de urgência da mensagem represada (#2232, `TAREFA_DA_URGENCIA`).
+  "Perceber risco de segurança numa mensagem represada": {
+    es: "Detectar un riesgo de seguridad en un mensaje retenido",
+  },
+  "Lê a última mensagem do cliente quando o teto de envio adiou a resposta, só se a regra de urgência de hoje não viu nela um risco à segurança ou à saúde — e conta as mensagens com esse risco que ela não reconheceu. Ele nunca passa a conversa nem responde.":
+    {
+      es: "Lee el último mensaje del cliente cuando el límite de envío pospuso la respuesta, solo si la regla de urgencia de hoy no vio en él un riesgo de seguridad o de salud — y cuenta los mensajes con ese riesgo que ella no reconoció. Él nunca transfiere la conversación ni responde.",
+    },
+  "Quando o Jev percebe, numa mensagem represada pelo teto de envio, um risco à segurança ou à saúde que a regra de urgência não reconheceu, ele abre um aviso na Central, com o alerta crítico que a regra abriria, para alguém da equipe responder na hora. Ele nunca passa a conversa nem responde ao cliente.":
+    {
+      es: "Cuando Jev percibe, en un mensaje retenido por el límite de envío, un riesgo de seguridad o de salud que la regla de urgencia no reconoció, abre un aviso en el Centro, con la alerta crítica que abriría la regla, para que alguien del equipo responda de inmediato. Él nunca transfiere la conversación ni responde al cliente.",
+    },
+  "Quando o Jev perceber, numa mensagem represada pelo teto de envio, um risco à segurança ou à saúde que a regra de urgência não reconheceu, ele abre um aviso na Central, com o alerta crítico que a regra abriria, para alguém da equipe responder na hora. Ele nunca passa a conversa nem responde ao cliente.":
+    {
+      es: "Cuando Jev perciba, en un mensaje retenido por el límite de envío, un riesgo de seguridad o de salud que la regla de urgencia no reconoció, abrirá un aviso en el Centro, con la alerta crítica que abriría la regla, para que alguien del equipo responda de inmediato. Él nunca transfiere la conversación ni responde al cliente.",
+    },
+  "Nos últimos {dias} dias, o Jev ainda não percebeu nenhuma mensagem represada pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
+    {
+      es: "En los últimos {dias} días, Jev todavía no ha percibido ningún mensaje retenido por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
+    },
+  "Nos últimos {dias} dias, o Jev percebeu {n} mensagem represada pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
+    {
+      es: "En los últimos {dias} días, Jev ha percibido {n} mensaje retenido por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
+    },
+  "Nos últimos {dias} dias, o Jev percebeu {n} mensagens represadas pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
+    {
+      es: "En los últimos {dias} días, Jev ha percibido {n} mensajes retenidos por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
+    },
+  // O "por quê" da chamada da urgência em IA › Execuções (`SINAL_DE_URGENCIA`).
+  "Perceber risco de segurança na mensagem represada": {
+    es: "Detectar un riesgo de seguridad en el mensaje retenido",
+  },
+  "O Jev foi perguntado, numa mensagem represada pelo teto de envio, se ela relata um risco à segurança ou à saúde que a regra de urgência de hoje não reconheceu. Ele não responde nem passa a conversa.":
+    {
+      es: "Se le preguntó a Jev, en un mensaje retenido por el límite de envío, si relata un riesgo de seguridad o de salud que la regla de urgencia de hoy no reconoció. Él no responde ni transfiere la conversación.",
+    },
+  "O Jev não respondeu: valeu só a regra de urgência de hoje.":
+    { es: "Jev no respondió: solo valió la regla de urgencia de hoy." },
   // O "por quê" da chamada dos pedidos em IA › Execuções (`PEDIDOS_DO_CLIENTE`).
   "O Jev foi perguntado se esta mensagem traz um pedido que a regra de hoje não viu. Ele não bloqueia nem passa a conversa.": {
     es: "Se le preguntó a Jev si este mensaje trae un pedido que la regla de hoy no vio. Él no bloquea ni transfiere la conversación.",
@@ -14570,6 +14615,36 @@ export const DICIONARIO: Traducoes = {
   "canais já estavam reativados": { es: "canales ya estaban reactivados" },
   "canal arquivado fica de fora": { es: "canal archivado queda fuera" },
   "canais arquivados ficam de fora": { es: "canales archivados quedan fuera" },
+  // ─── Videochamada (Jitsi Meet, #2440) ───
+  Videochamada: { es: "Videollamada" },
+  "Sala de videochamada": { es: "Sala de videollamada" },
+  "A sala abre em uma aba nova: é lá que o navegador pede câmera e microfone.": {
+    es: "La sala se abre en una pestaña nueva: ahí el navegador pide cámara y micrófono.",
+  },
+  "Envie o link pelo chat e o contato entra pelo celular, sem instalar nada. A sala vale só para esta chamada.": {
+    es: "Envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada. La sala vale solo para esta llamada.",
+  },
+  "Abrir sala em nova aba": { es: "Abrir sala en pestaña nueva" },
+  "Videochamada (Jitsi Meet)": {
+    es: "Videollamada (Jitsi Meet)",
+  },
+  "Abrir sala de vídeo no header da conversa: o contato entra pelo link no chat, sem instalar nada.": {
+    es: "Abrir sala de vídeo en el encabezado de la conversación: el contacto entra por el enlace en el chat, sin instalar nada.",
+  },
+  "No arquivo de ambiente, JITSI_SERVER_URL apontando para a origem da sala (ex.: https://meet.jit.si). Vazio = o botão Vídeo não aparece.": {
+    es: "En el archivo de ambiente, JITSI_SERVER_URL apuntando al origen de la sala (p. ej. https://meet.jit.si). Vacío = el botón Vídeo no aparece.",
+  },
+  "Link da videochamada copiado.": { es: "Enlace de la videollamada copiado." },
+  "Link da videochamada enviado na conversa.": {
+    es: "Enlace de la videollamada enviado en la conversación.",
+  },
+  "Não consegui copiar o link. Selecione e copie da barra de endereço.": {
+    es: "No pude copiar el enlace. Selecciona y copia desde la barra de direcciones.",
+  },
+  "Não consegui enviar o link. Copie e cole na conversa.": {
+    es: "No pude enviar el enlace. Cópialo y pégalo en la conversación.",
+  },
+  "Enviar link na conversa": { es: "Enviar enlace a la conversación" },
 };
 
 /**
