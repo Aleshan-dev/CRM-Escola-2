@@ -97,6 +97,12 @@ function bancoFalso(contatos: string[], negocios: Negocio[], criados: Record<str
   };
 }
 
+/** Toda consulta do caminho, lote por lote, leva o filtro de organização. */
+function cercaDeOrganizacao(banco: ReturnType<typeof bancoFalso>) {
+  expect(banco.urls.length).toBeGreaterThan(0);
+  for (const u of banco.urls) expect(u).toContain(`organization_id=eq.${ORG}`);
+}
+
 const quando = (minutos: number) => new Date(Date.UTC(2026, 0, 1) + minutos * 60_000).toISOString();
 
 async function candidatos(sb: ReturnType<typeof bancoFalso>["sb"]) {
@@ -192,6 +198,7 @@ describe("recorte de funil grande não estoura a URL (#2358)", () => {
     expect(urls.length, "os ids foram numa consulta só").toBeGreaterThan(1);
     for (const u of urls) expect(u.length).toBeLessThan(MURO_DO_GATEWAY);
     expect(lista.map((c) => c.contactId)).toEqual(contatos);
+    cercaDeOrganizacao(banco);
   });
 
   it("o corte global atravessa lotes: `limite` recorta a união ordenada, não cada lote", async () => {
@@ -220,6 +227,7 @@ describe("recorte de funil grande não estoura a URL (#2358)", () => {
     expect(lista).toHaveLength(50);
     expect(lista.map((c) => c.contactId)).toEqual(esperado);
     for (const u of banco.urlsDeContatos()) expect(u.length).toBeLessThan(MURO_DO_GATEWAY);
+    cercaDeOrganizacao(banco);
   });
 
   it("excluídos saem da URL e são cortados ANTES do limite (caminho com funil)", async () => {
@@ -241,6 +249,7 @@ describe("recorte de funil grande não estoura a URL (#2358)", () => {
     // O corte é DEPOIS da exclusão: os 50 primeiros VÁLIDOS, não 10 + buraco.
     expect(lista.map((c) => c.contactId)).toEqual(contatos.slice(40, 90));
     for (const u of banco.urlsDeContatos()) expect(u).not.toContain("not.in");
+    cercaDeOrganizacao(banco);
   });
 
   it("o mesmo corte com exclusão vale sem filtro de negócio (consulta paginada)", async () => {
@@ -255,6 +264,7 @@ describe("recorte de funil grande não estoura a URL (#2358)", () => {
 
     expect(lista.map((c) => c.contactId)).toEqual(contatos.slice(40, 90));
     for (const u of banco.urlsDeContatos()) expect(u).not.toContain("not.in");
+    cercaDeOrganizacao(banco);
   });
 
   it("incluídos à mão também vão em lotes (até 5.000 ids), sem URL acima do muro", async () => {
@@ -272,5 +282,55 @@ describe("recorte de funil grande não estoura a URL (#2358)", () => {
     const urls = banco.urlsDeContatos();
     expect(urls.length).toBeGreaterThanOrEqual(6);
     for (const u of urls) expect(u.length).toBeLessThan(MURO_DO_GATEWAY);
+    cercaDeOrganizacao(banco);
+  });
+
+  it("incluído repetido em lotes diferentes entra UMA vez", async () => {
+    const contatos = Array.from({ length: 300 }, (_, i) => uuid(i));
+    const banco = bancoFalso(contatos, []);
+    // 150 ids fora do recorte; o da posição 120 repete o da posição 10, e os
+    // dois caem em lotes diferentes de 100.
+    const incluir = contatos.slice(100, 250);
+    incluir[120] = incluir[10]!;
+
+    const lista = await buscarCandidatos(banco.sb, {
+      organizationId: ORG,
+      filtro: { ...FILTRO_VAZIO, com_alguma_tag: ["vip"], limite: 1, incluir_contatos: incluir },
+      agora: new Date(Date.UTC(2026, 5, 1)),
+    });
+
+    const ids = lista.map((c) => c.contactId);
+    expect(ids.filter((id) => id === incluir[10])).toHaveLength(1);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(1 + 149);
+    cercaDeOrganizacao(banco);
+  });
+
+  it("a ordem global é a do Postgres: segundo exato antes do fracionário do mesmo segundo", async () => {
+    // `localeCompare` (colação ICU) põe `.` antes de `+` e invertia este par. Os
+    // dois ficam em lotes diferentes, para que só a ordenação global decida.
+    const contatos = Array.from({ length: 150 }, (_, i) => uuid(i));
+    const criados: Record<string, string> = {};
+    contatos.forEach((c, i) => {
+      criados[c] = quando(100_000 + i);
+    });
+    criados[contatos[5]!] = "2026-01-01T12:34:56.5+00:00";
+    criados[contatos[120]!] = "2026-01-01T12:34:56+00:00";
+    const negocios = contatos.map((c, i) => ({
+      id: uuid(i, "2222"),
+      contact_id: c,
+      created_at: quando(i),
+      custom_fields: {},
+    }));
+    const banco = bancoFalso(contatos, negocios, criados);
+
+    const lista = await buscarCandidatos(banco.sb, {
+      organizationId: ORG,
+      filtro: comFunil({ limite: 1 }),
+      agora: new Date(Date.UTC(2026, 5, 1)),
+    });
+
+    expect(lista.map((c) => c.contactId)).toEqual([contatos[120]]);
+    cercaDeOrganizacao(banco);
   });
 });

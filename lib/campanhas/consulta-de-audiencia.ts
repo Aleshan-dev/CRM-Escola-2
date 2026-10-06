@@ -146,7 +146,11 @@ export async function buscarCandidatos(
     });
     if (error) throw new Error(`audiência: contatos — ${error.message}`);
     linhas = data.filter((l) => !excluidos.has(l.id));
-    linhas.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+    // Comparação ORDINAL, não `localeCompare`: a colação ICU põe `.` antes de
+    // `+`, e um `…56+00:00` (segundo exato) cairia DEPOIS de um `…56.5+00:00`,
+    // o contrário do `ORDER BY` do Postgres. Com timestamp em UTC no formato do
+    // PostgREST e uuid em hex minúsculo, a ordem de bytes é a do banco.
+    linhas.sort((a, b) => ordinal(a.created_at, b.created_at) || ordinal(a.id, b.id));
   } else {
     // Sem recorte de negócio não há por onde fatiar: uma consulta, paginada
     // pelo `max_rows`, até juntar `filtro.limite` linhas VÁLIDAS. Excluir em
@@ -166,7 +170,9 @@ export async function buscarCandidatos(
   // Entram mesmo fora do recorte, e por isso vêm em consulta própria; os vetos
   // por pessoa continuam valendo para eles (incluir à mão não fura opt-out).
   const jaTem = new Set(linhas.map((l) => l.id));
-  const faltam = filtro.incluir_contatos.filter((id) => !jaTem.has(id));
+  // Deduplicado ANTES dos lotes: o mesmo id em dois lotes voltaria duas vezes,
+  // e a gravação da campanha esbarraria no contato único por campanha.
+  const faltam = [...new Set(filtro.incluir_contatos)].filter((id) => !jaTem.has(id));
   if (faltam.length > 0) {
     // Em lotes pela mesma razão do recorte: até 5.000 ids não cabem numa URL.
     const { data: extras, error: erroExtras } = await buscaEmLotes<LinhaDeContato>(
@@ -324,6 +330,10 @@ export async function contatosJaEmCampanha(
     .in("campaign_id", ids);
   if (erroDest) throw new Error(`audiência: comprometidos — ${erroDest.message}`);
   return new Set((data ?? []).map((r) => (r as { contact_id: string }).contact_id));
+}
+
+function ordinal(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Aspas para o literal de array do Postgres — etiqueta com vírgula quebraria o `{a,b}`. */
