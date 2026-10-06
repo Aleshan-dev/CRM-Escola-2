@@ -405,10 +405,11 @@ export async function POST(_req: NextRequest, ctx: Context): Promise<Response> {
     efeitos.conversas_fechadas += 1;
   }
 
-  // RAG (spec 21, etapa 9): sem isso, a conversa já ingerida continua no acervo
-  // — o filtro do lote é `rag_review_status is null`, e ingerido não volta
-  // para a fila. Zerar na hora do marcar tira o passado do alcance do agente;
-  // o lote novo já exclui pessoal na leitura.
+  // RAG (spec 21, etapa 9): zerar `usable_for_rag` só impede ingestões
+  // FUTURAS destas conversas (o lote novo também exclui pessoal na leitura).
+  // Os trechos já ingeridos continuam em `ai_chunks` e alcançáveis pelo
+  // retriever — `retrieve_top_k_chunks` não lê `usable_for_rag`. Removê-los ao
+  // marcar é a issue #2394 (a mesma lacuna da #1957 na LGPD).
   const { error: ragErro } = await admin
     .from("conversations")
     .update({ usable_for_rag: false })
