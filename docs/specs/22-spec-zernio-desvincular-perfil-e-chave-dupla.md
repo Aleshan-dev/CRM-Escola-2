@@ -72,13 +72,14 @@ Quando não há integração configurada, a lista vem vazia (nada a comparar).
 `validatePartnerCredentials` (`lib/channels/connect.ts`) lista `GET /v1/accounts`
 SEM `profileId` (o caminho social usa `?profileId=` e funciona). Medido contra o
 provedor com chave válida: sem perfil a lista vem `{"accounts":[]}`. Três saídas,
-só com o que a resposta prova — sem adivinhar a forma do provedor:
+só com o que a resposta prova — sem adivinhar a forma do provedor (nesta ordem
+no código: perfil primeiro, depois lista vazia):
 
 | Resposta | Mensagem |
 |---|---|
+| o id colado é um perfil (confere em `GET /v1/profiles`, best-effort) | "Este id é de um PERFIL. Aqui vai o id da CONTA." |
 | lista vazia | "A chave não lista nenhuma conta. Confira o perfil e a conta no painel do provedor." |
 | lista com contas, sem a pedida | "Conta fora do alcance desta chave. Confira se a conta pertence ao perfil desta chave." |
-| o id colado é um perfil (confere em `GET /v1/profiles`, best-effort) | "Este id é de um PERFIL. Aqui vai o id da CONTA." |
 
 ## Fora do escopo (limite de produto, não bug)
 
