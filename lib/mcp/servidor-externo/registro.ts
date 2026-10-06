@@ -2,12 +2,15 @@
  * O registro de um servidor MCP externo (#2147) — e a leitura que o turno faz
  * antes de decidir se existe algum.
  *
- * ── Onde ele mora, e por que sem migration ──────────────────────────────────
+ * ── O que mora onde ────────────────────────────────────────────────────────
  *
- * `organizations.settings` é o jsonb onde a instalação já guarda configuração
- * (o mesmo bolso de `conversions` do PR #2197, o mesmo de `proposals`): a linha
- * já existe para toda organização, então registrar um servidor é gravar uma
- * chave — não é abrir coluna. Nada em `supabase/` é tocado por esta fatia.
+ * O ENDEREÇO continua em `organizations.settings.mcp_externo` (o jsonb de
+ * sempre, merge em dois níveis, os bolsos dos outros atravessam intactos). A
+ * CHAVE saiu de lá: `settings` é entregue pela RLS a todo membro da
+ * organização, inclusive `viewer`, e ela ficava em claro — agora são colunas
+ * cifradas na mesma linha, lidas e gravadas por `segredo.ts` (#2147, item 3).
+ * Uma linha por organização, sempre lida pelo `organization_id` do run ou da
+ * sessão, nunca do corpo do pedido (item 2).
  *
  * ── Por que o merge é em DOIS níveis ────────────────────────────────────────
  *

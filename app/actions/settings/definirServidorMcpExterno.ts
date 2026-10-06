@@ -59,13 +59,16 @@ export type ResultadoRegistroDeServidorMcp =
         | "forbidden_tenant"
         | "forbidden_role"
         | "mfa_required"
+        | "upstream_unavailable"
+        | "endpoint_inseguro"
         | "erro_ao_gravar";
     };
 
 /**
- * Endpoint (http/https) e chave. Vazio apaga; a validação de URL de verdade é
- * a de `ehEndpointValido`, na leitura — aqui só se impõe tamanho, porque a
- * Server Action é endpoint público e o tipo do parâmetro não chega ao servidor.
+ * Endpoint (http/https) e chave. Vazio apaga; a conferência de segurança do
+ * ENDEREÇO acontece logo abaixo, depois do gate — aqui só se impõe tamanho,
+ * porque a Server Action é endpoint público e o tipo do parâmetro não chega ao
+ * servidor.
  */
 const entradaSchema = z.object({
   endpoint: z.string().trim().max(500),
@@ -125,9 +128,18 @@ export async function definirServidorMcpExterno(
 
   // `settings` é jsonb compartilhado: ler, mesclar SÓ o nosso bolso e gravar
   // preserva o que é dos outros — é a razão do merge em dois níveis.
-  const settings = mesclarServidorMcpExterno(atual?.settings ?? {}, entrada.data);
+  const settings = mesclarServidorMcpExterno(atual?.settings ?? {}, { endpoint, chave });
+  const temRegistro = settings[BOLSO_MCP_EXTERNO] !== undefined;
+  // A CHAVE nunca entra no jsonb: sai cifrada, ou zerada quando apagam.
+  const colunas = temRegistro ? cifrarChaveMcpExterno(chave) : SEGREDO_APAGADO;
 
-  const { error } = await admin.from("organizations").update({ settings }).eq("id", org.orgId);
+  const { error } = await admin
+    .from("organizations")
+    .update({ settings, ...colunas })
+    // A LINHA da organização da sessão (item 2) — o filtro é parte do contrato,
+    // não detalhe de implementação: sem ele um update sem where gravaria a
+    // chave de todo mundo.
+    .eq("id", org.orgId);
   if (error) return { ok: false, error: "erro_ao_gravar" };
 
   await audit({

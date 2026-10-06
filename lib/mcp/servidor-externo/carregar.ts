@@ -17,52 +17,108 @@
  * estado de antes do registro. Lançar aqui derrubaria a virada de turno inteira
  * por causa de um terceiro fora do ar, e é o registro que o operador pode
  * desligar, não o agente.
+ *
+ * ── Por que o TURNO COM CONTATO não ganha servidor nenhum (item 8, escolha b) ─
+ *
+ * O servidor remoto não recebe o `ctx.contatoDoTurno`, então uma leitura
+ * remota durante a conversa poderia devolver dado de OUTRO cliente ao modelo —
+ * e do modelo ao contato. Até existir identificação forçada do contato na
+ * chamada, quem decide é aqui: turno com contato não carrega servidor, e o
+ * turno é o de sempre. Cobre o Conversador e o Operador, que os dois montam
+ * ferramentas passando o contato do turno.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { logger } from "@/lib/logger";
 import { listarFerramentasDoServidor, type FerramentaRemota } from "./chamada";
-import { lerServidorMcpExterno, type ServidorMcpExterno } from "./registro";
+import { hostDoEndpoint, lerEndpointMcpExterno, type ServidorMcpExterno } from "./registro";
+import { abrirChaveMcpExterno } from "./segredo";
+
+/** Colunas que saem do jsonb porque a RLS entregava a chave a todo membro. */
+const COLUNAS_DO_SEGREDO =
+  "settings, mcp_externo_chave_encrypted, mcp_externo_chave_iv, mcp_externo_chave_tag";
 
 /** O que o montador do turno recebe: a configuração e o que o servidor anunciou. */
 export interface ServidorMcpExternoMontado {
   servidor: ServidorMcpExterno;
   ferramentas: readonly FerramentaRemota[];
+  /**
+   * JUNTA DE TESTE, o mesmo `fetchImpl` opcional que `allowlistedFetch` já
+   * aceita: o stub do ERP de mentira mora em `127.0.0.1`, faixa que o guard
+   * anti-SSRF recusa (item 4). `carregarServidorMcpExterno` NUNCA preenche
+   * isto — quem monta este objeto em produção sai com o guard default.
+   */
+  fetch?: FetchLike;
+}
+
+export interface OpcoesDeCarga {
+  /**
+   * O CONTATO deste turno, quando há conversa. Presente = nenhuma ferramenta
+   * remota é carregada (item 8, escolha (b)).
+   */
+  contatoDoTurno?: string;
+  /** `fetch` de saída para a descoberta — teste stuba o ERP em `127.0.0.1`. */
+  fetch?: FetchLike;
 }
 
 /**
- * `null` = não há servidor registrado (ou não deu para falar com ele). É o
- * contrato do chamador: `...(montado ? { servidorMcpExterno: montado } : {})`,
- * e sem essa chave o turno é o de sempre.
+ * `null` = não há servidor registrado, o turno tem contato, ou não deu para
+ * falar com ele. É o contrato do chamador: `...(montado ?
+ * { servidorMcpExterno: montado } : {})`, e sem essa chave o turno é o de
+ * sempre — catálogo compilado, rede nenhuma.
  */
 export async function carregarServidorMcpExterno(
   supabase: SupabaseClient,
   organizationId: string,
+  opcoes?: OpcoesDeCarga,
 ): Promise<ServidorMcpExternoMontado | null> {
+  // ESCOLHA (b), item 8 — antes de ler banco nem de pensar em rede. Um turno
+  // com conversa não monta ferramenta remota: sem o identificador do contato
+  // na chamada, a leitura remota não tem como saber de QUAL cliente é o dado.
+  if (opcoes?.contatoDoTurno) return null;
+
   const { data, error } = await supabase
     .from("organizations")
-    .select("settings")
+    .select(COLUNAS_DO_SEGREDO)
+    // SEMPRE o `organization_id` do run, nunca do corpo do pedido (item 2): a
+    // mesma linha que a ação gravou é a única que este turno enxerga.
     .eq("id", organizationId)
     .maybeSingle();
   if (error) {
-    logger.warn("nao foi possivel ler organizations.settings para o servidor MCP externo", {
+    logger.warn("nao foi possivel ler o registro do servidor MCP externo", {
       organization_id: organizationId,
       error: error.message,
     });
     return null;
   }
 
-  const servidor = lerServidorMcpExterno(
-    (data as { settings?: unknown } | null)?.settings,
-  );
-  if (!servidor) return null;
+  const linha = data as {
+    settings?: unknown;
+    mcp_externo_chave_encrypted?: unknown;
+    mcp_externo_chave_iv?: unknown;
+    mcp_externo_chave_tag?: unknown;
+  } | null;
+
+  const endpoint = lerEndpointMcpExterno(linha?.settings);
+  const chave = abrirChaveMcpExterno({
+    mcp_externo_chave_encrypted: linha?.mcp_externo_chave_encrypted as string | undefined,
+    mcp_externo_chave_iv: linha?.mcp_externo_chave_iv as string | undefined,
+    mcp_externo_chave_tag: linha?.mcp_externo_chave_tag as string | undefined,
+  });
+  if (!endpoint || !chave) return null;
+  const servidor: ServidorMcpExterno = { endpoint, chave };
 
   try {
-    const ferramentas = await listarFerramentasDoServidor(servidor);
+    const ferramentas = await listarFerramentasDoServidor(servidor, {
+      ...(opcoes?.fetch ? { fetch: opcoes.fetch } : {}),
+    });
     if (ferramentas.length === 0) {
       logger.warn("servidor MCP externo registrado nao anunciou nenhuma ferramenta", {
         organization_id: organizationId,
-        endpoint: servidor.endpoint,
+        // SÓ o host: o endpoint pode trazer querystring de terceiros, e este
+        // logger é lido por gente que não precisa ver segredo alheio (item 5).
+        endpoint: hostDoEndpoint(endpoint),
       });
       return null;
     }

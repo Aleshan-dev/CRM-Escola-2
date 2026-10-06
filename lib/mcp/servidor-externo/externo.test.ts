@@ -208,34 +208,46 @@ describe("registro em organizations.settings.mcp_externo (#2147)", () => {
 
 describe("descoberta das ferramentas anunciadas (#2147)", () => {
   function bancoCom(settings: unknown) {
+    // A linha devolvida traz as QUATRO colunas cifradas: é por elas que a chave
+    // abre (migration 0573) — o jsonb não tem chave nenhuma para entregar.
+    const cifrado = cifrarChaveMcpExterno(CHAVE);
+    const ids: Array<string | undefined> = [];
     const cadeia: Record<string, unknown> = {
       select: () => cadeia,
-      eq: () => cadeia,
-      maybeSingle: async () => ({ data: { settings }, error: null }),
+      eq: (coluna: string, valor: unknown) =>
+        (ids.push(coluna === "id" ? (valor as string) : undefined), cadeia),
+      maybeSingle: async () => ({ data: { settings, ...cifrado }, error: null }),
     };
-    return { from: () => cadeia } as never;
+    return { ids, cliente: { from: () => cadeia } as never };
   }
 
   it("sem registro devolve null e não contata rede nenhuma", async () => {
-    const montado = await carregarServidorMcpExterno(bancoCom({ proposals: { enabled: true } }), ORG);
-    expect(montado).toBeNull();
+    const { cliente } = bancoCom({ proposals: { enabled: true } });
+    expect(await carregarServidorMcpExterno(cliente, ORG)).toBeNull();
+  });
+
+  it("a leitura é SEMPRE pela organização do turno, nunca por um id vindo de fora (item 2)", async () => {
+    const primeiro = bancoCom({ mcp_externo: { endpoint: base } });
+    const segundo = bancoCom({ mcp_externo: { endpoint: base } });
+    await carregarServidorMcpExterno(primeiro.cliente, "00000000-0000-4000-8000-000000000001");
+    await carregarServidorMcpExterno(segundo.cliente, "00000000-0000-4000-8000-000000000002");
+    expect(primeiro.ids).toEqual(["00000000-0000-4000-8000-000000000001"]);
+    expect(segundo.ids).toEqual(["00000000-0000-4000-8000-000000000002"]);
   });
 
   it("servidor registrado que não responde devolve null — o turno não morre por isso", async () => {
-    const montado = await carregarServidorMcpExterno(
-      bancoCom({ mcp_externo: { endpoint: "http://127.0.0.1:1/mcp", chave: CHAVE } }),
-      ORG,
-    );
-    expect(montado).toBeNull();
+    const { cliente } = bancoCom({ mcp_externo: { endpoint: "http://127.0.0.1:1/mcp" } });
+    expect(await carregarServidorMcpExterno(cliente, ORG, { fetch: fetchDoStub() })).toBeNull();
   });
 
-  it("com registro devolve endpoint + chave e as ferramentas que o servidor anunciou", async () => {
-    const montado = await carregarServidorMcpExterno(
-      bancoCom({ mcp_externo: { endpoint: base, chave: CHAVE } }),
-      ORG,
-    );
+  it("com registro devolve endpoint + chave ABERTA das colunas e o que o servidor anunciou", async () => {
+    // A chave foi CIFRADA no banco e aberta aqui — o jsonb não a contém, e é
+    // por isso que a descoberta é a prova de ponta a ponta da migration 0573.
+    const { cliente, ids } = bancoCom({ mcp_externo: { endpoint: base } });
+    const montado = await carregarServidorMcpExterno(cliente, ORG, { fetch: fetchDoStub() });
     expect(montado?.servidor).toEqual({ endpoint: base, chave: CHAVE });
     expect(montado?.ferramentas.map((f) => f.name)).toEqual(["erp_achar"]);
+    expect(ids).toEqual([ORG]);
   });
 });
 
