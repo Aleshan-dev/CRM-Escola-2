@@ -95,7 +95,7 @@ test("marcar some da lista, Pessoais acha com selo, desmarcar volta sem selo", a
   // O filtro Pessoais acha, com o selo.
   await page.getByTestId("filtro-pessoais").click();
   await expect(page.getByText(NOME).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Pessoal").first()).toBeVisible();
+  await expect(page.getByText("Pessoal", { exact: true }).first()).toBeVisible();
   await page.screenshot({ path: "evidence/spec-21/contato-pessoal-filtro-com-selo.png", fullPage: true });
 
   // Desmarca PELA TELA, na ficha.
@@ -108,6 +108,8 @@ test("marcar some da lista, Pessoais acha com selo, desmarcar volta sem selo", a
   // Volta à lista, sem selo e com o mesmo nome (nada apagado).
   await page.goto("/app/contacts");
   await expect(page.getByText(NOME).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Pessoal")).toHaveCount(0);
+  // `exact: true` de propósito: o botão do filtro se chama "Pessoais" e casa
+  // com "Pessoal" por substring — sem exato, ele sozinho já quebra a contagem.
+  await expect(page.getByText("Pessoal", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: "evidence/spec-21/contato-pessoal-volta-sem-selo.png", fullPage: true });
 });
