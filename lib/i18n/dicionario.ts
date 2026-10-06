@@ -37,6 +37,11 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  // Autorização por fonte de formulário.
+  "Autorizar IA para leads deste formulário": { es: "Autorizar IA para los leads de este formulario" },
+  "Autoriza somente novos envios completos com consentimento explícito para atendimento automatizado. Não retoma contatos bloqueados ou em atendimento humano. O agente e o canal precisam estar configurados para atender.": { es: "Autoriza solo nuevos envíos completos con consentimiento explícito para atención automatizada. No retoma contactos bloqueados o atendidos por una persona. El agente y el canal deben estar configurados para atender." },
+  "O integrador deve enviar ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Envios antigos e repetidos não são liberados.": { es: "El integrador debe enviar ai_service_consent: true, submission_status: completed y ai_service_consent_version con la versión del aviso aceptado. Aceptar solo la política de privacidad no autoriza la IA. Los envíos antiguos y repetidos no se autorizan." },
+
   // A conferência de fato (#2231): a terceira camada do before_send.
   "Conferir afirmações de fato na resposta": { es: "Verificar las afirmaciones de hecho de la respuesta" },
   "Lê a resposta que o assistente vai enviar e confere, nas evidências consultadas neste turno, se o que ele afirma sobre o negócio está escrito ali — ou se o material diz o contrário.":
