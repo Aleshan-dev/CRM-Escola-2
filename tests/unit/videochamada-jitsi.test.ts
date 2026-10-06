@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   novaSala,
@@ -120,5 +120,22 @@ describe("a sala é aleatória e por chamada", () => {
     );
     expect(urlDaSala(null, "sala-x")).toBeNull();
     expect(urlDaSala(resolveServidorDeVideo(""), "sala-x")).toBeNull();
+  });
+});
+
+describe("a sala nasce também fora de contexto seguro (self-host em http://IP)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sem crypto.randomUUID (o navegador em http://IP) a sala ainda nasce, aleatória", () => {
+    // Exatamente o navegador fora de https/localhost: `getRandomValues` existe,
+    // `randomUUID` não. Com a chamada crua, o clique em "Vídeo" lançava TypeError.
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    const salas = Array.from({ length: 50 }, () => novaSala());
+    for (const sala of salas) {
+      expect(sala).toMatch(
+        /^sala-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+    }
+    expect(new Set(salas).size).toBe(50);
   });
 });

@@ -18,6 +18,8 @@
  * esconde, nunca erro).
  */
 
+import { randomId } from "@/lib/random-id";
+
 /** Só `http(s)://`. Toda outra origem vira `null` — vira `href`, então um
  * `javascript:` ou um `data:` aqui seria código executando no clique. */
 const EH_HTTP = /^https?:\/\/\S+$/i;
@@ -65,10 +67,14 @@ export function servidorDeVideo(): string | null {
  *    marca. Por isso o prefixo é neutro e `lib/video/jitsi.ts` NÃO entra em
  *    `MARCA_CONGELADA` (a lista só encolhe).
  *
- * `crypto.randomUUID()` existe em todo navegador moderno e em Node ≥19.
+ * O uuid vem de `randomId()` e não de `crypto.randomUUID()` cru: este módulo
+ * roda no navegador (o botão o importa), e o navegador só expõe `randomUUID`
+ * em contexto seguro (https ou localhost). No self-host em `http://IP` a
+ * chamada crua lança `TypeError` e o diálogo nunca abre (medido no Chromium,
+ * review do #2441).
  */
 export function novaSala(): string {
-  return `sala-${crypto.randomUUID()}`;
+  return `sala-${randomId()}`;
 }
 
 /**
