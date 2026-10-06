@@ -71,7 +71,7 @@ describe("form authorization adapter", () => {
     } finally {
       vi.unstubAllEnvs();
     }
-    expect(rpc.mock.calls[0][1].p_ttl_ms).toBe(3 * 24 * 60 * 60 * 1000);
+    expect(rpc).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ p_ttl_ms: 3 * 24 * 60 * 60 * 1000 }));
   });
   // O parâmetro é `bigint`: 1.1 dia em ms (95040000.00000001) não entra e a recusa não revogaria.
   it("sends a whole-millisecond TTL when the knob has fractional days", async () => {
@@ -82,7 +82,7 @@ describe("form authorization adapter", () => {
     } finally {
       vi.unstubAllEnvs();
     }
-    expect(rpc.mock.calls[0][1].p_ttl_ms).toBe(95040000);
+    expect(rpc).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ p_ttl_ms: 95040000 }));
   });
   it("keeps the lead available for human care on database failure", async () => {
     const rpc = vi.fn().mockRejectedValue(new Error("database unavailable"));
