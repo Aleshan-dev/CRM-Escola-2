@@ -4074,7 +4074,7 @@ async function executarTurnoDoAgente(
           {
             organizationId: tenantId,
             jobId: preview?.runId ?? liveJob().id,
-            ...(leadId ? { contactId: leadId } : {}),
+            contactId: leadId || null,
           },
           configDoTurno,
           runLog,
