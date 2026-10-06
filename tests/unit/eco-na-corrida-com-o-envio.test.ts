@@ -8,8 +8,13 @@
  *   - `ehEcoDeEnvioNosso` leu DEPOIS — a linha já era `sent`, fora de "em voo".
  * Resultado: a IA pausada por 1 h na conversa e a mensagem duas vezes na tela.
  *
- * O dublê encena a corrida: o envio confirma no instante em que o eco é
- * inserido — exatamente a janela entre as duas leituras.
+ * O dublê encena a corrida nas duas ordens, e respeita o unique
+ * `(organization_id, external_id)` de `messages`: o banco recusa com 23505 a
+ * segunda linha com o mesmo id, então o dublê também recusa.
+ *   - o envio confirma ANTES de o eco ser gravado: o insert do eco bate no
+ *     unique e sai pelo dedup de sempre (desde o #1855, que grava o eco bare);
+ *   - o eco é gravado ANTES, o envio confirma e apaga o eco, e só então a
+ *     ingestão lê de novo: é aqui que a re-checagem depois do insert decide.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -32,20 +37,29 @@ interface Linha {
 const BARE = "3EB06FABDB312F95A4EB7B";
 const TEXTO = "Olá, Luciano! Somos da RODAÊ bikes elétricas. Teria interesse?\n1. Sim\n2. Não";
 
-function banco(opcoes: { envioConfirmaNoInsertDoEco: boolean }) {
-  const messages: Linha[] = [
-    {
-      id: "envio-campanha",
-      organization_id: "org-1",
-      conversation_id: "conversa-1",
-      external_id: null,
-      direction: "outbound",
-      status: "queued",
-      sent_via: "automation",
-      body: TEXTO,
-      type: "chat",
-    },
-  ];
+type Corrida = "nenhuma" | "envio-confirma-no-insert-do-eco" | "envio-confirma-depois-do-insert-do-eco";
+
+function banco(corrida: Corrida) {
+  const envio: Linha = {
+    id: "envio-campanha",
+    organization_id: "org-1",
+    conversation_id: "conversa-1",
+    external_id: null,
+    direction: "outbound",
+    status: "queued",
+    sent_via: "automation",
+    body: TEXTO,
+    type: "chat",
+  };
+  const messages: Linha[] = [envio];
+  let ecoInserido = false;
+  let envioConfirmou = false;
+  /** O envio confirma: grava o id do canal e apaga o eco pelo id (`removerEcoDoProprioEnvio`). */
+  const confirmarEnvio = () => {
+    envioConfirmou = true;
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.sent_via === "external_device") messages.splice(i, 1);
+    Object.assign(envio, { external_id: BARE, status: "sent" });
+  };
   const conversa: Record<string, unknown> = { id: "conversa-1", bot_silenced_until: null };
 
   const casa = (m: Linha, filtros: Array<[string, unknown, "eq" | "in" | "neq" | "is"]>) =>
@@ -83,7 +97,10 @@ function banco(opcoes: { envioConfirmaNoInsertDoEco: boolean }) {
       },
       then(ok: (v: unknown) => unknown) {
         if (acao === "delete") {
-          for (let i = messages.length - 1; i >= 0; i--) if (casa(messages[i], filtros)) messages.splice(i, 1);
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i];
+            if (m && casa(m, filtros)) messages.splice(i, 1);
+          }
           return Promise.resolve(ok({ error: null }));
         }
         return Promise.resolve(ok({ data: messages.filter((m) => casa(m, filtros)), error: null }));
@@ -96,18 +113,27 @@ function banco(opcoes: { envioConfirmaNoInsertDoEco: boolean }) {
     select: () =>
       nome === "conversations"
         ? { eq() { return this; }, async maybeSingle() { return { data: { bot_silenced_until: conversa.bot_silenced_until }, error: null }; } }
-        : consulta("select"),
+        : (() => {
+            // A ORDEM INVERSA: o eco já está gravado, e o envio confirma antes da
+            // próxima leitura de `messages` que a ingestão fizer.
+            if (nome === "messages" && corrida === "envio-confirma-depois-do-insert-do-eco" && ecoInserido && !envioConfirmou) confirmarEnvio();
+            return consulta("select");
+          })(),
     delete: () => consulta("delete"),
     insert: (linha: Record<string, unknown>) => ({
       select: () => ({
         async maybeSingle() {
           if (nome !== "messages") return { data: { id: "x" }, error: null };
-          // ⭐ A CORRIDA: o envio confirma exatamente agora.
-          if (opcoes.envioConfirmaNoInsertDoEco) {
-            Object.assign(messages[0], { external_id: BARE, status: "sent" });
-          }
+          // O envio confirma exatamente agora, antes de o eco ser gravado.
+          if (corrida === "envio-confirma-no-insert-do-eco") confirmarEnvio();
           const nova = { id: `eco-${messages.length + 1}`, ...linha } as Linha;
+          // O unique `(organization_id, external_id)`: o banco recusa a duplicata.
+          const duplicada = messages.some(
+            (m) => m.external_id !== null && m.organization_id === nova.organization_id && m.external_id === nova.external_id,
+          );
+          if (duplicada) return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
           messages.push(nova);
+          ecoInserido = true;
           return { data: { id: nova.id }, error: null };
         },
       }),
@@ -129,7 +155,7 @@ function banco(opcoes: { envioConfirmaNoInsertDoEco: boolean }) {
       return { data: null, error: null };
     },
   };
-  return { admin, messages, conversa };
+  return { admin, messages, conversa, envio };
 }
 
 const SESSION = { id: "sessao-1", organization_id: "org-1" };
@@ -145,8 +171,17 @@ const eco = (body: string): WahaPayload => ({
 });
 
 describe("eco que chega no meio do envio", () => {
-  it("⭐ envio confirma entre as duas guardas: a IA NÃO é pausada e a duplicata sai", async () => {
-    const { admin, conversa, messages } = banco({ envioConfirmaNoInsertDoEco: true });
+  it("⭐ eco gravado ANTES de o envio confirmar: a re-checagem depois do insert reconhece o eco e a IA NÃO é pausada", async () => {
+    const { admin, conversa, messages } = banco("envio-confirma-depois-do-insert-do-eco");
+
+    await dispatchWahaEvent(admin as never, SESSION as never, envelope(eco(TEXTO)), "req-0");
+
+    expect(conversa.bot_silenced_until, "a IA foi pausada por ter falado — o caso do Luciano").toBeNull();
+    expect(messages.map((m) => m.id), "a mensagem da campanha ficou duas vezes na conversa").toEqual(["envio-campanha"]);
+  });
+
+  it("CONTROLE do dedup: o envio confirma no insert do eco, o unique recusa o eco e a IA NÃO é pausada", async () => {
+    const { admin, conversa, messages } = banco("envio-confirma-no-insert-do-eco");
 
     await dispatchWahaEvent(admin as never, SESSION as never, envelope(eco(TEXTO)), "req-1");
 
@@ -158,7 +193,7 @@ describe("eco que chega no meio do envio", () => {
   });
 
   it("CONTROLE: digitação real no celular (texto diferente, nenhum id nosso) AINDA pausa", async () => {
-    const { admin, conversa, messages } = banco({ envioConfirmaNoInsertDoEco: false });
+    const { admin, conversa, messages } = banco("nenhuma");
     const humano: WahaPayload = { ...eco("oi, é o Cristiano respondendo do celular"), id: "true_5513996919846@c.us_AAAABBBBCCCCDDDDEEEE" };
 
     await dispatchWahaEvent(admin as never, SESSION as never, envelope(humano), "req-2");
@@ -168,8 +203,8 @@ describe("eco que chega no meio do envio", () => {
   });
 
   it("CONTROLE: id NOSSO já gravado antes do eco — sai pelo dedup de sempre, sem inserir", async () => {
-    const { admin, conversa, messages } = banco({ envioConfirmaNoInsertDoEco: false });
-    Object.assign(messages[0], { external_id: BARE, status: "sent" });
+    const { admin, conversa, messages, envio } = banco("nenhuma");
+    Object.assign(envio, { external_id: BARE, status: "sent" });
 
     await dispatchWahaEvent(admin as never, SESSION as never, envelope(eco(TEXTO)), "req-3");
 
