@@ -24,6 +24,10 @@ import { InterruptorAiDecide } from "./_interruptor";
 export const dynamic = "force-dynamic";
 
 const DESCRICAO = "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira.";
+// Falhar ABERTO na informação: com a leitura falhando, mostrar LIGADO seria a
+// tela afirmar um estado que ela não leu — e a empresa pode ter desligado.
+const ERRO_DE_LEITURA =
+  "Não consegui ler agora o estado deste interruptor. Enquanto ele não puder ser lido, nenhum passo a IA decide consulta o modelo. Recarregue a página; se continuar, avise quem cuida da instalação.";
 
 export default async function AutomacoesSettingsPage() {
   const user = await requireAuth();
@@ -34,7 +38,7 @@ export default async function AutomacoesSettingsPage() {
   }
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("organizations")
     .select("settings")
     .eq("id", activeOrg.orgId)
@@ -44,8 +48,9 @@ export default async function AutomacoesSettingsPage() {
   const automacoes = (settings?.[CHAVE_DAS_AUTOMACOES] ?? null) as Record<string, unknown> | null;
   const bruto = automacoes?.ai_decide;
   // A mesma régua do leitor de runtime: só um `false` gravado desliga. Ausente
-  // ou ilegível mostra LIGADO, que é o estado em que a tela abre para quem
-  // nunca mexeu aqui — a tela não pode mentir sobre o que o motor vai fazer.
+  // ou lixo mostra LIGADO, que é o estado em que a tela abre para quem nunca
+  // mexeu aqui. Erro de LEITURA não chega aqui: vira o aviso abaixo — a tela
+  // não pode mentir sobre o que o motor vai fazer.
   const ligado = typeof bruto === "boolean" ? bruto : AI_DECIDE_PADRAO;
   const idioma = user.idioma;
 
@@ -56,7 +61,13 @@ export default async function AutomacoesSettingsPage() {
         <p className="max-w-2xl text-sm text-muted-foreground">{traduzir(DESCRICAO, idioma)}</p>
       </header>
 
-      <InterruptorAiDecide ligado={ligado} idioma={idioma} />
+      {error ? (
+        <p role="alert" className="max-w-2xl rounded-md border border-destructive/40 p-4 text-sm text-destructive">
+          {traduzir(ERRO_DE_LEITURA, idioma)}
+        </p>
+      ) : (
+        <InterruptorAiDecide ligado={ligado} idioma={idioma} />
+      )}
     </div>
   );
 }

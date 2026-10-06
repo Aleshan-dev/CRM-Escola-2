@@ -14291,6 +14291,9 @@ export const DICIONARIO: Traducoes = {
   "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira.": {
     es: "El único freno del paso en que la IA elige entre las opciones de una regla, para toda la empresa.",
   },
+  "Não consegui ler agora o estado deste interruptor. Enquanto ele não puder ser lido, nenhum passo a IA decide consulta o modelo. Recarregue a página; se continuar, avise quem cuida da instalação.": {
+    es: "No pude leer ahora el estado de este interruptor. Mientras no se pueda leer, ningún paso la IA decide consulta al modelo. Recargue la página; si continúa, avise a quien administra la instalación.",
+  },
   "A IA pode decidir entre as opções de uma regra": {
     es: "La IA puede decidir entre las opciones de una regla",
   },
