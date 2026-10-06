@@ -51,7 +51,9 @@ export async function autorizarCaptacaoParaIA(
       p_lead_id: input.leadId,
       p_contact_id: input.contactId,
       p_request_id: input.requestId,
-      p_ttl_ms: ttlDaAutorizacaoMs(process.env),
+      // `bigint` no banco: dia fracionário daria ms não inteiro, a RPC falharia
+      // inteira e a RECUSA deixaria de revogar.
+      p_ttl_ms: Math.round(ttlDaAutorizacaoMs(process.env)),
     });
     if (error) throw error;
     return data === true;

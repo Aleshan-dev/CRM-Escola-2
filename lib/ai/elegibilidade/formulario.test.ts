@@ -59,7 +59,7 @@ describe("form authorization adapter", () => {
       p_lead_id: "lead",
       p_contact_id: "contact",
       p_request_id: "request",
-      p_ttl_ms: ttlDaAutorizacaoMs(process.env),
+      p_ttl_ms: Math.round(ttlDaAutorizacaoMs(process.env)),
     });
   });
   // A renovação no banco usa a régua do gate, não um default próprio.
@@ -72,6 +72,17 @@ describe("form authorization adapter", () => {
       vi.unstubAllEnvs();
     }
     expect(rpc.mock.calls[0][1].p_ttl_ms).toBe(3 * 24 * 60 * 60 * 1000);
+  });
+  // O parâmetro é `bigint`: 1.1 dia em ms (95040000.00000001) não entra e a recusa não revogaria.
+  it("sends a whole-millisecond TTL when the knob has fractional days", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    vi.stubEnv("AI_ALLOWLIST_TTL_DAYS", "1.1");
+    try {
+      await autorizarCaptacaoParaIA({ rpc } as unknown as SupabaseClient, input);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(rpc.mock.calls[0][1].p_ttl_ms).toBe(95040000);
   });
   it("keeps the lead available for human care on database failure", async () => {
     const rpc = vi.fn().mockRejectedValue(new Error("database unavailable"));

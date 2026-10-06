@@ -35,11 +35,16 @@ const request = "fa000000-0000-4000-8000-000000000008";
 const session = "fa000000-0000-4000-8000-000000000009";
 const valid =
   '{"ai_service_consent":true,"submission_status":"completed","ai_service_consent_version":"synthetic-v1"}';
-function authorize(organizationId = org) {
+// O default do gate (AI_ALLOWLIST_TTL_DAYS = 21 dias), em ms, como a rota envia.
+const ttl21d = 21 * 24 * 60 * 60 * 1000;
+const signature = "public.fn_authorize_ai_form_capture(uuid,uuid,uuid,uuid,uuid,bigint)";
+function authorize(organizationId = org, ttlMs = ttl21d) {
   return sql(
-    `select public.fn_authorize_ai_form_capture('${organizationId}','${source}','${lead}','${contact}','${request}');`,
+    `select public.fn_authorize_ai_form_capture('${organizationId}','${source}','${lead}','${contact}','${request}',${ttlMs});`,
   );
 }
+const authorizedAt = () =>
+  sql(`select ai_authorized_at::text || '|' || ai_authorized_reason from public.contacts where id='${contact}';`);
 beforeAll(() => {
   sql(`
     insert into public.organizations(id,slug,legal_name,display_name) values
@@ -50,8 +55,8 @@ beforeAll(() => {
     insert into public.contacts(id,organization_id,name,phone_number) values ('${contact}','${org}','Synthetic','+5511999990000');
     insert into public.webhook_sources(id,organization_id,name,path_token,default_pipeline_id,default_stage_id)
       values ('${source}','${org}','Synthetic','synthetic-form-source-test','${pipeline}','${stage}');
-    insert into public.crm_leads(id,organization_id,pipeline_id,stage_id,title,source,source_metadata,contact_id)
-      values ('${lead}','${org}','${pipeline}','${stage}','Synthetic','webhook','{"webhook_source_id":"${source}"}','${contact}');
+    insert into public.crm_leads(id,organization_id,pipeline_id,stage_id,title,source,source_metadata,contact_id,external_id)
+      values ('${lead}','${org}','${pipeline}','${stage}','Synthetic','webhook','{"webhook_source_id":"${source}"}','${contact}','synthetic-submission-1');
     insert into public.webhook_lead_captures(organization_id,webhook_source_id,source_name,lead_id,contact_id,outcome,request_id,fields)
       values ('${org}','${source}','Synthetic','${lead}','${contact}','criado','${request}','${valid}');
     insert into public.channel_sessions(id,organization_id,waha_session_name,webhook_secret_encrypted)
@@ -63,7 +68,7 @@ beforeEach(() => {
     update public.webhook_sources set authorize_ai_on_capture=true,is_active=true,secret_encrypted='synthetic-cipher' where id='${source}';
     update public.contacts set ai_authorized_at=null,ai_authorized_reason=null,force_human=false,is_blocked=false,is_anonymized=false,is_personal=false,
       blocked_at=null,anonymized_at=null,is_merged_into=null,merged_at=null,phone_number='+5511999990000',consent='{}' where id='${contact}';
-    update public.crm_leads set source='webhook',source_metadata='{"webhook_source_id":"${source}"}',organization_id='${org}',contact_id='${contact}' where id='${lead}';
+    update public.crm_leads set source='webhook',source_metadata='{"webhook_source_id":"${source}"}',organization_id='${org}',contact_id='${contact}',external_id='synthetic-submission-1' where id='${lead}';
     update public.webhook_lead_captures set outcome='criado',fields='${valid}',received_at=now(),request_id='${request}' where request_id='${request}';`);
 });
 describe("form origin authorization", () => {
@@ -102,6 +107,9 @@ describe("form origin authorization", () => {
     'update public.contacts set consent=\'{"automated_service":{"declined_at":"2026-01-01"}}\'',
     "update public.crm_leads set source='manual'",
     "update public.crm_leads set source_metadata='{}'",
+    // Sem external_id não há idempotência que barre a repetição: não concede.
+    `update public.crm_leads set external_id=null where id='${lead}'`,
+    `update public.crm_leads set external_id='   ' where id='${lead}'`,
     "update public.webhook_lead_captures set outcome='duplicado'",
     "update public.webhook_lead_captures set received_at=now()-interval '1 day'",
     "update public.webhook_lead_captures set fields='{}'",
@@ -133,11 +141,41 @@ describe("form origin authorization", () => {
     sql(`update public.webhook_lead_captures set fields='${valid}' where request_id='${request}';`);
     expect(authorize()).toBe("f");
   });
+  it("renews an expired authorization on a new complete consented submission", () => {
+    sql(`update public.contacts set ai_authorized_at=now()-interval '30 days',ai_authorized_reason='antiga' where id='${contact}';`);
+    expect(authorize()).toBe("t");
+    expect(
+      sql(`select ai_authorized_at > now()-interval '1 minute' from public.contacts where id='${contact}';`),
+    ).toBe("t");
+    expect(authorizedAt()).toContain(`formulario:${source}:${lead}`);
+  });
+  const expired = `update public.contacts set ai_authorized_at=now()-interval '30 days',ai_authorized_reason='anterior' where id='${contact}'`;
+  it.each([
+    ["a current authorization", `update public.contacts set ai_authorized_at=now()-interval '20 days',ai_authorized_reason='anterior' where id='${contact}'`, ttl21d],
+    ["an expired authorization without external_id", `${expired}; update public.crm_leads set external_id=null where id='${lead}'`, ttl21d],
+    ["an expired authorization with a non-positive TTL", expired, 0],
+  ])("does not renew %s", (_label, change, ttlMs) => {
+    sql(change + ";");
+    const before = authorizedAt();
+    expect(authorize(org, ttlMs)).toBe("f");
+    expect(authorizedAt()).toBe(before);
+  });
+  it("explicit refusal without external_id still revokes and forces human care", () => {
+    expect(authorize()).toBe("t");
+    sql(`update public.crm_leads set external_id=null where id='${lead}';
+      update public.webhook_lead_captures set fields=fields || '{"ai_service_consent":false}' where request_id='${request}';`);
+    expect(authorize()).toBe("f");
+    expect(
+      sql(
+        `select force_human and ai_authorized_at is null and consent #>> '{automated_service,declined_at}' is not null from public.contacts where id='${contact}';`,
+      ),
+    ).toBe("t");
+  });
   it("rejects a different tenant and a capture with the wrong request", () => {
     expect(authorize(other)).toBe("f");
     expect(
       sql(
-        `select public.fn_authorize_ai_form_capture('${org}','${source}','${lead}','${contact}','${other}');`,
+        `select public.fn_authorize_ai_form_capture('${org}','${source}','${lead}','${contact}','${other}',${ttl21d});`,
       ),
     ).toBe("f");
   });
@@ -156,7 +194,7 @@ describe("form origin authorization", () => {
             "postgres",
             "-tA",
             "-c",
-            `select public.fn_authorize_ai_form_capture('${org}','${source}','${lead}','${contact}','${request}');`,
+            `select public.fn_authorize_ai_form_capture('${org}','${source}','${lead}','${contact}','${request}',${ttl21d});`,
           ],
           (error, stdout) => (error ? reject(error) : resolve(stdout.trim())),
         );
@@ -166,7 +204,7 @@ describe("form origin authorization", () => {
   it("service role can authorize with invoker privileges", () => {
     expect(
       sql(
-        `set role service_role; select public.fn_authorize_ai_form_capture('${org}','${source}','${lead}','${contact}','${request}');`,
+        `set role service_role; select public.fn_authorize_ai_form_capture('${org}','${source}','${lead}','${contact}','${request}',${ttl21d});`,
       )
         .split("\n")
         .at(-1),
@@ -181,17 +219,17 @@ describe("form origin authorization", () => {
   it("does not expose the operation to public API roles", () => {
     expect(
       sql(
-        `select has_function_privilege('anon','public.fn_authorize_ai_form_capture(uuid,uuid,uuid,uuid,uuid)','EXECUTE');`,
+        `select has_function_privilege('anon','${signature}','EXECUTE');`,
       ),
     ).toBe("f");
     expect(
       sql(
-        `select has_function_privilege('authenticated','public.fn_authorize_ai_form_capture(uuid,uuid,uuid,uuid,uuid)','EXECUTE');`,
+        `select has_function_privilege('authenticated','${signature}','EXECUTE');`,
       ),
     ).toBe("f");
     expect(
       sql(
-        `select has_function_privilege('service_role','public.fn_authorize_ai_form_capture(uuid,uuid,uuid,uuid,uuid)','EXECUTE');`,
+        `select has_function_privilege('service_role','${signature}','EXECUTE');`,
       ),
     ).toBe("t");
   });
