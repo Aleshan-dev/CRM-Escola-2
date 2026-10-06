@@ -13,44 +13,173 @@ import {
 } from "@/components/ui/dialog";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useT } from "@/hooks/i18n/useT";
+import { estadoDaJanela, formatarDecorrido } from "@/lib/channels/janela";
 import { copyToClipboard } from "@/lib/clipboard";
-import { VideoCamera } from "@/lib/ui/icons";
-import { servidorDeVideo, urlDaSala } from "@/lib/video/jitsi";
+import { ArrowSquareOut, VideoCamera } from "@/lib/ui/icons";
+import { novaSala, servidorDeVideo, urlDaSala } from "@/lib/video/jitsi";
 
 interface Props {
-  /** A conversa que vira a sala: `deskcomm-<conversationId>`. */
+  /** A conversa de quem envia o link — a sala em si é aleatória (#2441). */
   conversationId: string;
+  /** Mesma régua do composer: `channel_sessions.provider` da conversa. */
+  provider: string | null;
+  /** Mesma régua do composer: `last_inbound_at` da conversa. */
+  lastInboundAt: string | null;
+  /**
+   * As travas que o composer já aplica e que o link também herda — contato
+   * bloqueado/anonimizado, conversa encerrada. Montado por quem o chama com
+   * os MESMOS critérios do composer: um lugar decide o que é "não pode enviar".
+   */
+  bloqueio?: string | null;
 }
 
 /**
- * Botão "Vídeo" do header da conversa (#2440) — videochamada por Jitsi Meet.
+ * O BOTÃO "VÍDEO" DO HEADER (#2440) — videochamada por Jitsi Meet.
  *
  * A feature é OPT-IN: sem `JITSI_SERVER_URL` no `.env`, `servidorDeVideo()`
  * devolve `null` e este componente NÃO RENDERIZA (padrão `DialButton` para a
  * voz: esconde, nunca erro).
  *
- * Duas saídas da sala, e as duas são propositalmente o mesmo link:
+ * ─── Por que NOVA ABA e não iframe ──────────────────────────────────────────
  *
- *  - **Copiar link** — para quem vai colar em outro lugar (e-mail, outro chat).
- *  - **Enviar link na conversa** — o caminho normal: o link chega pelo
- *    WhatsApp do contato e ele entra pelo celular. Passa por `useSendMessage`,
- *    então herda janela fechada, suporte somente leitura e conversa
- *    encerrada — as mesmas travas de qualquer mensagem.
+ * O `next.config.ts` manda `Permissions-Policy: camera=(), microphone=(self)`
+ * em TODA rota, e o iframe do Jitsi é outra origem: câmera e microfone saem
+ * negados lá dentro (medido no review do #2441 — `{camera:false, microphone:false}`
+ * com o header de produção, `true` sem ele). Some o corte de 5 minutos do
+ * `meet.jit.si` em chamada embutida (post oficial do Jitsi, 18/05/2023), e o
+ * iframe não é um caminho que funcione. A aba nova carrega a página DO Jitsi,
+ * com o `Permissions-Policy` e o rate-limit DELES — fora do alcance do nosso
+ * header.
  *
- * O iframe leva `allow` de câmera/microfone/tela cheia: sem ele o navegador
- * nega o pedido de mídia do Jitsi e a sala abre muda e às cegas.
+ * ─── As duas travas do link ─────────────────────────────────────────────────
+ *
+ * 1. **Janela de 24h** — a rota `POST /api/v1/messages` só confere a janela
+ *    para `api_token`/`ai_agent`; quem envia da tela entra como `user` e ela
+ *    NÃO barra (`app/api/v1/messages/_handler.ts`, ~linha 548). Sem isto o
+ *    link sairia como texto livre: a rota responde 201 e a plataforma recusa
+ *    depois com 131047 — a falha silenciosa da #1614. Por isso o botão usa a
+ *    MESMA régua do composer (`estadoDaJanela`, `lib/channels/janela.ts`), não
+ *    uma segunda regra.
+ * 2. **Bloqueio/encerramento** — chega pronto em `bloqueio`, montado no header
+ *    com os critérios do composer. `supportReadonly` NÃO entra: ele mora no
+ *    `user`, que o header não recebe, e não vou afirmar numa doc uma trava
+ *    que não apliquei.
+ *
+ * A cópia passa por `copyToClipboard` e NUNCA pela API crua de clipboard do
+ * navegador: self-host em `http://IP` não tem `isSecureContext`, e lá o
+ * clipboard direto nem existe. (A frase é paráfrase de propósito —
+ * `lib/clipboard.test.ts` varre os arquivos `"use client"` por essa sequência
+ * literal e reprova qualquer ocorrência, comentário incluso.)
+ *
+ * ─── Por que a mutação mora no diálogo e não aqui ───────────────────────────
+ *
+ * `useSendMessage()` liga no `QueryClientProvider`. Este componente é montado
+ * pelo header em QUALQUER teste de tela, e a maioria não tem provider nenhum:
+ * chamar o hook aqui derrubaria `ConversationHeader.test.tsx` e
+ * `contato-pessoal-gates.test.tsx` com "No QueryClient set" — foi exatamente
+ * o que aconteceu na primeira passada deste review. Como o diálogo só existe
+ * com servidor E aberto, o hook passa a rodar só quando há envio a fazer.
  */
-export function VideoCallButton({ conversationId }: Props) {
+export function VideoCallButton({
+  conversationId,
+  provider,
+  lastInboundAt,
+  bloqueio,
+}: Props) {
   const t = useT();
   const servidor = useMemo(() => servidorDeVideo(), []);
   const [aberto, setAberto] = useState(false);
-  const enviar = useSendMessage();
+  // A sala nasce quando o diálogo abre e morre quando ele fecha: nada de
+  // gravar, nada de reusar o link da chamada anterior desta conversa.
+  const [sala, setSala] = useState<string | null>(null);
 
-  const url = urlDaSala(servidor, conversationId);
+  // Reavaliada a cada render, como o selo de janela faz: a régua é uma conta
+  // sobre `last_inbound_at`, não estado guardado (cabeçalho de lib/channels/janela.ts).
+  const janela = estadoDaJanela(provider, lastInboundAt, new Date());
+  const janelaFechada = janela.tipo === "fechada";
+  const motivoJanela = janelaFechada
+    ? janela.fechadaHaMs === null
+      ? t(
+          "O cliente ainda não escreveu — a janela de 24h nunca abriu. Só um modelo aprovado sai daqui.",
+        )
+      : `${t("A janela de 24h fechou há")} ${formatarDecorrido(janela.fechadaHaMs)}.`
+    : null;
+  const envioLiberado = !bloqueio && !janelaFechada;
+
+  // Sala nova a cada abertura: fechar e reabrir é OUTRA chamada, e o link da
+  // anterior deixa de apontar para este encontro. Nasce AQUI (no gesto de
+  // abrir), não num `useEffect` — `set-state-in-effect` é anti-padrão e o
+  // efeito só correria depois do render, com o diálogo já aberto e o link
+  // ainda nulo.
+  const abrir = (vaiAbrir: boolean) => {
+    if (vaiAbrir) setSala(novaSala());
+    setAberto(vaiAbrir);
+  };
+
+  if (!servidor) return null;
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        className="shrink-0"
+        onClick={() => abrir(true)}
+        data-testid="btn-videochamada"
+      >
+        <VideoCamera size={16} weight="bold" aria-hidden />
+        <span>{t("Vídeo")}</span>
+      </Button>
+
+      {/* O diálogo só existe ABERTO: é a condição que segura a mutação
+          (`useSendMessage`) para dentro — ver o cabeçalho deste arquivo.
+          `key={sala}` remonta a cada chamada, então nada da anterior sobrevive. */}
+      {aberto && sala && (
+        <DialogoVideo
+          key={sala}
+          conversationId={conversationId}
+          sala={sala}
+          envioLiberado={envioLiberado}
+          bloqueio={bloqueio ?? motivoJanela}
+          onFechar={() => abrir(false)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * O diálogo da videochamada — a parte que manda a mensagem.
+ *
+ * Separado de `VideoCallButton` por um motivo de ordem de hooks: `useSendMessage`
+ * exige `QueryClientProvider`, e o botão é montado pelo header em teste de tela
+ * que não tem um. Aqui dentro o hook só roda quando o operador abriu a sala,
+ * que é quando existe envio para fazer.
+ *
+ * As travas (`envioLiberado`/`bloqueio`) vêm calculadas do pai: quem decide a
+ * régua é quem tem `provider` e `last_inbound_at`, e recalculá-las aqui seria
+ * uma segunda verdade.
+ */
+function DialogoVideo({
+  conversationId,
+  sala,
+  envioLiberado,
+  bloqueio,
+  onFechar,
+}: {
+  conversationId: string;
+  sala: string;
+  envioLiberado: boolean;
+  /** O motivo pronto para mostrar — janela fechada ou bloqueio do composer. */
+  bloqueio: string | null;
+  onFechar: () => void;
+}) {
+  const t = useT();
+  const enviar = useSendMessage();
+  const url = urlDaSala(servidorDeVideo(), sala);
 
   const copiar = useCallback(async () => {
     if (!url) return;
-    // `copyToClipboard` (e não `navigator.clipboard` na mão): self-host em
+    // `copyToClipboard` e nunca a API crua de clipboard: self-host em
     // http://IP não tem isSecureContext, e lá o clipboard direto nem existe.
     const ok = await copyToClipboard(url);
     if (ok) toast.success(t("Link da videochamada copiado."));
@@ -65,7 +194,7 @@ export function VideoCallButton({ conversationId }: Props) {
       {
         onSuccess: () => {
           toast.success(t("Link da videochamada enviado na conversa."));
-          setAberto(false);
+          onFechar();
         },
         onError: () => {
           // O erro detalhado já vem do showApiError; aqui só o convite a
@@ -74,60 +203,67 @@ export function VideoCallButton({ conversationId }: Props) {
         },
       },
     );
-  }, [url, conversationId, enviar, t]);
-
-  if (!url) return null;
+  }, [url, conversationId, enviar, t, onFechar]);
 
   return (
-    <>
-      <Button
-        variant="outline"
-        className="shrink-0"
-        onClick={() => setAberto(true)}
-        data-testid="btn-videochamada"
-      >
-        <VideoCamera size={16} weight="bold" aria-hidden />
-        <span>{t("Vídeo")}</span>
-      </Button>
+    <Dialog open onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-4">
+        <DialogHeader>
+          <DialogTitle>{t("Videochamada")}</DialogTitle>
+          <DialogDescription>
+            {t(
+              "A sala abre em uma aba nova: é lá que o navegador pede câmera e microfone.",
+            )}
+          </DialogDescription>
+        </DialogHeader>
 
-      <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>{t("Videochamada")}</DialogTitle>
-            <DialogDescription>
-              {t(
-                "A sala é esta conversa: envie o link pelo chat e o contato entra pelo celular, sem instalar nada.",
-              )}
-            </DialogDescription>
-          </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "Envie o link pelo chat e o contato entra pelo celular, sem instalar nada. A sala vale só para esta chamada.",
+          )}
+        </p>
 
-          <iframe
-            title={t("Sala de videochamada")}
-            src={url}
-            allow="camera; microphone; display-capture; fullscreen; picture-in-picture"
-            className="h-[60vh] w-full rounded-md border"
-            data-testid="iframe-videochamada"
-          />
+        {url && (
+          <Button asChild className="w-full justify-between" data-testid="btn-abrir-sala">
+            {/* target="_blank" + rel="noopener": a aba nova não recebe
+                `window.opener` — sem isso, a sala aberta manipularia a tela
+                do atendimento de quem abriu. */}
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              <span className="truncate">{t("Abrir sala em nova aba")}</span>
+              <ArrowSquareOut size={16} aria-hidden />
+            </a>
+          </Button>
+        )}
 
-          <DialogFooter className="gap-2 sm:justify-between">
-            <Button variant="ghost" onClick={() => setAberto(false)}>
-              {t("Fechar")}
+        {/* A trava NÃO some: o operador precisa ver POR QUE o link não sai,
+            senão ele descobre a regra pelo erro da plataforma (#1614). */}
+        {!envioLiberado && (
+          <p
+            className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            data-testid="video-bloqueio"
+          >
+            {bloqueio}
+          </p>
+        )}
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={onFechar}>
+            {t("Fechar")}
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={copiar} data-testid="btn-copiar-link-video">
+              {t("Copiar link")}
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={copiar} data-testid="btn-copiar-link-video">
-                {t("Copiar link")}
-              </Button>
-              <Button
-                onClick={enviarLink}
-                disabled={enviar.isPending}
-                data-testid="btn-enviar-link-video"
-              >
-                {enviar.isPending ? t("Enviando…") : t("Enviar link na conversa")}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+            <Button
+              onClick={enviarLink}
+              disabled={enviar.isPending || !envioLiberado}
+              data-testid="btn-enviar-link-video"
+            >
+              {enviar.isPending ? t("Enviando…") : t("Enviar link na conversa")}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

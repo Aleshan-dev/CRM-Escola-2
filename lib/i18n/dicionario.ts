@@ -14522,10 +14522,25 @@ export const DICIONARIO: Traducoes = {
   // ─── Videochamada (Jitsi Meet, #2440) ───
   Videochamada: { es: "Videollamada" },
   "Sala de videochamada": { es: "Sala de videollamada" },
-  "A sala é esta conversa: envie o link pelo chat e o contato entra pelo celular, sem instalar nada.":
-    {
-      es: "La sala es esta conversa: envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada.",
-    },
+  "A sala abre em uma aba nova: é lá que o navegador pede câmera e microfone.": {
+    es: "La sala se abre en una pestaña nueva: ahí el navegador pide cámara y micrófono.",
+  },
+  "Envie o link pelo chat e o contato entra pelo celular, sem instalar nada. A sala vale só para esta chamada.": {
+    es: "Envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada. La sala vale solo para esta llamada.",
+  },
+  "Abrir sala em nova aba": { es: "Abrir sala en pestaña nueva" },
+  "Conversa encerrada — o link não sai até ela reabrir.": {
+    es: "Conversación cerrada — el enlace no sale hasta que se reabra.",
+  },
+  "Videochamada (Jitsi Meet)": {
+    es: "Videollamada (Jitsi Meet)",
+  },
+  "Abrir sala de vídeo no header da conversa: o contato entra pelo link no chat, sem instalar nada.": {
+    es: "Abrir sala de vídeo en el encabezado de la conversación: el contacto entra por el enlace en el chat, sin instalar nada.",
+  },
+  "No arquivo de ambiente, JITSI_SERVER_URL apontando para a origem da sala (ex.: https://meet.jit.si). Vazio = o botão Vídeo não aparece.": {
+    es: "En el archivo de ambiente, JITSI_SERVER_URL apuntando al origen de la sala (p. ej. https://meet.jit.si). Vacío = el botón Vídeo no aparece.",
+  },
   "Link da videochamada copiado.": { es: "Enlace de la videollamada copiado." },
   "Link da videochamada enviado na conversa.": {
     es: "Enlace de la videollamada enviado en la conversación.",

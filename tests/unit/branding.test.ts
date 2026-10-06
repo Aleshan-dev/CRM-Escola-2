@@ -330,12 +330,12 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
     marcas: ["deskcommcrm"],
   },
   // ─── PROTOCOLO (contínuo) ───
-  "lib/video/jitsi.ts": {
-    categoria: "PROTOCOLO",
-    motivo:
-      "prefixo da sala de videochamada (<prefixo>-<conversationId>) na URL do Jitsi. O link é repassado pelo chat e vira o convite da sala: renomear separa quem já tem o link de quem entrar depois, e duas abertas da mesma conversa cairiam em salas diferentes. Não vem de branding() justamente porque não pode mudar junto com a marca",
-    marcas: ["deskcomm"],
-  },
+  //
+  // `lib/video/jitsi.ts` ficou DE FORA por decisão do review do #2441: a
+  // prefixa a sala do Jitsi com `sala-`, neutro. O link é repassado no chat e
+  // cai na tela do cliente final de quem revende a instalação — a sala não é
+  // lugar de marca. Com o prefixo neutro o arquivo não tem marca nenhuma, e
+  // lista só encolhe.
 };
 
 /**
@@ -996,6 +996,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "placeholder do campo de base URL de gateway OpenAI-compatible na tela de provedores: amostra do formato aceito.",
   },
+  "meet.jit.si": {
+    categoria: "AMOSTRA",
+    motivo:
+      "a origem citada como EXEMPLO da URL da videochamada — na mensagem de erro do Zod de lib/env.ts (JITSI_SERVER_URL fora de http(s) desliga a feature), no comoLigar do catálogo de recursos opcionais e na tradução espanhola do mesmo texto. Não é destino de chamada: o produto nunca fala com `meet.jit.si`; quem chega lá é o operador e o contato, na aba que o link abre, pelo navegador deles — e o valor real é o do `.env` de cada instalação (em runtime, não queimado no build). Fica AMOSTRA porque chega à TELA, que é a razão de a régua exigir declaração em vez de silêncio.",
+  },
   "000000000000-xxxxxxxx.apps.googleusercontent.com": {
     categoria: "AMOSTRA",
     motivo:
@@ -1177,6 +1182,12 @@ describe("catraca de host de terceiro no código que embarca", () => {
       // abre é o celular do atendente. Crescimento escrito, como a regra pede.
       "maps.google.com",
       "meet.google.com",
+      // Decisão escrita, #2441: a origem do Jitsi aparece como EXEMPLO na
+      // mensagem do Zod de `JITSI_SERVER_URL`, no `comoLigar` do catálogo de
+      // recursos opcionais e na tradução do mesmo texto. O produto não fala
+      // com esse host (o valor real vem do `.env` em runtime); quem chega lá
+      // é quem abre o link. Crescimento escrito, como a regra pede.
+      "meet.jit.si",
       "meusistema.com",
       "mi-gateway.ejemplo.com",
       "partners.tiendanube.com",

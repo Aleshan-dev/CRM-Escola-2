@@ -276,9 +276,29 @@ export function ConversationHeader({
         )}
         {/* Videochamada (#2440): sem JITSI_SERVER_URL este botão não renderiza,
             então ele não ocupa lugar nem na instalação que não oferece a feature.
-            A sala é a própria conversa — por isso não depende de telefone, só do
-            link ir pelo chat. */}
-        <VideoCallButton conversationId={conversation.id} />
+            A sala é aleatória por chamada (#2441) — não depende de telefone,
+            só do link ir pelo chat.
+
+            `provider`/`lastInboundAt` e `bloqueio` vêm para o botão seguir a
+            MESMA régua do composer: janela de 24h (a rota não barra quem envia
+            da tela — vira 131047 silencioso, #1614) e as travas de contato e de
+            conversa encerrada. Os textos são os do composer, que já têm
+            espanhol. `supportReadonly` fica de fora: ele mora no `user`, que
+            este componente não recebe. */}
+        <VideoCallButton
+          conversationId={conversation.id}
+          provider={conversation.channel_sessions?.provider ?? null}
+          lastInboundAt={conversation.last_inbound_at}
+          bloqueio={
+            c?.is_blocked
+              ? t("Contato bloqueado — envio de mensagens desabilitado.")
+              : c?.is_anonymized
+                ? t("Contato anonimizado — não é possível enviar mensagens.")
+                : status === "closed"
+                  ? t("Conversa encerrada — o link não sai até ela reabrir.")
+                  : null
+          }
+        />
         {isOpen && (
           <Button
             size="sm"

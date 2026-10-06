@@ -18,12 +18,20 @@
  * esconde, nunca erro).
  */
 
+/** Só `http(s)://`. Toda outra origem vira `null` — vira `href`, então um
+ * `javascript:` ou um `data:` aqui seria código executando no clique. */
+const EH_HTTP = /^https?:\/\/\S+$/i;
+
 /** Valor da env já normalizado: `null` quando a instalação não oferece video. */
 export function resolveServidorDeVideo(
   valor: string | undefined | null,
 ): string | null {
   const url = (valor ?? "").trim().replace(/\/+$/, "");
   if (url.length === 0) return null;
+  // O Zod de `lib/env.ts` já recusa fora de http(s) (e desliga a feature em
+  // vez de derrubar o boot); esta segunda triagem é quem protege o `href` no
+  // navegador, que lê o payload injetado e não passa pelo Zod de novo.
+  if (!EH_HTTP.test(url)) return null;
   return url;
 }
 
@@ -42,22 +50,35 @@ export function servidorDeVideo(): string | null {
 }
 
 /**
- * Nome da sala: `deskcomm-<conversationId>`.
+ * Nome da sala: `sala-<uuid aleatório>`, gerado NO MOMENTO em que o diálogo
+ * abre — nada é gravado.
  *
- * O UUID da conversa é a sala. Ele já é não-avinhável e já existe — nada de
- * inventar um token a mais para armazenar. Consequência assumida e documentada
- * (`docs/features/videochamada.md`): quem tem o link entra, então o link é
- * tratado como dado sensível (mesma régua do link de reset de senha).
+ * Duas decisões aqui são do review do #2441:
+ *
+ *  - **Aleatório por chamada, não derivado da conversa.** Com a sala fixa
+ *    (o primeiro formato era o UUID da conversa), o link de UMA consulta
+ *    entraria na seguinte enquanto a conversa existir — e o id interno da
+ *    conversa sairia para fora. Aqui o link vale para o encontro que o
+ *    operador acabou de abrir, e só.
+ *  - **Prefixo `sala-`, não o nome do produto.** Este link vai parar na tela
+ *    do cliente final de quem revende a instalação; a sala não é lugar de
+ *    marca. Por isso o prefixo é neutro e `lib/video/jitsi.ts` NÃO entra em
+ *    `MARCA_CONGELADA` (a lista só encolhe).
+ *
+ * `crypto.randomUUID()` existe em todo navegador moderno e em Node ≥19.
  */
-export function salaDeVideo(conversationId: string): string {
-  return `deskcomm-${conversationId}`;
+export function novaSala(): string {
+  return `sala-${crypto.randomUUID()}`;
 }
 
-/** URL completa da sala a partir do servidor configurado. */
-export function urlDaSala(
-  servidor: string | null,
-  conversationId: string,
-): string | null {
+/**
+ * URL completa da sala, ou `null` quando não há servidor.
+ *
+ * Sem servidor não existe "sala parcial": devolver a sala sozinha deixaria o
+ * botão montar um `href` relativo que abriria uma rota interna nossa como se
+ * fosse videochamada.
+ */
+export function urlDaSala(servidor: string | null, sala: string): string | null {
   if (!servidor) return null;
-  return `${servidor}/${salaDeVideo(conversationId)}`;
+  return `${servidor}/${sala}`;
 }

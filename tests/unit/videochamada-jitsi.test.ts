@@ -2,24 +2,30 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  novaSala,
   resolveServidorDeVideo,
-  salaDeVideo,
   servidorDeVideo,
   urlDaSala,
 } from "@/lib/video/jitsi";
 
 /**
- * A VIDEOCHAMADA NASCE DESESLIGADA E NUNCA ERRA POR ISSO (#2440).
+ * A VIDEOCHAMADA NASCE DESESLIGADA E NUNCA ERRA POR ISSO (#2440), e a sala
+ * não é derivada de mais nada (#2441).
  *
- * Duas coisas aqui são contrato, não detalhe:
+ * Três coisas aqui são contrato, não detalhe:
  *
  *  1. Vazio (o caso de TODA instalação que não configurou `JITSI_SERVER_URL`)
  *     devolve `null`, e é esse `null` que esconde o botão. Padrão de
  *     `WACALLS_API_BASE_URL`: esconde, nunca erro.
  *  2. Barra no fim é aparada — `.env` escrito à mão traz `https://meet.jit.si/`
- *     e a sala viraria `...si//deskcomm-...`, que é uma sala DIFERENTE no Jitsi
- *     (a parte depois do host muda o nome). Medido no processo de escrita deste
- *     teste, não deduzido.
+ *     e a sala viraria `...si//sala-...`, que é uma sala DIFERENTE no Jitsi
+ *     (a parte depois do host muda o nome). Medido na escrita do PR, não
+ *     deduzido.
+ *  3. Fora de `http(s)` vira `null`: desde o review do #2441 a URL vira
+ *     `href` de um `<a>`, e um `javascript:` no `.env` seria código rodando no
+ *     clique do operador. O Zod de `lib/env.ts` já recusa e desliga a feature
+ *     (a `catch()` manda o aviso pro log); esta triagem é quem protege o lado
+ *     do navegador, que lê o payload injetado e não passa pelo Zod de novo.
  */
 describe("servidor de videochamada (Jitsi)", () => {
   it("vazio, só espaço ou ausente = a instalação não oferece videochamada", () => {
@@ -48,6 +54,15 @@ describe("servidor de videochamada (Jitsi)", () => {
     );
   });
 
+  it("fora de http(s) vira null — a URL vira href, não pode virar código", () => {
+    expect(resolveServidorDeVideo("javascript:alert(1)")).toBeNull();
+    expect(resolveServidorDeVideo("data:text/html,<script>x</script>")).toBeNull();
+    expect(resolveServidorDeVideo("file:///etc/passwd")).toBeNull();
+    expect(resolveServidorDeVideo("meet.jit.si")).toBeNull(); // sem esquema
+    // E o resultado inseguro NÃO escapa nem mesmo concatenado depois:
+    expect(urlDaSala(resolveServidorDeVideo("javascript:alert(1)"), "sala-1")).toBeNull();
+  });
+
   it("no servidor lê process.env, sem janela", () => {
     // Ambiente de teste não tem `window`; é o ramo do servidor que roda.
     const antes = process.env.JITSI_SERVER_URL;
@@ -60,27 +75,50 @@ describe("servidor de videochamada (Jitsi)", () => {
   });
 });
 
-describe("a sala é a própria conversa", () => {
-  it("prefixa o UUID da conversa e não inventa mais nada", () => {
-    const id = "3f1d2b7c-9a44-4e11-8f21-5b6c7d8e9f00";
-    expect(salaDeVideo(id)).toBe(`deskcomm-${id}`);
-    // Duas abas abrindo a MESMA conversa caem na mesma sala — é o que faz o
-    // reenvio de link funcionar (o contato entra no que já está aberto).
-    expect(salaDeVideo(id)).toBe(salaDeVideo(id));
+/**
+ * A SALA É ALEATÓRIA E A CADA CHAMADA (#2441).
+ *
+ * O formato anterior era `deskcomm-<conversationId>`, e o review do #2441
+ * derrubou as duas metades dele:
+ *
+ *  - **O UUID da conversa saía para fora.** O link vai para o cliente final e
+ *    o id interno da conversa não é dele.
+ *  - **A sala era fixa.** O link de UMA consulta entraria na seguinte, enquanto
+ *    a conversa existir — e o segundo clique no botão reenviava a MESMA sala
+ *    já aberta.
+ *
+ * O prefixo também mudou, de `deskcomm-` para `sala-`: este link cai na tela
+ * de quem revende a instalação, e a sala não é lugar de marca.
+ */
+describe("a sala é aleatória e por chamada", () => {
+  it("prefixa com 'sala-' e não com o nome do produto", () => {
+    const sala = novaSala();
+    expect(sala.startsWith("sala-")).toBe(true);
+    // Regra de marca: nada do nome do produto na sala (#2441 — entrou na
+    // conversa do cliente final). Se isto falhar, é o prefixo que mudou.
+    expect(sala.toLowerCase()).not.toContain("deskcomm");
+    expect(sala.toLowerCase()).not.toContain("upsay");
+    expect(sala.toLowerCase()).not.toContain("webtecnica");
+  });
+
+  it("duas chamadas nunca caem na mesma sala", () => {
+    // É o que protege a conversa seguinte da sala da anterior.
+    expect(novaSala()).not.toBe(novaSala());
+    const salas = new Set(Array.from({ length: 50 }, () => novaSala()));
+    expect(salas.size).toBe(50);
+  });
+
+  it("a sala é um slug que a URL aceita (sem espaço, com hífen)", () => {
+    const sala = novaSala();
+    expect(sala).toMatch(/^sala-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(sala).not.toMatch(/\s/);
   });
 
   it("URL completa só quando há servidor; sem servidor, nada de sala órfã", () => {
-    const id = "3f1d2b7c-9a44-4e11-8f21-5b6c7d8e9f00";
-    expect(urlDaSala("https://meet.jit.si", id)).toBe(
-      `https://meet.jit.si/deskcomm-${id}`,
+    expect(urlDaSala("https://meet.jit.si", "sala-x")).toBe(
+      "https://meet.jit.si/sala-x",
     );
-    expect(urlDaSala(null, id)).toBeNull();
-    expect(urlDaSala(resolveServidorDeVideo(""), id)).toBeNull();
-  });
-
-  it("conversas diferentes nunca dividem sala", () => {
-    const a = urlDaSala("https://meet.jit.si", "aaaaaaaa-0000-0000-0000-000000000000");
-    const b = urlDaSala("https://meet.jit.si", "bbbbbbbb-0000-0000-0000-000000000000");
-    expect(a).not.toBe(b);
+    expect(urlDaSala(null, "sala-x")).toBeNull();
+    expect(urlDaSala(resolveServidorDeVideo(""), "sala-x")).toBeNull();
   });
 });

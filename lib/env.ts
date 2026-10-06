@@ -208,9 +208,35 @@ const schema = z.object({
   // em `lib/video/jitsi.ts`.
   //
   // `https://meet.jit.si` (público, sem conta) ou o servidor próprio em
-  // Docker/consórcio — a URL é a origem do iframe e também da sala
-  // (`<url>/deskcomm-<conversationId>`).
-  JITSI_SERVER_URL: z.string().optional().default(""),
+  // Docker/consórcio — a URL é a ORIGEM da aba de videochamada.
+  //
+  // Validada como URL http(s) desde o review do #2441: depois de trocarmos o
+  // iframe por aba nova, este valor vira `href` num `<a>`, então um `javascript:`
+  // escrito no `.env` seria código executando no clique do operador. A segunda
+  // triagem (`EH_HTTP`, em `lib/video/jitsi.ts`) fica no lado do navegador,
+  // que lê o payload injetado e não passa por aqui de novo.
+  //
+  // O formato é `.refine().catch()` e não `.url()` puro, pelo motivo que a
+  // nota de META_GRAPH_BASE_URL registra: validação que DERRUBA roda no import
+  // do Next e derruba TODAS as telas com o contêiner `healthy`. Aqui a ação
+  // falha fechada — URL fora de http(s) vira `""`, o botão some, a feature
+  // desliga — e a informação sobe em alto e bom som no log (padrão
+  // `diasDeRetencao`, lá em cima).
+  JITSI_SERVER_URL: z
+    .string()
+    .optional()
+    .default("")
+    .refine((v) => v.trim() === "" || /^https?:\/\/\S+$/i.test(v.trim()), {
+      message: "precisa ser uma URL http(s) como https://meet.jit.si",
+    })
+    .catch(({ error }) => {
+      console.warn(
+        `[env] JITSI_SERVER_URL inválida (${JSON.stringify(process.env.JITSI_SERVER_URL)}) — videochamada DESLIGADA. ` +
+          `Ela vira o link da sala no botão "Vídeo", então só http(s) vale (ex.: https://meet.jit.si). ` +
+          `(${error.issues[0]?.message ?? "valor recusado"})`,
+      );
+      return "";
+    }),
 
   // ─── Canal Datafy (recorte do #1130) — OPCIONAL, DESLIGADO POR PADRÃO ───
   //
