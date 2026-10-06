@@ -52,6 +52,46 @@ it("requires admin and never returns the stored key", async () => {
   expect(h.read).toHaveBeenCalledWith({}, "trusted");
   expect(h.role).toHaveBeenCalledWith("admin", expect.anything());
 });
+it("lists channels whose account left the profile as orphaned", async () => {
+  h.channels.mockResolvedValue([
+    {
+      id: "ch-nova",
+      updated_at: "2026-10-06T00:00:00Z",
+      accountId: "account",
+      display_name: "Instagram · brand",
+      status: "WORKING",
+      metadata: {},
+    },
+    {
+      id: "ch-orfa",
+      updated_at: "2026-10-06T00:00:00Z",
+      accountId: "velha",
+      display_name: "Instagram · velha",
+      status: "FAILED",
+      metadata: {},
+    },
+  ]);
+  const body = (await (await GET()).json()) as {
+    data: {
+      accounts: { channel: { id: string } | null }[];
+      orphaned_channels: {
+        channel_id: string;
+        account_id: string;
+        display_name: string | null;
+        status: string;
+      }[];
+    };
+  };
+  expect(body.data.orphaned_channels).toEqual([
+    {
+      channel_id: "ch-orfa",
+      account_id: "velha",
+      display_name: "Instagram · velha",
+      status: "FAILED",
+    },
+  ]);
+  expect(JSON.stringify(body.data)).not.toContain("hidden-key");
+});
 it("refuses foreign organization injection", async () => {
   expect(
     (
@@ -83,6 +123,32 @@ it("blocks missing role, read-only support and missing MFA proof", async () => {
   h.mfa.mockResolvedValue(true);
   expect((await call({})).status).toBe(403);
   expect(h.configure).not.toHaveBeenCalled();
+});
+it("lists channels whose account left the profile as orphaned", async () => {
+  h.channels.mockResolvedValue([
+    { id: "ch-nova", accountId: "account", display_name: "IG nova", status: "WORKING" },
+    { id: "ch-velha", accountId: "b".repeat(24), display_name: "IG velha", status: "FAILED" },
+  ]);
+  const response = await GET();
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as {
+    data: {
+      orphaned_channels: { channel_id: string; account_id: string; status: string }[];
+    };
+  };
+  expect(body.data.orphaned_channels).toEqual([
+    { channel_id: "ch-velha", account_id: "b".repeat(24), display_name: "IG velha", status: "FAILED" },
+  ]);
+  expect(JSON.stringify(body)).not.toContain("hidden-key");
+});
+it("returns no orphaned channels without a configured profile", async () => {
+  h.read.mockResolvedValue(null);
+  h.channels.mockResolvedValue([
+    { id: "ch-1", accountId: "b".repeat(24), display_name: "IG", status: "FAILED" },
+  ]);
+  const response = await GET();
+  const body = (await response.json()) as { data: { orphaned_channels: unknown[] } };
+  expect(body.data.orphaned_channels).toEqual([]);
 });
 it("disconnects under the trusted tenant and audits the outcome", async () => {
   h.disconnect.mockResolvedValue({ channel_id: "ch", account_removed: true });

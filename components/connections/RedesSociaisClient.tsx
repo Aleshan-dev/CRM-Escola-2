@@ -32,11 +32,18 @@ type Account = {
   inbox_supported: boolean;
   channel: { id: string; status: string; metadata?: Record<string, unknown> | null } | null;
 };
+type Orphaned = {
+  channel_id: string;
+  account_id: string;
+  display_name: string | null;
+  status: string;
+};
 type State = {
   label: string;
   configured: boolean;
   networks: { id: string; label: string; inbox: boolean }[];
   accounts: Account[];
+  orphaned_channels: Orphaned[];
 };
 export function RedesSociaisClient() {
   const t = useT();
@@ -57,6 +64,7 @@ export function RedesSociaisClient() {
   const [removing, setRemoving] = useState<{ account: Account; removeAccount: boolean } | null>(
     null,
   );
+  const [excluding, setExcluding] = useState<Orphaned | null>(null);
   const load = () => query.refetch();
   async function togglePausado(account: Account) {
     if (!account.channel) return;
@@ -71,6 +79,20 @@ export function RedesSociaisClient() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível mudar o estado do canal.");
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function excluirOrfao(orfao: Orphaned) {
+    setBusy(orfao.channel_id);
+    setError(null);
+    try {
+      await apiClient.delete(`/api/v1/channel-sessions/${orfao.channel_id}`);
+      toast.success(t("Canal excluído. A lista atualiza sem a linha órfã."));
+      setExcluding(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível excluir o canal.");
     } finally {
       setBusy(null);
     }
@@ -346,6 +368,52 @@ export function RedesSociaisClient() {
           {state.accounts.length === 0 && (
             <p>{t("Nenhuma conta conectada neste perfil. Autorize uma rede para começar.")}</p>
           )}
+          {(state.orphaned_channels ?? []).length > 0 && (
+            <Card className="space-y-3 border-destructive p-4">
+              <h3 className="font-semibold">{t("Canais sem conta no perfil")}</h3>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  "Estas conexões apontam para contas que saíram do perfil no provedor (por exemplo, conta removida e recriada por lá). Exclua a linha órfã para fechar o aviso.",
+                )}
+              </p>
+              {(state.orphaned_channels ?? []).map((orfao) => (
+                <div
+                  key={orfao.channel_id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                >
+                  <div>
+                    <p className="font-medium">{orfao.display_name ?? orfao.account_id}</p>
+                    <p className="text-xs text-muted-foreground">{orfao.status}</p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    disabled={!!busy}
+                    onClick={() => setExcluding(orfao)}
+                  >
+                    {t("Excluir")}
+                  </Button>
+                </div>
+              ))}
+            </Card>
+          )}
+          <AlertDialog open={!!excluding} onOpenChange={(open) => !open && setExcluding(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("Excluir o canal órfão?")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t(
+                    "A linha sai da lista e os avisos dela são fechados. As conversas já recebidas continuam no CRM.",
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
+                <AlertDialogAction onClick={() => excluding && void excluirOrfao(excluding)}>
+                  {t("Excluir canal")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="ghost" className="self-start" onClick={() => setEditing(!editing)}>
             {t("Alterar credencial")}
           </Button>

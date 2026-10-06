@@ -12190,6 +12190,13 @@ export const DICIONARIO: Traducoes = {
   "Manter IA pausada": { es: "Mantener IA pausada" },
   "Não foi possível carregar as redes sociais.": { es: "No se pudieron cargar las redes sociales." },
   "Reconfigurar integração": { es: "Reconfigurar integración" },
+  "Canais sem conta no perfil": { es: "Canales sin cuenta en el perfil" },
+  "Estas conexões apontam para contas que saíram do perfil no provedor (por exemplo, conta removida e recriada por lá). Exclua a linha órfã para fechar o aviso.": { es: "Estas conexiones apuntan a cuentas que salieron del perfil en el proveedor (por ejemplo, una cuenta eliminada y recreada allí). Elimina la línea huérfana para cerrar el aviso." },
+  "Canal excluído. A lista atualiza sem a linha órfã.": { es: "Canal eliminado. La lista se actualiza sin la línea huérfana." },
+  "Excluir": { es: "Eliminar" },
+  "Excluir o canal órfão?": { es: "¿Eliminar el canal huérfano?" },
+  "A linha sai da lista e os avisos dela são fechados. As conversas já recebidas continuam no CRM.": { es: "La línea sale de la lista y se cierran sus avisos. Las conversaciones ya recibidas siguen en el CRM." },
+  "Excluir canal": { es: "Eliminar canal" },
 
   // Extensões declarativas — interface e mensagens literais da API.
   "Extensões": { es: "Extensiones" },

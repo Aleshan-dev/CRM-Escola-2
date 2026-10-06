@@ -2,8 +2,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RedesSociaisClient } from "./RedesSociaisClient";
-const h = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
-vi.mock("@/lib/api/client", () => ({ apiClient: h }));
+const h = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), remove: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({ apiClient: { get: h.get, post: h.post, delete: h.remove } }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("./ChannelAiAccess", () => ({ ChannelAiAccess: () => <div>IA pausada</div> }));
@@ -95,5 +95,26 @@ it("asks before removing an account from support and keeps it linked", async () 
       account_id: "a",
       remove_account: false,
     }),
+  );
+});
+it("shows orphaned channels and excludes them through channel-sessions", async () => {
+  h.get.mockResolvedValue({
+    data: {
+      configured: true,
+      label: "Partner",
+      networks: [{ id: "instagram", label: "Instagram" }],
+      accounts: [],
+      orphaned_channels: [
+        { channel_id: "ch-orfa", account_id: "velha", display_name: "Instagram velha", status: "FAILED" },
+      ],
+    },
+  });
+  h.remove.mockResolvedValue({ data: { id: "ch-orfa", archived: true } });
+  mount();
+  await screen.findByText("Canais sem conta no perfil");
+  fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Excluir canal" }));
+  await vi.waitFor(() =>
+    expect(h.remove).toHaveBeenCalledWith("/api/v1/channel-sessions/ch-orfa"),
   );
 });

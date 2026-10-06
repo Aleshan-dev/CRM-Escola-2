@@ -76,6 +76,12 @@ export async function GET() {
     const config = await readSocialIntegration(db, auth.org.orgId);
     const channels = await socialChannels(db, auth.org.orgId);
     const accounts = config ? await listSocialAccounts(config.key, config.profileId) : [];
+    const contaNoPerfil = new Set(accounts.map((a) => a._id));
+    // Sem integração não há perfil para comparar: tudo órfão seria ruído, e a
+    // tela de vincular já cobre esse estado. A lista só existe com perfil.
+    const orfaos = config
+      ? channels.filter((c) => !contaNoPerfil.has(c.accountId))
+      : [];
     return ok(
       {
         label: SOCIAL_PROVIDER_LABEL,
@@ -92,6 +98,17 @@ export async function GET() {
             active: a.isActive,
             inbox_supported: inboxSupported(a.platform),
             channel: channels.find((c) => c.accountId === a._id) ?? null,
+          })),
+        // Canal ativo cuja conta saiu do perfil (removida e recriada no
+        // provedor, ou perfil trocado por fora): a faixa do topo o lê e o
+        // cartão mostra o novo — sem esta lista a linha é inalcançável e a
+        // faixa é eterna. A exclusão usa o DELETE de channel-sessions/[id],
+        // que fecha os avisos da conexão removida.
+        orphaned_channels: orfaos.map((c) => ({
+            channel_id: c.id,
+            account_id: c.accountId,
+            display_name: c.display_name,
+            status: c.status,
           })),
       },
       { requestId, headers },
