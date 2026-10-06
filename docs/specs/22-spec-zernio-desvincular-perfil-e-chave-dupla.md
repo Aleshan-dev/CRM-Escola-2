@@ -42,9 +42,13 @@ perfil trocado por fora). Item em snake_case:
 { "channel_id": "uuid", "account_id": "hex24", "display_name": "...", "status": "FAILED" }
 ```
 
-A tela mostra a seção "Canais sem conta no perfil" com **Excluir**, que chama o
-`DELETE /api/v1/channel-sessions/[id]` existente — o mesmo que fecha os avisos
-de saúde da conexão removida. Sem isso a faixa é eterna e a linha é inalcançável.
+A tela mostra a seção "Canais sem conta no perfil" com **Excluir**, que chama a
+ação `disconnect` (`remove_account: false`): apaga a assinatura no provedor pelo
+id ou pela URL, como no #2412, arquiva e fecha os avisos. NÃO usa o
+`DELETE /api/v1/channel-sessions/[id]`: ele não apaga a assinatura, que é por
+chave e não por conta — ficaria viva entregando numa URL que vira 404. Se o
+provedor já tiver apagado a assinatura com a conta, o 404 dele conta como
+sucesso. Sem isso a faixa é eterna e a linha é inalcançável.
 Quando não há integração configurada, a lista vem vazia (nada a comparar).
 
 ### `POST /api/v1/channels/social` — ação `unlink`

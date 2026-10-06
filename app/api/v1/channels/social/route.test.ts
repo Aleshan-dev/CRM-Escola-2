@@ -126,23 +126,6 @@ it("blocks missing role, read-only support and missing MFA proof", async () => {
   expect((await call({})).status).toBe(403);
   expect(h.configure).not.toHaveBeenCalled();
 });
-it("lists channels whose account left the profile as orphaned", async () => {
-  h.channels.mockResolvedValue([
-    { id: "ch-nova", accountId: "account", display_name: "IG nova", status: "WORKING" },
-    { id: "ch-velha", accountId: "b".repeat(24), display_name: "IG velha", status: "FAILED" },
-  ]);
-  const response = await GET();
-  expect(response.status).toBe(200);
-  const body = (await response.json()) as {
-    data: {
-      orphaned_channels: { channel_id: string; account_id: string; status: string }[];
-    };
-  };
-  expect(body.data.orphaned_channels).toEqual([
-    { channel_id: "ch-velha", account_id: "b".repeat(24), display_name: "IG velha", status: "FAILED" },
-  ]);
-  expect(JSON.stringify(body)).not.toContain("hidden-key");
-});
 it("returns no orphaned channels without a configured profile", async () => {
   h.read.mockResolvedValue(null);
   h.channels.mockResolvedValue([

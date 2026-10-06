@@ -88,7 +88,14 @@ export function RedesSociaisClient() {
     setBusy(orfao.channel_id);
     setError(null);
     try {
-      await apiClient.delete(`/api/v1/channel-sessions/${orfao.channel_id}`);
+      // A ação disconnect, não o DELETE de channel-sessions: só ela apaga a
+      // assinatura de webhook no provedor (pelo id ou pela URL, #2412). A
+      // assinatura é por chave, então sobreviveria à linha e entregaria num 404.
+      await apiClient.post("/api/v1/channels/social", {
+        action: "disconnect",
+        account_id: orfao.account_id,
+        remove_account: false,
+      });
       toast.success(t("Canal excluído. A lista atualiza sem a linha órfã."));
       setExcluding(null);
       await load();

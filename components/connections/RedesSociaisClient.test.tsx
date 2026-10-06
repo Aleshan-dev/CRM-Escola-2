@@ -97,7 +97,7 @@ it("asks before removing an account from support and keeps it linked", async () 
     }),
   );
 });
-it("shows orphaned channels and excludes them through channel-sessions", async () => {
+it("shows orphaned channels and removes them through the disconnect action, which deletes the provider webhook", async () => {
   h.get.mockResolvedValue({
     data: {
       configured: true,
@@ -109,14 +109,20 @@ it("shows orphaned channels and excludes them through channel-sessions", async (
       ],
     },
   });
-  h.remove.mockResolvedValue({ data: { id: "ch-orfa", archived: true } });
+  h.post.mockResolvedValue({ data: { channel_id: "ch-orfa", account_removed: false } });
   mount();
   await screen.findByText("Canais sem conta no perfil");
   fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
   fireEvent.click(await screen.findByRole("button", { name: "Excluir canal" }));
   await vi.waitFor(() =>
-    expect(h.remove).toHaveBeenCalledWith("/api/v1/channel-sessions/ch-orfa"),
+    expect(h.post).toHaveBeenCalledWith("/api/v1/channels/social", {
+      action: "disconnect",
+      account_id: "velha",
+      remove_account: false,
+    }),
   );
+  // channel-sessions/[id] não apaga a assinatura no provedor: ela ficaria viva.
+  expect(h.remove).not.toHaveBeenCalled();
 });
 it("asks before unlinking the profile and posts unlink on confirm", async () => {
   h.get.mockResolvedValue({

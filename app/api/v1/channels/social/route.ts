@@ -104,8 +104,8 @@ export async function GET() {
         // Canal ativo cuja conta saiu do perfil (removida e recriada no
         // provedor, ou perfil trocado por fora): a faixa do topo o lê e o
         // cartão mostra o novo — sem esta lista a linha é inalcançável e a
-        // faixa é eterna. A exclusão usa o DELETE de channel-sessions/[id],
-        // que fecha os avisos da conexão removida.
+        // faixa é eterna. A exclusão usa a ação disconnect (sem remover a
+        // conta): apaga a assinatura no provedor, arquiva e fecha os avisos.
         orphaned_channels: orfaos.map((c) => ({
             channel_id: c.id,
             account_id: c.accountId,
