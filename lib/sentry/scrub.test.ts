@@ -69,6 +69,18 @@ describe("scrubMessage", () => {
     expect(out).not.toContain("joao@exemplo.com");
   });
 
+  it("número internacional com +DDI sai inteiro — e não vira `+[CPF]8` (#2345)", () => {
+    // O padrão de CPF comia 11 dos 12 dígitos do `+351…` e sobrava o último.
+    expect(scrubMessage("zap +351912345678 ok")).toBe("zap [PHONE] ok");
+    expect(scrubMessage("zap +351 912 345 678 ok")).toBe("zap [PHONE] ok");
+    expect(scrubMessage("zap +34 612 345 678 ok")).toBe("zap [PHONE] ok");
+  });
+
+  it("os nove dígitos em três blocos (NIF/telemóvel) saem apagados (#2345)", () => {
+    expect(scrubMessage("nif 123 456 789 ok")).toBe("nif [PHONE] ok");
+    expect(scrubMessage("doc 123.456.789 ok")).toBe("doc [PHONE] ok");
+  });
+
   // O mesmo texto vai ao Sentry e ao Jev, e a tela do Jev promete ao admin que
   // o telefone sai apagado. O padrão antigo exigia o DDD colado ao número, sem
   // parênteses: `(11) 98765-4321` e `98765-4321` — os jeitos mais comuns de
