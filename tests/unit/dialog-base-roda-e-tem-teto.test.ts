@@ -27,10 +27,7 @@ import path from "node:path";
  * casos abaixo VERMELHOS.
  */
 
-const BASE = path.resolve(
-  __dirname,
-  "../../components/ui/dialog.tsx",
-);
+const BASE = path.resolve(__dirname, "../../components/ui/dialog.tsx");
 const cn = path.resolve(__dirname, "../../lib/utils.ts");
 
 describe("DialogContent base tem teto de altura (#2044)", () => {
@@ -44,18 +41,56 @@ describe("DialogContent base tem teto de altura (#2044)", () => {
     expect(fonte).toMatch(/overflow-y-auto/);
   });
 
+  /**
+   * A ÂNCORA É UM CONJUNTO DE CLASSES, E NÃO UMA SEQUÊNCIA DELAS.
+   *
+   * A versão anterior procurava a string literal
+   * `"fixed left-[50%] top-[50%] z-50 grid"` e lia os 700 caracteres seguintes.
+   * Isso amarrava o gate à ORDEM das classes — e a ordem das classes neste
+   * repositório é decidida pelo `prettier-plugin-tailwindcss`, que está
+   * configurado no `.prettierrc` e tem toda a autorização para reordenar.
+   *
+   * Medido: `components/ui/dialog.tsx` **nunca esteve formatado** (o arquivo do
+   * HEAD reprova `prettier --check`), e no instante em que alguém roda
+   * `pnpm format` o plugin troca `left-[50%] top-[50%]` por
+   * `top-[50%] left-[50%]`. A âncora deixa de casar, `indexOf` devolve -1, o
+   * `slice(-1, 699)` devolve string VAZIA — e o gate reprova dizendo que o teto
+   * de altura sumiu, quando ele está exatamente onde deveria.
+   *
+   * O defeito que este arquivo existe para pegar (#2044) é "o teto não está na
+   * base compartilhada". Isso é uma pergunta sobre QUAIS classes convivem na
+   * mesma string, nunca sobre em que ordem elas aparecem. Perguntar pelo
+   * conjunto mede a mesma coisa e para de reprovar formatação.
+   */
+  /** Toda string literal entre aspas duplas do arquivo. */
+  const literais = [...fonte.matchAll(/"([^"\n]*)"/g)].map((m) => m[1] ?? "");
+
+  /** A string de classes que carrega TODAS as marcas da base do DialogContent. */
+  const ASSINATURA_DA_BASE = ["fixed", "left-[50%]", "top-[50%]", "z-50", "grid"];
+  const base = literais.find((literal) => {
+    const classes = new Set(literal.split(/\s+/));
+    return ASSINATURA_DA_BASE.every((c) => classes.has(c));
+  });
+
   it("o teto está na base compartilhada, e não num diálogo solto", () => {
-    // A âncora é a assinatura exclusiva do DialogContent base
-    // (`fixed left-[50%] top-[50%] z-50 grid`) — a MESMA linha carrega o teto.
-    const i = fonte.indexOf("fixed left-[50%] top-[50%] z-50 grid");
-    const linha = fonte.slice(i, i + 700);
-    expect(linha).toMatch(/max-h-\[calc\(100dvh-2rem\)\]/);
-    expect(linha).toMatch(/overflow-y-auto/);
+    // Guarda de vacuidade: sem achar a base, os dois `expect` abaixo passariam
+    // num `undefined` e o gate ficaria verde medindo nada.
+    expect(base, `nenhuma string reúne ${ASSINATURA_DA_BASE.join(" + ")}`).toBeTruthy();
+    const classes = new Set((base ?? "").split(/\s+/));
+    expect(classes).toContain("max-h-[calc(100dvh-2rem)]");
+    expect(classes).toContain("overflow-y-auto");
   });
 
   it("mantém o botão de fechar (X) no componente base", () => {
     expect(fonte).toMatch(/DialogPrimitive\.Close/);
-    expect(fonte).toMatch(/right-4 top-4/);
+    // `right-4` e `top-4` no MESMO className, em qualquer ordem — pelo mesmo
+    // motivo do caso acima: o prettier reordena, e `top-4 right-4` posiciona o
+    // X exatamente onde `right-4 top-4` posicionava.
+    const fechar = literais.find((literal) => {
+      const classes = new Set(literal.split(/\s+/));
+      return classes.has("absolute") && classes.has("right-4") && classes.has("top-4");
+    });
+    expect(fechar, "o X do diálogo base perdeu a âncora no canto").toBeTruthy();
   });
 });
 
