@@ -39395,9 +39395,12 @@ alter table public.organizations
 -- volta a existir e expurga linha `deleted` com mais de 90 dias; a 0435
 -- (#1765) devolve a contagem desse expurgo, que antes não aparecia nem no
 -- retorno nem na trilha; a 0557 (#1534) obedece ao interruptor e marca a
--- mensagem `media_status='expired'` ao expirar. O corpo abaixo é a 0557
--- EDITADA NO LUGAR — ele tem de casar com o da última migration, senão quem
--- instala pelo kit self-host fica com outra função de quem aplica a cadeia
+-- mensagem `media_status='expired'` ao expirar; a 0572 (#1887, PR #2309)
+-- estende a retenção ao anexo de nota interna, sob o MESMO interruptor e a
+-- MESMA pausa LGPD. O corpo abaixo é a 0572 EDITADA NO LUGAR — a 0557 já
+-- redefinia esta função, então o corpo é a UNIÃO das duas e tem
+-- de casar com o da ÚLTIMA migration da cadeia, senão quem instala pelo kit
+-- self-host fica com outra função de quem aplica a cadeia
 -- (apendice-do-baseline-nao-diverge-da-cadeia).
 create or replace function public.fn_enfileirar_midia_vencida(p_limite integer default 500)
 returns jsonb
@@ -39413,6 +39416,10 @@ declare
   -- é a mesma categoria — arquivo sem ponteiro — e a chave de retorno não
   -- muda (o `toEqual` congelado de `poda-de-midia.test.ts` mede as três).
   v_orfas_nota integer := 0;
+  -- Anexo de nota VIVO que já passou da retenção (#1887). Conta em
+  -- `v_vencidas`: é a MESMA categoria — arquivo vencido por idade — e a chave
+  -- congelada do retorno (0435) não muda de nome nem de número.
+  v_vencidas_nota integer := 0;
   -- O que o expurgo apagou NESTA chamada (#1765). Começa em 0 para que a
   -- rodada sem nada a expurgar devolva 0 — e não null, que o cron somaria
   -- como se fosse apagado.
@@ -39599,6 +39606,69 @@ begin
   )
   select count(*) into v_orfas_nota from fila_da_nota;
   v_orfas := v_orfas + v_orfas_nota;
+
+  -- 2c. RETENÇÃO POR IDADE DO ANEXO DA NOTA VIVA (#1887). Até aqui o bucket
+  --     `internal-media` só era alcançado quando a nota SUMIA (passo 2b) ou
+  --     sob pedido LGPD (passo 6d da 0483): uma nota que CONTINUA EXISTINDO
+  --     segurava o anexo para sempre, e numa cota de 1 GB dividida com
+  --     `whatsapp-media` o bucket crescia sem teto — anexos de até 50 MB
+  --     (issue #1887; opção A, decisão do mantenedor no PR #2309).
+  --     O anexo interno passa a seguir a MESMA regra da mídia de conversa:
+  --     mesmo knob (`organizations.media_retention_days`, piso de 30 dias),
+  --     MESMO interruptor (`media_retention_enforced`, 0557) e MESMA pausa
+  --     enquanto a organização tem pedido LGPD em andamento — sem os dois, o
+  --     anexo de nota seria a ÚNICA coisa apagada numa organização que
+  --     desligou a limpeza, ou no meio de um atendimento LGPD. Mesmo desenho
+  --     do passo 1 — a idade é a da NOTA, a mesma
+  --     medida que a da mensagem, e o arquivo só sai DEPOIS do knob. Nota
+  --     viva dentro da retenção não é tocada; é esta linha que o teste de
+  --     #1887 cobra (e que reprova se a condição de idade sumir).
+  --     Os três ponteiros são zerados como no passo 6d da 0483: a nota fica
+  --     com o texto e sem card apontando para arquivo que já saiu do bucket.
+  --     Arquivo já removido à mão não quebra a rodada: a linha entra como
+  --     `pending` e o worker a fecha como `skipped`, como no passo 1.
+  --     Aqui não existe o "nenhuma OUTRA mensagem usa" do passo 1: o caminho
+  --     de anexo é único por upload (`note-<uuid>.<ext>`). A rota de nota só
+  --     confere que o caminho é da mesma conversa, então duas notas PODEM
+  --     apontar para o mesmo arquivo por chamada direta à API (pela tela não
+  --     acontece); nesse caso a mais nova perde o anexo quando a mais velha
+  --     vence — caso raro, aceito na decisão.
+  with vencidas_da_nota as (
+    select n.id, n.organization_id, n.media_storage_path as caminho
+      from public.conversation_notes n
+      join public.organizations o on o.id = n.organization_id
+     where n.media_storage_path is not null
+       and o.media_retention_enforced
+       and n.created_at < now() - make_interval(days => greatest(coalesce(o.media_retention_days, 365), 30))
+       and not exists (
+         select 1 from public.lgpd_requests r
+          where r.organization_id = n.organization_id
+            and r.status in ('received', 'processing')
+       )
+     order by n.created_at
+     limit v_lim
+     for update of n skip locked
+  ), fila_da_retencao as (
+    insert into public.storage_redaction_queue (organization_id, bucket, object_path)
+    select distinct v.organization_id, 'internal-media', v.caminho
+      from vencidas_da_nota v
+    on conflict (bucket, object_path) do update
+      set status = 'pending',
+          attempts = 0,
+          enqueued_at = now(),
+          processed_at = null,
+          error_message = null
+      where storage_redaction_queue.status in ('deleted', 'skipped')
+    returning 1
+  ), limpas_da_nota as (
+    update public.conversation_notes n
+       set media_storage_path = null, media_mime = null, media_size_bytes = null
+      from vencidas_da_nota v
+     where n.id = v.id
+    returning 1
+  )
+  select count(*) into v_vencidas_nota from limpas_da_nota;
+  v_vencidas := v_vencidas + v_vencidas_nota;
   return jsonb_build_object('vencidas', v_vencidas, 'orfas', v_orfas, 'expurgadas', v_expurgadas);
 end;
 $$;
@@ -45339,6 +45409,88 @@ revoke all on function public.fn_contato_pessoal_remove_trechos_do_rag(uuid,uuid
 grant execute on function public.fn_contato_pessoal_remove_trechos_do_rag(uuid,uuid) to service_role;
 
 notify pgrst,'reload schema';
+
+
+-- ---- Autorização por fonte de formulário (migration 0577) ----
+-- manifest: Autorização opcional por fonte de formulário, vinculada à captação completa com consentimento explícito e external_id, sem retomar atendimento humano; renova só autorização vencida (TTL do gate) e a recusa revoga mesmo sem external_id.
+alter table public.webhook_sources
+  add column if not exists authorize_ai_on_capture boolean not null default false;
+
+-- Só o ingresso no servidor chama esta operação. Nenhum backfill ou trigger.
+-- SECURITY INVOKER: não aumenta os privilégios do chamador.
+-- A assinatura ganhou p_ttl_ms. Um banco que já aplicou a versão de 5 argumentos
+-- ficaria com DUAS funções (create or replace não troca lista de argumentos).
+drop function if exists public.fn_authorize_ai_form_capture(uuid, uuid, uuid, uuid, uuid);
+
+-- p_ttl_ms: validade da autorização, a MESMA régua do gate (AI_ALLOWLIST_TTL_DAYS,
+-- lida no servidor por ttlDaAutorizacaoMs). Nulo ou <= 0 não renova nada.
+create or replace function public.fn_authorize_ai_form_capture(
+  p_organization_id uuid, p_source_id uuid, p_lead_id uuid,
+  p_contact_id uuid, p_request_id uuid, p_ttl_ms bigint
+) returns boolean
+language sql security invoker set search_path = ''
+as $function$
+  with capture as (
+        select w.fields, l.external_id from public.webhook_sources s
+        join public.crm_leads l on l.organization_id = s.organization_id
+          and l.id = p_lead_id and l.contact_id = p_contact_id
+          and l.pipeline_id = s.default_pipeline_id and l.source = 'webhook'
+          and l.source_metadata ->> 'webhook_source_id' = s.id::text
+        join public.crm_pipelines p on p.id = s.default_pipeline_id
+          and p.organization_id = s.organization_id
+        join public.webhook_lead_captures w on w.organization_id = s.organization_id
+          and w.webhook_source_id = s.id and w.lead_id = l.id and w.contact_id = p_contact_id
+        where s.id = p_source_id and s.organization_id = p_organization_id
+          and s.is_active and s.kind = 'lead_capture' and s.authorize_ai_on_capture
+          and s.secret_encrypted is not null
+          and w.outcome = 'criado' and w.request_id = p_request_id
+          and w.received_at > now() - interval '5 minutes'
+          and w.fields ->> 'submission_status' = 'completed'
+          and jsonb_typeof(w.fields -> 'ai_service_consent_version') = 'string'
+          and length(trim(w.fields ->> 'ai_service_consent_version')) between 1 and 120
+  ), revoked as (
+    -- A RECUSA explícita NÃO exige external_id: revogar e travar para humano é o
+    -- lado seguro, e vale mesmo num envio sem identidade estável.
+    update public.contacts c
+    set ai_authorized_at = null, ai_authorized_reason = null, force_human = true,
+        consent = jsonb_set(coalesce(c.consent, '{}'::jsonb), '{automated_service}',
+          coalesce(c.consent -> 'automated_service', '{}'::jsonb) ||
+            jsonb_build_object('declined_at', now(), 'source', 'formulario:' || p_source_id::text))
+    where c.id = p_contact_id and c.organization_id = p_organization_id
+      and exists (select 1 from capture where fields -> 'ai_service_consent' = 'false'::jsonb)
+    returning c.id
+  ), authorized as (
+    update public.contacts c
+    set ai_authorized_at = now(),
+        ai_authorized_reason = 'formulario:' || p_source_id::text || ':' || p_lead_id::text
+    where c.id = p_contact_id and c.organization_id = p_organization_id
+      -- Concede a quem nunca foi autorizado e RENOVA só autorização VENCIDA.
+      -- Autorização vigente não é regravada.
+      and (c.ai_authorized_at is null
+        or (p_ttl_ms > 0 and c.ai_authorized_at < now() - p_ttl_ms * interval '1 millisecond'))
+      and not c.force_human and not c.is_blocked and not c.is_anonymized and not c.is_personal
+      and c.blocked_at is null and c.anonymized_at is null
+      and c.is_merged_into is null and c.merged_at is null
+      and c.phone_number ~ '^\+[1-9][0-9]{7,14}$'
+      and nullif(c.consent #>> '{marketing,declined_at}', '') is null
+      and nullif(c.consent #>> '{automated_service,declined_at}', '') is null
+      and not exists (
+        select 1 from public.conversations v
+        where v.organization_id = c.organization_id and v.contact_id = c.id
+          and v.status <> 'closed'
+          and (v.assigned_to_user_id is not null or v.assignee_kind = 'human'
+            or v.last_handoff_at is not null or v.bot_silenced_until > now())
+      )
+      -- Conceder ou renovar exige external_id. O HMAC prova a assinatura do corpo;
+      -- quem barra a repetição é a idempotência por external_id (o reenvio vira
+      -- captação 'duplicado', não 'criado'), e não a idade do corpo.
+      and exists (select 1 from capture where fields -> 'ai_service_consent' = 'true'::jsonb
+        and length(btrim(external_id)) > 0)
+    returning c.id
+  ) select exists(select 1 from authorized);
+$function$;
+revoke execute on function public.fn_authorize_ai_form_capture(uuid, uuid, uuid, uuid, uuid, bigint) from public, anon, authenticated;
+grant execute on function public.fn_authorize_ai_form_capture(uuid, uuid, uuid, uuid, uuid, bigint) to service_role;
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --

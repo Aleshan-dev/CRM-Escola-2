@@ -30,6 +30,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { guardarCredencial } from "@/lib/ai/credenciais/guardar";
 import { definirPadraoDeIaDaOrganizacao } from "@/lib/ai/pontos/padrao-da-organizacao";
 import { IDS_DE_PROVEDOR } from "@/lib/ai/pontos/provedores";
+import {
+  MENSAGEM_PROVEDOR_DESLIGADO,
+  provedorDesligadoNaInstalacao,
+} from "@/lib/ai/pontos/provedores-oferecidos";
 import { requireOnboardingCtx, OnboardingError } from "./_shared";
 
 export type ResultadoDaChave =
@@ -72,6 +76,12 @@ export async function salvarChaveDaIa(formData: FormData): Promise<ResultadoDaCh
   const provider = String(formData.get("provider") ?? "");
   if (!(IDS_DE_PROVEDOR as readonly string[]).includes(provider)) {
     return { ok: false, erro: "Escolha qual inteligência artificial você contratou." };
+  }
+
+  // A gravação abaixo também vira o padrão da EMPRESA: a assinatura do ChatGPT
+  // não entra por aqui com o módulo `login_codex` desligado.
+  if (await provedorDesligadoNaInstalacao(createAdminClient(), provider)) {
+    return { ok: false, erro: MENSAGEM_PROVEDOR_DESLIGADO };
   }
 
   const apiKey = String(formData.get("api_key") ?? "").trim();

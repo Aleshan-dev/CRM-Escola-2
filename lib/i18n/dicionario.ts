@@ -37,6 +37,32 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  "Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.": { es: "Configura la firma de la fuente antes de autorizar IA. Para quitar la firma, desactiva primero la autorización de IA." },
+  // Autorização por fonte de formulário.
+  "Autorizar IA para leads deste formulário": { es: "Autorizar IA para los leads de este formulario" },
+  "Autoriza somente novos envios completos com consentimento explícito para atendimento automatizado. Não retoma contatos bloqueados ou em atendimento humano. O agente e o canal precisam estar configurados para atender.": { es: "Autoriza solo nuevos envíos completos con consentimiento explícito para atención automatizada. No retoma contactos bloqueados o atendidos por una persona. El agente y el canal deben estar configurados para atender." },
+  "O integrador deve enviar external_id, ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Sem external_id, o envio não concede nem renova a autorização; reenviar com o mesmo external_id não libera de novo. Uma recusa (false) num envio completo e válido revoga, mesmo sem external_id.": { es: "El integrador debe enviar external_id, ai_service_consent: true, submission_status: completed y ai_service_consent_version con la versión del aviso aceptado. Aceptar solo la política de privacidad no autoriza la IA. Sin external_id, el envío no concede ni renueva la autorización; reenviar con el mismo external_id no vuelve a autorizar. Un rechazo (false) en un envío completo y válido revoca, incluso sin external_id." },
+
+  // A conferência de fato (#2231): a terceira camada do before_send.
+  "Conferir afirmações de fato na resposta": { es: "Verificar las afirmaciones de hecho de la respuesta" },
+  "Lê a resposta que o assistente vai enviar e confere, nas evidências consultadas neste turno, se o que ele afirma sobre o negócio está escrito ali — ou se o material diz o contrário.":
+    { es: "Lee la respuesta que el asistente va a enviar y verifica, en las evidencias consultadas en este turno, si lo que afirma sobre el negocio está escrito allí — o si el material dice lo contrario." },
+  "Nesta versão a conferência de fato só observa: ela grava o que teria sido corrigido, mas nenhum envio é barrado. Deixar o Jev decidir sozinho só depois que você vir no cartão quantas mensagens teriam sido corrigidas.":
+    { es: "En esta versión la verificación de hechos solo observa: registra lo que se habría corregido, pero no bloquea ningún envío. Dejar que Jev decida solo después de que veas en la tarjeta cuántos mensajes se habrían corregido." },
+  "dias, a conferência de fato e o envio de hoje concordaram em": { es: "días, la verificación de hechos y el envío actual coincidieron en" },
+  "respostas — as duas deixaram passar a mesma afirmação.":
+    { es: "respuestas — las dos dejaron pasar la misma afirmación." },
+  "O agente diz ao cliente um horário, um preço ou um endereço que não está em nenhum material, e a pessoa vai até a loja ou à recepção por algo que não é verdade.":
+    { es: "El agente le dice al cliente un horario, un precio o una dirección que no está en ningún material, y la persona va a la tienda o a recepción por algo que no es verdad." },
+  "O Jev foi perguntado se o que a resposta afirma sobre o negócio está escrito nas evidências consultadas neste turno.":
+    { es: "Se le preguntó a Jev si lo que la respuesta afirma sobre el negocio está escrito en las evidencias consultadas en este turno." },
+  "O Jev não respondeu: a mensagem foi como estava, sem a conferência de fato.":
+    { es: "Jev no respondió: el mensaje salió como estaba, sin la verificación de hechos." },
+  "Confere se o que o assistente afirma sobre o negócio (horário, preço, endereço) está no material que ele consultou para responder.":
+    { es: "Verifica si lo que el asistente afirma sobre el negocio (horario, precio, dirección) está en el material que consultó para responder." },
+  "Liga-se no cartão do Jev, em Provedores de IA.": { es: "Se activa en la tarjeta de Jev, en Proveedores de IA." },
+  "Vem desligada. Nesta versão ela só anota o que encontrou e não barra nenhuma mensagem; ligada, custa +1 consulta ao Jev por resposta.":
+    { es: "Viene desactivada. En esta versión solo anota lo que encontró y no bloquea ningún mensaje; activada, cuesta +1 consulta a Jev por respuesta." },
   // Roteador do Jev sob demanda e resultados.
   "Como o roteador consulta as IAs": { es: "Cómo consulta el enrutador a las IA" },
   "Modo do roteador salvo.": { es: "Se guardó el modo del enrutador." },
@@ -1634,6 +1660,13 @@ export const DICIONARIO: Traducoes = {
   },
   // ─── Shell persistente (sidebar, topbar, ⌘K, menu do usuário) ───
   "Navegação principal": { es: "Navegación principal" },
+  // A barra de abas do celular: o rótulo acessível dela e o da aba que abre a
+  // gaveta com o resto dos destinos.
+  "Navegação rápida": { es: "Navegación rápida" },
+  Mais: { es: "Más" },
+  // O estado de carregando da tela de Desempenho, que passou a usar o mesmo
+  // molde de vazio/erro das outras telas.
+  "Carregando o desempenho": { es: "Cargando el rendimiento" },
   "Expandir sidebar": { es: "Expandir barra lateral" },
   "Recolher sidebar": { es: "Contraer barra lateral" },
   Versão: { es: "Versión" },
@@ -3276,6 +3309,24 @@ export const DICIONARIO: Traducoes = {
   "Ligado, toda entrega de webhook precisa vir assinada com o segredo da sessão. Desligado por padrão porque nem todo servidor de canal assina: ligar sem que ele assine corta a entrada de mensagens.": {
     es: "Si está activado, cada entrega de webhook debe llegar firmada con el secreto de la sesión. Viene desactivado por defecto porque no todos los servidores de canal firman: activarlo sin que firmen corta la entrada de mensajes.",
   },
+  "Nenhuma entrega do WhatsApp na última semana para conferir a assinatura.": {
+    es: "Ninguna entrega de WhatsApp en la última semana para comprobar la firma.",
+  },
+  "As últimas entregas do WhatsApp chegaram assinadas: sim (última em {momento}).": {
+    es: "Las últimas entregas de WhatsApp llegaron firmadas: sí (la última el {momento}).",
+  },
+  "As últimas entregas do WhatsApp chegaram assinadas: não.": {
+    es: "Las últimas entregas de WhatsApp llegaron firmadas: no.",
+  },
+  "Última assinada: {momento}.": {
+    es: "Última firmada: {momento}.",
+  },
+  "Última sem assinatura: {momento}.": {
+    es: "Última sin firma: {momento}.",
+  },
+  "Pode ligar: o WhatsApp já assina.": {
+    es: "Puede activarlo: WhatsApp ya firma.",
+  },
   "Divulgação de pagamento no atendimento": {
     es: "Divulgación de pago en la atención",
   },
@@ -4553,6 +4604,44 @@ export const DICIONARIO: Traducoes = {
   "Perceber pedidos do cliente": {
     es: "Detectar pedidos del cliente",
   },
+  // O sinal de urgência da mensagem represada (#2232, `TAREFA_DA_URGENCIA`).
+  "Perceber risco de segurança numa mensagem represada": {
+    es: "Detectar un riesgo de seguridad en un mensaje retenido",
+  },
+  "Lê a última mensagem do cliente quando o teto de envio adiou a resposta, só se a regra de urgência de hoje não viu nela um risco à segurança ou à saúde — e conta as mensagens com esse risco que ela não reconheceu. Ele nunca passa a conversa nem responde.":
+    {
+      es: "Lee el último mensaje del cliente cuando el límite de envío pospuso la respuesta, solo si la regla de urgencia de hoy no vio en él un riesgo de seguridad o de salud — y cuenta los mensajes con ese riesgo que ella no reconoció. Él nunca transfiere la conversación ni responde.",
+    },
+  "Quando o Jev percebe, numa mensagem represada pelo teto de envio, um risco à segurança ou à saúde que a regra de urgência não reconheceu, ele abre um aviso na Central, com o alerta crítico que a regra abriria, para alguém da equipe responder na hora. Ele nunca passa a conversa nem responde ao cliente.":
+    {
+      es: "Cuando Jev percibe, en un mensaje retenido por el límite de envío, un riesgo de seguridad o de salud que la regla de urgencia no reconoció, abre un aviso en el Centro, con la alerta crítica que abriría la regla, para que alguien del equipo responda de inmediato. Él nunca transfiere la conversación ni responde al cliente.",
+    },
+  "Quando o Jev perceber, numa mensagem represada pelo teto de envio, um risco à segurança ou à saúde que a regra de urgência não reconheceu, ele abre um aviso na Central, com o alerta crítico que a regra abriria, para alguém da equipe responder na hora. Ele nunca passa a conversa nem responde ao cliente.":
+    {
+      es: "Cuando Jev perciba, en un mensaje retenido por el límite de envío, un riesgo de seguridad o de salud que la regla de urgencia no reconoció, abrirá un aviso en el Centro, con la alerta crítica que abriría la regla, para que alguien del equipo responda de inmediato. Él nunca transfiere la conversación ni responde al cliente.",
+    },
+  "Nos últimos {dias} dias, o Jev ainda não percebeu nenhuma mensagem represada pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
+    {
+      es: "En los últimos {dias} días, Jev todavía no ha percibido ningún mensaje retenido por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
+    },
+  "Nos últimos {dias} dias, o Jev percebeu {n} mensagem represada pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
+    {
+      es: "En los últimos {dias} días, Jev ha percibido {n} mensaje retenido por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
+    },
+  "Nos últimos {dias} dias, o Jev percebeu {n} mensagens represadas pelo teto de envio com um risco que a regra de urgência de hoje não reconheceu.":
+    {
+      es: "En los últimos {dias} días, Jev ha percibido {n} mensajes retenidos por el límite de envío con un riesgo que la regla de urgencia de hoy no reconoció.",
+    },
+  // O "por quê" da chamada da urgência em IA › Execuções (`SINAL_DE_URGENCIA`).
+  "Perceber risco de segurança na mensagem represada": {
+    es: "Detectar un riesgo de seguridad en el mensaje retenido",
+  },
+  "O Jev foi perguntado, numa mensagem represada pelo teto de envio, se ela relata um risco à segurança ou à saúde que a regra de urgência de hoje não reconheceu. Ele não responde nem passa a conversa.":
+    {
+      es: "Se le preguntó a Jev, en un mensaje retenido por el límite de envío, si relata un riesgo de seguridad o de salud que la regla de urgencia de hoy no reconoció. Él no responde ni transfiere la conversación.",
+    },
+  "O Jev não respondeu: valeu só a regra de urgência de hoje.":
+    { es: "Jev no respondió: solo valió la regla de urgencia de hoy." },
   // O "por quê" da chamada dos pedidos em IA › Execuções (`PEDIDOS_DO_CLIENTE`).
   "O Jev foi perguntado se esta mensagem traz um pedido que a regra de hoje não viu. Ele não bloqueia nem passa a conversa.": {
     es: "Se le preguntó a Jev si este mensaje trae un pedido que la regla de hoy no vio. Él no bloquea ni transfiere la conversación.",
@@ -10236,6 +10325,16 @@ export const DICIONARIO: Traducoes = {
   "Ver o que ele aprendeu": { es: "Ver lo que aprendió" },
   "O que o agente sabe": { es: "Lo que el agente sabe" },
   "Não publicado": { es: "No publicado" },
+  // Editor da jornada (Equipe › Atendimento) — issue #2312.
+  "Copiar estes horários para os outros dias úteis": {
+    es: "Copiar estos horarios a los otros días hábiles",
+  },
+  "Limite de 50 janelas por atendente: remova algumas antes de copiar.": {
+    es: "Límite de 50 franjas por atendente: elimina algunas antes de copiar.",
+  },
+  "É isto que ficou gravado — confira os dias e os horários antes de sair.": {
+    es: "Esto es lo que quedó guardado: revisa los días y los horarios antes de salir.",
+  },
   "Conexão do WhatsApp caiu — precisa escanear o QR de novo": {
     es: "Se cayó la conexión de WhatsApp: escanea el QR de nuevo",
   },
@@ -11442,6 +11541,13 @@ export const DICIONARIO: Traducoes = {
   // (LeadTimeline.tsx, TimelineView.tsx, CRMSidePanel.tsx) as traduz na
   // LEITURA com `t(item.reason)`. A chave aqui tem de bater byte a byte com
   // o texto que o backend grava — nunca traduza só um pedaço.
+  // Nota da autorização por fonte de formulário (#2452).
+  "Atendimento por IA autorizado pelo consentimento explícito deste formulário.": {
+    es: "Atención por IA autorizada por el consentimiento explícito de este formulario.",
+  },
+  "Este envio não concedeu nova autorização de IA. Confira o consentimento e o estado do contato antes de configurar o atendimento.": {
+    es: "Este envío no concedió una nueva autorización de IA. Revisa el consentimiento y el estado del contacto antes de configurar la atención.",
+  },
   "Não enviei: o contato pediu para parar de receber mensagens": {
     es: "No envié: el contacto pidió dejar de recibir mensajes",
   },
@@ -14234,6 +14340,31 @@ export const DICIONARIO: Traducoes = {
     es: "La IA respondió sin decir qué opción elegir, así que no se ejecutó nada. Inténtelo de nuevo o corrija la instrucción.",
   },
 
+  // ─── interruptor POR EMPRESA do ai_decide (issue #2367) ───
+  "A ação não rodou: o interruptor desta empresa desligou todos os passos a IA decide, então o modelo não foi consultado e nada foi executado. Ligue o interruptor em Configurações, na tela Automações.": {
+    es: "La acción no se ejecutó: el interruptor de esta empresa apagó todos los pasos la IA decide, así que no se consultó al modelo ni se ejecutó nada. Encienda el interruptor en Configuración, en la pantalla Automatizaciones.",
+  },
+  "A ação não rodou: não deu para ler agora o interruptor da IA desta empresa, então o modelo não foi consultado e nada foi executado. As próximas execuções tentam de novo.": {
+    es: "La acción no se ejecutó: no se pudo leer ahora el interruptor de la IA de esta empresa, así que no se consultó al modelo ni se ejecutó nada. Las próximas ejecuciones lo intentan de nuevo.",
+  },
+  // `Automações` já tinha entrada (linha ~5330, chave sem aspas) — só a frase
+  // do motivo e os textos da tela são novos aqui.
+  "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira.": {
+    es: "El único freno del paso en que la IA elige entre las opciones de una regla, para toda la empresa.",
+  },
+  "Não consegui ler agora o estado deste interruptor. Enquanto ele não puder ser lido, nenhum passo a IA decide consulta o modelo. Recarregue a página; se continuar, avise quem cuida da instalação.": {
+    es: "No pude leer ahora el estado de este interruptor. Mientras no se pueda leer, ningún paso la IA decide consulta al modelo. Recargue la página; si continúa, avise a quien administra la instalación.",
+  },
+  "A IA pode decidir entre as opções de uma regra": {
+    es: "La IA puede decidir entre las opciones de una regla",
+  },
+  "Com o interruptor desligado, nenhuma regra consulta o modelo: o passo a IA decide é pulado e o motivo aparece na aba Atividade. As regras sem esse passo continuam rodando igual. O padrão é ligado, para não quebrar regra já gravada.": {
+    es: "Con el interruptor apagado, ninguna regla consulta al modelo: el paso la IA decide se omite y el motivo aparece en la pestaña Actividad. Las reglas sin ese paso siguen funcionando igual. El valor predeterminado es encendido, para no romper reglas ya guardadas.",
+  },
+  "Só um gerente ou administrador da organização pode mudar esta configuração.": {
+    es: "Solo un gerente o administrador de la organización puede cambiar esta configuración.",
+  },
+
   // ─── PREVISÃO PONDERADA DO FUNIL (issue #1535) ───
   "Previsão": { es: "Previsión" },
   "Ponderado": { es: "Ponderado" },
@@ -14519,6 +14650,36 @@ export const DICIONARIO: Traducoes = {
   "canais já estavam reativados": { es: "canales ya estaban reactivados" },
   "canal arquivado fica de fora": { es: "canal archivado queda fuera" },
   "canais arquivados ficam de fora": { es: "canales archivados quedan fuera" },
+  // ─── Videochamada (Jitsi Meet, #2440) ───
+  Videochamada: { es: "Videollamada" },
+  "Sala de videochamada": { es: "Sala de videollamada" },
+  "A sala abre em uma aba nova: é lá que o navegador pede câmera e microfone.": {
+    es: "La sala se abre en una pestaña nueva: ahí el navegador pide cámara y micrófono.",
+  },
+  "Envie o link pelo chat e o contato entra pelo celular, sem instalar nada. A sala vale só para esta chamada.": {
+    es: "Envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada. La sala vale solo para esta llamada.",
+  },
+  "Abrir sala em nova aba": { es: "Abrir sala en pestaña nueva" },
+  "Videochamada (Jitsi Meet)": {
+    es: "Videollamada (Jitsi Meet)",
+  },
+  "Abrir sala de vídeo no header da conversa: o contato entra pelo link no chat, sem instalar nada.": {
+    es: "Abrir sala de vídeo en el encabezado de la conversación: el contacto entra por el enlace en el chat, sin instalar nada.",
+  },
+  "No arquivo de ambiente, JITSI_SERVER_URL apontando para a origem da sala (ex.: https://meet.jit.si). Vazio = o botão Vídeo não aparece.": {
+    es: "En el archivo de ambiente, JITSI_SERVER_URL apuntando al origen de la sala (p. ej. https://meet.jit.si). Vacío = el botón Vídeo no aparece.",
+  },
+  "Link da videochamada copiado.": { es: "Enlace de la videollamada copiado." },
+  "Link da videochamada enviado na conversa.": {
+    es: "Enlace de la videollamada enviado en la conversación.",
+  },
+  "Não consegui copiar o link. Selecione e copie da barra de endereço.": {
+    es: "No pude copiar el enlace. Selecciona y copia desde la barra de direcciones.",
+  },
+  "Não consegui enviar o link. Copie e cole na conversa.": {
+    es: "No pude enviar el enlace. Cópialo y pégalo en la conversación.",
+  },
+  "Enviar link na conversa": { es: "Enviar enlace a la conversación" },
 };
 
 /**
