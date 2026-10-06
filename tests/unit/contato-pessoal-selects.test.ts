@@ -8,7 +8,7 @@ import { STATUS_DO_DESTINATARIO, TERMINAIS_DE_DESPACHO, MOTIVOS_DE_EXCLUSAO } fr
 /**
  * OS TIPOS ESPELHAM A COLUNA (spec 21, fatia 1, etapa 2).
  *
- * `is_personal` nasce no banco (migration 0544) e cada leitura que monta selo,
+ * `is_personal` nasce no banco (migration 0563) e cada leitura que monta selo,
  * filtro ou veto precisa pedi-la explicitamente — coluna que o SELECT não pede
  * chega como `undefined`, e `undefined` lido como "não é pessoal" é o defeito
  * que este arquivo existe para impedir.

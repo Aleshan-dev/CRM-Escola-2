@@ -448,7 +448,7 @@ const PARES: Array<{
     tabela: "campaign_recipients",
     coluna: "status",
     // lib/campanhas/tipos.ts → STATUS_DO_DESTINATARIO (tupla `as const`).
-    // Nasce com a migration 0544 (spec 21, fatia 1), que acrescenta `personal`:
+    // Nasce com a migration 0563 (spec 21, fatia 1), que acrescenta `personal`:
     // a saída própria de quem vira pessoal — nunca `opted_out`, para a taxa de
     // "pediu para parar" não contar quem nunca pediu (D7). Um status só no
     // CHECK viraria `23514` no UPDATE da rota de marcar; só no TypeScript

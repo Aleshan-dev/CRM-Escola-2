@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { columnExists, indexExists, seedGov, sql, GOV_ORG } from "./gov-helpers";
 
 /**
- * A COLUNA DO CONTATO PESSOAL (spec 21, fatia 1, migration 0544).
+ * A COLUNA DO CONTATO PESSOAL (spec 21, fatia 1, migration 0563).
  *
  * A marca mora em `contacts.is_personal`, coluna nova de propósito: reutilizar
  * `is_blocked` misturaria descadastro com pessoal na auditoria e nas regras
@@ -18,8 +18,8 @@ import { columnExists, indexExists, seedGov, sql, GOV_ORG } from "./gov-helpers"
  *   cai "CHECK aceita personal".
  * - Tirar o `where (is_personal = true)` do índice: vira índice cheio que o
  *   filtro de pessoal não usa → cai "índice parcial".
- * Linha para reverter: `supabase/migrations/20261005120000_0544_contato_pessoal.sql`
- * (e o apêndice 0544 no fim de `supabase/baseline.sql`).
+ * Linha para reverter: `supabase/migrations/20261006030529_0563_contato_pessoal.sql`
+ * (e o apêndice 0563 no fim de `supabase/baseline.sql`).
  */
 
 const CONTATO_PROVA = "dddd1111-1111-4111-8111-111111111111";

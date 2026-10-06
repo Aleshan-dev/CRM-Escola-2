@@ -25,7 +25,7 @@ type Context = { params: Promise<{ id: string }> };
  * Quem usa o mesmo número para vender e para a vida entrega os dois mundos
  * para a mesma operação: a IA assume conversa que era de gente, o inbox
  * mistura trabalho com vida, e o funil ganha card que nunca foi oportunidade.
- * A marca `contacts.is_personal` (migration 0544) tira o contato da operação —
+ * A marca `contacts.is_personal` (migration 0563) tira o contato da operação —
  * e é esta rota que a liga e desliga.
  *
  * ## Por que `manager`, e não `admin`

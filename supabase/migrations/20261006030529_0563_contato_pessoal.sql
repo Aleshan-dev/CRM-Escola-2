@@ -1,6 +1,6 @@
 -- manifest: **Contato pessoal nasce no banco (spec 21, fatia 1): `contacts.is_personal` com default desligado, índice parcial, e o status de saída `personal` no CHECK de `campaign_recipients`.** A marca fica numa coluna nova de propósito (reutilizar `is_blocked` misturaria descadastro com pessoal na auditoria e nas regras — spec §3.1). Quem marcou/quando fica só em auditoria + timeline, sem coluna extra (spec §3.6). O gatilho 0397 NÃO é estendido de propósito (§12.1 do plano: trigger é invariante de dado; o roteiro `coletando` de pessoal é cancelado pelo código da rota de marcar). Idempotente: `add column if not exists`, `create index if not exists`, `drop constraint if exists` + `add`. Apêndice espelhado no fim do `baseline.sql`; `MANIFEST.md` é histórico e não recebe linha.
 
--- 0544 — contato pessoal: a coluna e a saída de campanha.
+-- 0563 — contato pessoal: a coluna e a saída de campanha.
 --
 -- `is_personal boolean DEFAULT false NOT NULL` (espelha `is_blocked`): contato
 -- nasce operacional, e só vira pessoal por gesto explícito de gerente/dono na
