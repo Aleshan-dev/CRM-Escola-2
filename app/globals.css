@@ -1234,27 +1234,38 @@
    O suporte é o mesmo que o framework já exige de si: se `translate` individual
    não existisse no navegador, as classes de centralização do Tailwind 4 também
    não funcionariam. */
+/* O DESLOCAMENTO DE CENTRALIZAÇÃO VEM DE VARIÁVEL, E ISSO NÃO É ENFEITE.
+
+   `animation-fill-mode: both` faz o valor FINAL do keyframe continuar valendo
+   depois que a animação termina — então um `-50% -50%` cravado aqui VENCE o
+   `translate-y-0` de qualquer modal que escolha outro ancoramento, e o Tailwind
+   não tem como ganhar dessa disputa.
+
+   Foi o que aconteceu com a paleta de comandos (⌘K), que abria em `top-[10%]`
+   com `translate-y-0`: a animação a puxava meia altura para cima do próprio
+   ponto, e ela saía cortada no topo da tela. Com variável, quem ancora
+   diferente só declara `--ds-modal-y` e a animação acompanha. */
 @keyframes ds-modal-entra {
   from {
     opacity: 0;
-    translate: -50% calc(-50% + 8px);
+    translate: var(--ds-modal-x, -50%) calc(var(--ds-modal-y, -50%) + 8px);
     scale: 0.985;
   }
   to {
     opacity: 1;
-    translate: -50% -50%;
+    translate: var(--ds-modal-x, -50%) var(--ds-modal-y, -50%);
     scale: 1;
   }
 }
 @keyframes ds-modal-sai {
   from {
     opacity: 1;
-    translate: -50% -50%;
+    translate: var(--ds-modal-x, -50%) var(--ds-modal-y, -50%);
     scale: 1;
   }
   to {
     opacity: 0;
-    translate: -50% calc(-50% + 8px);
+    translate: var(--ds-modal-x, -50%) calc(var(--ds-modal-y, -50%) + 8px);
     scale: 0.985;
   }
 }
