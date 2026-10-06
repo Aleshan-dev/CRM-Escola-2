@@ -62,14 +62,22 @@ function parseScopes(raw: unknown): string[] {
   return raw.filter((s): s is string => typeof s === "string");
 }
 
+/**
+ * O MAIOR papel entre os `role:*` do token. A tela de tokens oferece "gerente"
+ * e "administrador" como caixas independentes, e a ordem dos escopos é a da
+ * lista da tela: o primeiro `role:` encontrado era sempre `manager`, e um token
+ * com as duas caixas marcadas fechava em 403 `forbidden_role` nas portas que
+ * cobram admin (configurar o agente, #2052). O padrão `agent` vale só para
+ * token SEM papel: com `role:viewer` sozinho, o token continua `viewer`.
+ */
 function scopesRole(scopes: string[]): Role {
+  let papel: Role | null = null;
   for (const s of scopes) {
-    if (s.startsWith("role:")) {
-      const r = s.slice("role:".length) as Role;
-      if (VALID_ROLES.has(r)) return r;
-    }
+    if (!s.startsWith("role:")) continue;
+    const r = s.slice("role:".length) as Role;
+    if (VALID_ROLES.has(r) && (papel === null || ROLE_RANK[r] > ROLE_RANK[papel])) papel = r;
   }
-  return "agent";
+  return papel ?? "agent";
 }
 
 /**
