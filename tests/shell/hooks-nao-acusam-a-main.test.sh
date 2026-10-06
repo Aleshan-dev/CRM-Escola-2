@@ -654,6 +654,69 @@ inv "" "$MARCA_SEGUNDO" "" > "$sq/$NOVO"; git -C "$sq" add "$NOVO"
 r=$(commitar_pelo_dispatcher "$sq" "edita o invariante depois de trazer a main")
 assert_exit "$(exit_de "$r")" 1 "NOVO-TROUXE-A-MAIN: depois de trazer a main, editar SEGUE acusado"
 
+# ── a ref LOCAL velha e a branch que trouxe uma main MAIS NOVA (o furo do cético) ──
+# A triagem traz o PR por `refs/triage/N`, e esse fetch NÃO atualiza `origin/main`. Se o PR
+# mesclou uma main mais nova, o invariante que ela ganhou está no HEAD e ausente da ref local
+# e da merge-base — a ausência sozinha o tomava por "criado pela branch". O que separa é a
+# PROCEDÊNCIA: um commit próprio (primeiros pais, sem merge) o adicionou?
+# A main daqui imita a real: o invariante Y entra por MERGE de PR; o W por commit DIRETO.
+INV_Y=tests/invariants/da-main-nova.test.ts
+INV_W=tests/invariants/direto-na-main.test.ts
+principal_rv="$TMP/principal_rv"; mkdir -p "$principal_rv"
+git -C "$principal_rv" init -q -b main
+printf '# leia\n' > "$principal_rv/README.md"; commitar "$principal_rv" "base"
+BASE_RV=$(git -C "$principal_rv" rev-parse HEAD)
+rvm="$TMP/ref-velha-merge"; preparar "$rvm" "$principal_rv" "$BASE_RV"
+rvr="$TMP/ref-velha-rebase"; preparar "$rvr" "$principal_rv" "$BASE_RV"
+for d in "$rvm" "$rvr"; do
+  mkdir -p "$d/tests/invariants"; inv "" "$MARCA_BRANCH" "" > "$d/$NOVO"; commitar "$d" "a branch cria o invariante dela"
+done
+# só DEPOIS dos clones a main avança: as refs locais `origin/main` ficam em BASE_RV
+git -C "$principal_rv" checkout -q -b pr-y
+mkdir -p "$principal_rv/tests/invariants"; inv "" "" "$MARCA_MAIN" > "$principal_rv/$INV_Y"; commitar "$principal_rv" "o PR cria Y"
+git -C "$principal_rv" checkout -q main; git -C "$principal_rv" merge -q --no-ff pr-y -m "Merge pull request: Y"
+inv "" "" "$MARCA_MAIN" > "$principal_rv/$INV_W"; commitar "$principal_rv" "W entra por commit direto"
+FRACO='it("MARCADOR-FRACO", () => {});'
+
+# CASO REF-VELHA-MERGE · a branch mesclou a main real (o padrão da doutrina) sem atualizar a ref
+git -C "$rvm" fetch -q "$principal_rv" main
+git -C "$rvm" merge -q --no-edit FETCH_HEAD >/dev/null 2>&1; rc=$?
+assert_exit "$rc" 0 "REF-VELHA-MERGE: a main real entra por merge limpo (a premissa)"
+if [ -n "$(git -C "$rvm" rev-parse -q --verify "HEAD:$INV_Y")" ] \
+   && [ -z "$(git -C "$rvm" rev-parse -q --verify "origin/main:$INV_Y")" ] \
+   && [ -z "$(git -C "$rvm" rev-parse -q --verify "$(git -C "$rvm" merge-base HEAD origin/main):$INV_Y")" ]; then
+  ok "REF-VELHA-MERGE: Y está no HEAD e ausente da ref local E da merge-base (a premissa do furo)"
+else falha "REF-VELHA-MERGE: a premissa (Y no HEAD, fora da ref e da base)" "a montagem não encena o caso"; fi
+inv "" "$FRACO" "" > "$rvm/$INV_Y"; git -C "$rvm" add "$INV_Y"
+r=$(commitar_pelo_dispatcher "$rvm" "enfraquece o invariante que a main ganhou")
+assert_exit "$(exit_de "$r")" 1 "REF-VELHA-MERGE: enfraquecer o invariante da main que chegou por merge SEGUE acusado"
+assert_contains "$(saida_de "$r")" "$INV_Y" "REF-VELHA-MERGE: e quem bloqueou foi o freeze"
+if tem_marcador "$rvm" "$INV_Y" MAIN && ! tem_marcador "$rvm" "$INV_Y" FRACO; then ok "REF-VELHA-MERGE: e o HEAD segue com a versão forte"
+else falha "REF-VELHA-MERGE: o HEAD segue com a versão forte" "o enfraquecimento entrou"; fi
+git -C "$rvm" checkout -q HEAD -- "$INV_Y"
+# o controle no MESMO estado: o invariante que a branch criou continua editável sem válvula
+inv "" "$MARCA_SEGUNDO" "" > "$rvm/$NOVO"; git -C "$rvm" add "$NOVO"
+r=$(commitar_pelo_dispatcher "$rvm" "ajusta o invariante proprio depois de trazer a main")
+assert_exit "$(exit_de "$r")" 0 "REF-VELHA-MERGE: no mesmo estado, o invariante da PRÓPRIA branch segue editável"
+
+# CASO REF-VELHA-REBASE · a branch fez rebase sobre a main real; Y entrou nela por merge de PR
+git -C "$rvr" fetch -q "$principal_rv" main
+git -C "$rvr" rebase -q FETCH_HEAD >/dev/null 2>&1; rc=$?
+assert_exit "$rc" 0 "REF-VELHA-REBASE: o rebase sobre a main real entra (a premissa)"
+inv "" "$FRACO" "" > "$rvr/$INV_Y"; git -C "$rvr" add "$INV_Y"
+r=$(commitar_pelo_dispatcher "$rvr" "enfraquece Y depois do rebase")
+assert_exit "$(exit_de "$r")" 1 "REF-VELHA-REBASE: Y, que a main ganhou por merge de PR, SEGUE acusado depois do rebase"
+git -C "$rvr" checkout -q HEAD -- "$INV_Y"
+# LIMITE-REBASE-COMMIT-DIRETO · ⚠️ PINA um limite: W entrou na main por commit SEM merge, e
+# depois do rebase ele está na cadeia de primeiros pais da branch como se fosse dela. Sem rede
+# não há como separar. Declarado no cabeçalho do hook; se alguém fechar, inverta este caso.
+inv "" "$FRACO" "" > "$rvr/$INV_W"; git -C "$rvr" add "$INV_W"
+r=$(rodar "$rvr" freeze-invariants.sh)
+assert_exit "$(exit_de "$r")" 0 "LIMITE-REBASE-COMMIT-DIRETO: W (commit direto na main) passa com a ref velha (limite declarado)"
+git -C "$rvr" fetch -q origin
+r=$(rodar "$rvr" freeze-invariants.sh)
+assert_exit "$(exit_de "$r")" 1 "LIMITE-REBASE-COMMIT-DIRETO: e depois do fetch W é acusado"
+
 # CASO REN-MAIN · rename de invariante da main, fora de merge — rename é delete disfarçado
 rm_="$TMP/ren-main"; preparar "$rm_" "$principal" "$BASE_DA_BRANCH"
 git -C "$rm_" mv "$INV" tests/invariants/renomeado-pela-sessao.test.ts
