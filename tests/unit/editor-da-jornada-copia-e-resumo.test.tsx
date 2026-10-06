@@ -151,6 +151,41 @@ describe("resumo do que foi publicado", () => {
     expect(within(resumo).getByText("Seg–Sex 08:00–11:30")).toBeInTheDocument();
   });
 
+  it("mexer no rascunho depois do resumo devolve o Salvar — senão a edição some no Fechar", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn(async (w: ScheduleWindow[]) => w);
+    abrir([{ dow: 1, start: "08:00", end: "11:30" }], onSave);
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await screen.findByTestId("resumo-publicado");
+    expect(screen.queryByRole("button", { name: "Salvar" })).toBeNull();
+
+    // A pessoa confere, vê só a segunda e corrige com o botão de copiar.
+    await user.click(screen.getByRole("button", { name: /copiar estes horários/i }));
+    expect(screen.getAllByTestId("janela")).toHaveLength(5);
+
+    // O resumo falava do rascunho ANTERIOR: sai, e o Salvar volta.
+    expect(screen.queryByTestId("resumo-publicado")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1]?.[0]).toHaveLength(5);
+  });
+
+  it("a região de status já está montada ANTES do resumo — é a mudança dentro dela que se anuncia", async () => {
+    const user = userEvent.setup();
+    abrir([{ dow: 1, start: "08:00", end: "11:30" }], vi.fn(async (w: ScheduleWindow[]) => w));
+
+    const regiao = screen.getByRole("status");
+    expect(regiao).toBeEmptyDOMElement();
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await screen.findByTestId("resumo-publicado");
+    // A MESMA região de antes, agora com o conteúdo — não uma nova que nasceu cheia.
+    expect(screen.getByRole("status")).toBe(regiao);
+    expect(within(regiao).getByText("Seg 08:00–11:30")).toBeInTheDocument();
+  });
+
   it("falhou a gravação não mostra resumo nenhum", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn(async () => {

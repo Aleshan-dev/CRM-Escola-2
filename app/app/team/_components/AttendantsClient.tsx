@@ -236,13 +236,24 @@ export function ScheduleDialog({
    * O resumo existe justamente para mostrar a diferença — se ele lesse o
    * formulário, repetiria o defeito da #2312 com outra roupa.
    */
-  const [publicado, setPublicado] = useState<ScheduleWindow[] | null>(null);
+  const [gravacao, setGravacao] = useState<{
+    rascunho: ScheduleWindow[];
+    timezone: string;
+    janelas: ScheduleWindow[];
+  } | null>(null);
+  // O resumo vale para o rascunho que foi gravado. Mexeu depois (outra faixa,
+  // o botão de copiar, o fuso)? O resumo sai e o "Salvar" volta — senão a
+  // edição sumiria no "Fechar" sem aviso, que é o defeito da #2312 de novo.
+  const publicado =
+    gravacao && gravacao.rascunho === windows && gravacao.timezone === timezone
+      ? gravacao.janelas
+      : null;
   /** Desligado quando não há o que copiar ou quando a cópia estouraria a rota. */
   const podeCopiar = podeCopiarParaDiasUteis(windows);
 
   async function salvar() {
     try {
-      setPublicado(await onSave(windows, timezone));
+      setGravacao({ rascunho: windows, timezone, janelas: await onSave(windows, timezone) });
     } catch {
       // O erro já virou toast no hook (`showApiError`) e o diálogo fica ABERTO:
       // fechar depois de uma gravação que falhou seria dizer que deu certo.
@@ -382,19 +393,24 @@ export function ScheduleDialog({
           rodapé vira "Fechar" justamente para ela conferir ANTES de sair, não
           depois, no toast que ninguém lê.
         */}
-        {publicado ? (
-          <div data-testid="resumo-publicado" className="space-y-1 rounded-md border p-3">
-            <p className="text-sm font-medium">{t("Publicado")}</p>
-            <ul className="text-sm text-muted-foreground">
-              {resumoDaJornada(publicado, t).map((linha) => (
-                <li key={linha}>{linha}</li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">
-              {t("É isto que ficou gravado — confira os dias e os horários antes de sair.")}
-            </p>
-          </div>
-        ) : null}
+        {/* A região de status fica SEMPRE montada e o resumo entra dentro dela:
+            leitor de tela anuncia mudança numa região que já existia, não uma
+            região que nasce já cheia. */}
+        <div role="status">
+          {publicado ? (
+            <div data-testid="resumo-publicado" className="space-y-1 rounded-md border p-3">
+              <p className="text-sm font-medium">{t("Publicado")}</p>
+              <ul className="text-sm text-muted-foreground">
+                {resumoDaJornada(publicado, t).map((linha) => (
+                  <li key={linha}>{linha}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                {t("É isto que ficou gravado — confira os dias e os horários antes de sair.")}
+              </p>
+            </div>
+          ) : null}
+        </div>
 
         <DialogFooter>
           {publicado ? (
