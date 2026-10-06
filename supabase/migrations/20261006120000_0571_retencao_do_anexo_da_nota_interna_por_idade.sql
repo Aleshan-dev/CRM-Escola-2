@@ -1,4 +1,5 @@
 -- manifest: O anexo da nota interna passa a ter retenção por idade, na MESMA régua da mídia de conversa (issue #1887, opção A). A 0483 deixou o bucket `internal-media` FORA da varredura de propósito e o alcança só quando a nota some (passo 2b) ou por pedido LGPD — uma nota que continua existindo segurava o anexo para sempre, e numa cota de 1 GB dividida o bucket crescia sem teto com anexos de até 50 MB. Agora o passo 2c de `fn_enfileirar_midia_vencida` varre `conversation_notes` com o MESMO knob (`organizations.media_retention_days`, piso de 30 dias), mede a idade na NOTA como o passo 1 mede na mensagem, enfileira com bucket `internal-media` e zera os três ponteiros (mesmo que o passo 6d da 0483 faz na redação) — anexo de nota viva DENTRO do knob não é tocado, e arquivo já removido entra como `pending` e sai `skipped` sem quebrar a rodada. Conta em `v_vencidas`: a chave congelada do retorno (0435) não muda. Idempotente (`create or replace`); o corpo vai EDITADO NO LUGAR no bloco da 0435 do `baseline.sql`, espelho da cadeia (`apendice-do-baseline-nao-diverge-da-cadeia`); MANIFEST.md intocado, como manda a tripla desde 02/10/2026. A opção (B) — retenção própria com knob separado — fica de FORA, decisão do mantenedor registrada na issue. Gate: `tests/invariants/retencao-do-anexo-da-nota-por-idade.test.ts`.
+-- Fusão do PR #2309: a migration nasceu como 0544 (05/10) e foi numerada 0571 ao trazer a `origin/main`, porque a 0557 (#1534) já redefinia esta função com o interruptor `media_retention_enforced` e a marca `media_status='expired'`. O corpo abaixo é a UNIÃO das duas definições e é a ÚLTIMA da cadeia — é o que `apendice-do-baseline-nao-diverge-da-cadeia` compara com o apêndice do baseline.
 
 create or replace function public.fn_enfileirar_midia_vencida(p_limite integer default 500)
 returns jsonb
@@ -43,15 +44,31 @@ begin
      and coalesce(processed_at, enqueued_at) < now() - v_janela_deleted;
   get diagnostics v_expurgadas = row_count;
 
-  -- 1. VENCIDAS: arquivo de mensagem mais velho que a retenção da organização.
-  --    A mensagem fica (texto, status, horário); só o arquivo sai, e a tela
-  --    mostra «Mídia indisponível». O piso de 30 dias é o mesmo do formulário.
+  -- 1. VENCIDAS: arquivo de mensagem mais velho que a retenção da organização —
+  --    SÓ de organização com o interruptor LIGADO (`media_retention_enforced`,
+  --    0557/#1534) e que NÃO está com pedido LGPD em andamento: um pedido de
+  --    acesso/eliminação em curso (`lgpd_requests` em `received`/`processing`)
+  --    não pode ter o objeto destruído no meio do atendimento — a suspensão é
+  --    da ORGANIZAÇÃO INTEIRA, o lado conservador de um prazo legal. O índice
+  --    `lgpd_requests_org_status_idx` (organization_id, status) cobre a
+  --    anti-join. A mensagem fica (texto, status, horário); o arquivo sai, a
+  --    `media_url` também (a rota não busca de novo do provedor), a transcrição
+  --    some junto (`media_derived_text`) e a tela mostra o aviso via
+  --    `metadata.media_status='expired'`. O piso de 30 dias é o mesmo do
+  --    formulário, mesmo com valor menor gravado no banco.
   with alvo as (
-    select m.id, m.organization_id, m.media_storage_path as caminho
+    select m.id, m.organization_id, m.media_storage_path as caminho,
+           greatest(coalesce(o.media_retention_days, 365), 30) as retencao_dias
       from public.messages m
       join public.organizations o on o.id = m.organization_id
      where m.media_storage_path is not null
+       and o.media_retention_enforced
        and m.created_at < now() - make_interval(days => greatest(coalesce(o.media_retention_days, 365), 30))
+       and not exists (
+         select 1 from public.lgpd_requests r
+          where r.organization_id = m.organization_id
+            and r.status in ('received', 'processing')
+       )
      order by m.created_at
      limit v_lim
      for update of m skip locked
@@ -87,7 +104,16 @@ begin
     returning 1
   ), limpas as (
     update public.messages m
-       set media_storage_path = null, updated_at = now()
+       set media_storage_path = null,
+           media_url = null,
+           media_derived_text = null,
+           metadata = coalesce(m.metadata, '{}'::jsonb)
+             || jsonb_build_object(
+                  'media_status', 'expired',
+                  'media_expired_at', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                  'media_retention_days', alvo.retencao_dias
+                ),
+           updated_at = now()
       from alvo
      where m.id = alvo.id
     returning 1
@@ -232,4 +258,3 @@ begin
   return jsonb_build_object('vencidas', v_vencidas, 'orfas', v_orfas, 'expurgadas', v_expurgadas);
 end;
 $$;
-

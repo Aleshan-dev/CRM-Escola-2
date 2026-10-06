@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
+import { agendarRecargaDasConversas } from "@/hooks/inbox/recargaDasConversas";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import {
@@ -20,6 +21,8 @@ export interface ContactSummary {
   tags: string[];
   is_blocked: boolean;
   is_anonymized: boolean;
+  /** Spec 21: lido da coluna, nunca de etiqueta (o selo "Pessoal" da fatia 3 lê daqui). */
+  is_personal: boolean;
   /** Caminho da foto no bucket privado. A tela nunca usa este valor como src —
    *  só para saber SE existe foto; a imagem vem de /api/v1/contacts/{id}/avatar,
    *  que assina a URL. Opcional: conversas em cache de antes do campo existir. */
@@ -173,9 +176,7 @@ export function useConversationsRealtime(
     refetchOnWindowFocus: true,
   });
 
-  const onChange = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ["conversations"] });
-  }, [qc]);
+  const onChange = useCallback(() => agendarRecargaDasConversas(qc), [qc]);
 
   // G4-01 (visibility_mode): a subscription postgres_changes HERDA a RLS de
   // SELECT de `conversations` — o Supabase Realtime avalia as policies do usuário

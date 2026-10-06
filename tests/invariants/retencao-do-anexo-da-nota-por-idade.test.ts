@@ -85,7 +85,7 @@ beforeEach(() => {
   `);
 });
 
-describe("anexo da nota interna — retenção por idade (0544, #1887)", () => {
+describe("anexo da nota interna — retenção por idade (0571, #1887)", () => {
   it("nota acima do knob vai para a fila com o bucket certo e os ponteiros zerados", () => {
     sql(`${nota(NOTA_VENCIDA, ANEXO_VENCIDO, 400)}${objeto("internal-media", ANEXO_VENCIDO, 400)}`);
 
