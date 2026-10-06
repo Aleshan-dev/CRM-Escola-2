@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useT } from "@/hooks/i18n/useT";
-import { estadoDaJanela, formatarDecorrido } from "@/lib/channels/janela";
+import { estadoDaJanela } from "@/lib/channels/janela";
 import { copyToClipboard } from "@/lib/clipboard";
+import { motivoDaJanelaFechada } from "@/lib/inbox/motivo-do-envio-bloqueado";
 import { ArrowSquareOut, VideoCamera } from "@/lib/ui/icons";
 import { novaSala, servidorDeVideo, urlDaSala } from "@/lib/video/jitsi";
 
@@ -26,11 +27,12 @@ interface Props {
   /** Mesma régua do composer: `last_inbound_at` da conversa. */
   lastInboundAt: string | null;
   /**
-   * As travas que o composer já aplica e que o link também herda — contato
-   * bloqueado/anonimizado, conversa encerrada. Montado por quem o chama com
-   * os MESMOS critérios do composer: um lugar decide o que é "não pode enviar".
+   * O motivo de contato bloqueado/anonimizado, já com o texto do composer
+   * (`motivoDoContato`): um lugar decide o que é "não pode enviar".
    */
   bloqueio?: string | null;
+  /** Conversa encerrada: desabilita o envio sem texto próprio, como o composer. */
+  encerrada?: boolean;
 }
 
 /**
@@ -60,8 +62,8 @@ interface Props {
  *    depois com 131047 — a falha silenciosa da #1614. Por isso o botão usa a
  *    MESMA régua do composer (`estadoDaJanela`, `lib/channels/janela.ts`), não
  *    uma segunda regra.
- * 2. **Bloqueio/encerramento** — chega pronto em `bloqueio`, montado no header
- *    com os critérios do composer. `supportReadonly` NÃO entra: ele mora no
+ * 2. **Bloqueio/encerramento** — `bloqueio` chega pronto do header (texto
+ *    do composer) e `encerrada` só desabilita, como o composer faz. `supportReadonly` NÃO entra: ele mora no
  *    `user`, que o header não recebe, e não vou afirmar numa doc uma trava
  *    que não apliquei.
  *
@@ -85,6 +87,7 @@ export function VideoCallButton({
   provider,
   lastInboundAt,
   bloqueio,
+  encerrada = false,
 }: Props) {
   const t = useT();
   const servidor = useMemo(() => servidorDeVideo(), []);
@@ -97,14 +100,9 @@ export function VideoCallButton({
   // sobre `last_inbound_at`, não estado guardado (cabeçalho de lib/channels/janela.ts).
   const janela = estadoDaJanela(provider, lastInboundAt, new Date());
   const janelaFechada = janela.tipo === "fechada";
-  const motivoJanela = janelaFechada
-    ? janela.fechadaHaMs === null
-      ? t(
-          "O cliente ainda não escreveu — a janela de 24h nunca abriu. Só um modelo aprovado sai daqui.",
-        )
-      : `${t("A janela de 24h fechou há")} ${formatarDecorrido(janela.fechadaHaMs)}.`
-    : null;
-  const envioLiberado = !bloqueio && !janelaFechada;
+  // O MESMO texto do composer, inclusive o da rede sem modelo aprovado.
+  const motivoJanela = motivoDaJanelaFechada(janela, provider, t);
+  const envioLiberado = !bloqueio && !janelaFechada && !encerrada;
 
   // Sala nova a cada abertura: fechar e reabrir é OUTRA chamada, e o link da
   // anterior deixa de apontar para este encontro. Nasce AQUI (no gesto de
@@ -237,7 +235,7 @@ function DialogoVideo({
 
         {/* A trava NÃO some: o operador precisa ver POR QUE o link não sai,
             senão ele descobre a regra pelo erro da plataforma (#1614). */}
-        {!envioLiberado && (
+        {!envioLiberado && bloqueio && (
           <p
             className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
             data-testid="video-bloqueio"

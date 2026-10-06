@@ -14529,9 +14529,6 @@ export const DICIONARIO: Traducoes = {
     es: "Envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada. La sala vale solo para esta llamada.",
   },
   "Abrir sala em nova aba": { es: "Abrir sala en pestaña nueva" },
-  "Conversa encerrada — o link não sai até ela reabrir.": {
-    es: "Conversación cerrada — el enlace no sale hasta que se reabra.",
-  },
   "Videochamada (Jitsi Meet)": {
     es: "Videollamada (Jitsi Meet)",
   },

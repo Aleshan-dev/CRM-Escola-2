@@ -108,6 +108,8 @@ describe("VideoCallButton", () => {
     // `noopener`: sem ela a sala aberta recebe window.opener e manipula a
     // tela do atendimento de quem abriu.
     expect(a.getAttribute("rel") ?? "").toContain("noopener");
+    // `noreferrer`: a URL do atendimento não vai como Referer para o Jitsi.
+    expect(a.getAttribute("rel") ?? "").toContain("noreferrer");
     expect(a.getAttribute("href")).toMatch(/^https:\/\/meet\.jit\.si\/sala-/);
     // Origem fora de http(s) não pode virar href (Zod já barra; isto é a rede).
     expect(a.getAttribute("href")).not.toMatch(/^javascript:/i);
@@ -244,5 +246,46 @@ describe("VideoCallButton", () => {
 
     expect(screen.getByTestId("btn-enviar-link-video")).toBeDisabled();
     expect(screen.getByTestId("video-bloqueio").textContent).toContain("Contato bloqueado");
+  });
+
+  it("rede sem modelo aprovado (zernio_social): o texto é o do composer, não oferece modelo", async () => {
+    // O composer, nesta mesma conversa, manda aguardar o cliente: não há modelo
+    // aprovado nesta rede. O diálogo dizia "só um modelo aprovado sai daqui" —
+    // dois textos para a mesma trava, e o do vídeo mandava procurar o que não existe.
+    injetaServidor("https://meet.jit.si");
+    render(
+      <VideoCallButton
+        conversationId={CONVERSA}
+        provider="zernio_social"
+        lastInboundAt={ultimaMensagem(48)}
+      />,
+    );
+    await abrirDialog();
+
+    expect(screen.getByTestId("btn-enviar-link-video")).toBeDisabled();
+    const motivo = screen.getByTestId("video-bloqueio").textContent ?? "";
+    expect(motivo).toBe(
+      "Aguarde uma nova mensagem do cliente para reabrir o atendimento nesta rede.",
+    );
+    expect(motivo).not.toContain("modelo aprovado");
+  });
+
+  it("conversa encerrada: o envio desliga sem texto inventado, como o composer", async () => {
+    injetaServidor("https://meet.jit.si");
+    render(
+      <VideoCallButton
+        conversationId={CONVERSA}
+        provider={CANAL_COM_JANELA}
+        lastInboundAt={ultimaMensagem(1)}
+        encerrada
+      />,
+    );
+    await abrirDialog();
+
+    expect(screen.getByTestId("btn-enviar-link-video")).toBeDisabled();
+    // O composer só faz `disabled` em conversa encerrada; um texto só do vídeo
+    // seria a segunda voz para a mesma trava.
+    expect(screen.queryByTestId("video-bloqueio")).toBeNull();
+    expect(screen.getByTestId("btn-copiar-link-video")).toBeEnabled();
   });
 });
