@@ -250,7 +250,7 @@ export function ContactDetailClient({ contactId }: Props) {
                   <AlertDialogHeader>
                     <AlertDialogTitle>{t("Marcar este contato como pessoal?")}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      {t("O contato sai da operação: conversas fecham, IA, follow-ups, campanha e envios param. Tudo continua no banco e volta ao desmarcar.")}
+                      {t("O contato sai da operação: conversas fecham, IA, follow-ups, campanha e envios param. O histórico continua no banco e volta à vista ao desmarcar; follow-ups e campanhas cancelados não voltam.")}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

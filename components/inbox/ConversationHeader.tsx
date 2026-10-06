@@ -537,7 +537,7 @@ export function ConversationHeader({
             <AlertDialogTitle>{t("Marcar este contato como pessoal?")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t(
-                "A conversa sai do inbox e o contato fica fora da operação: sem IA, sem follow-up, sem campanha e sem envio. Tudo continua no banco e volta ao desmarcar.",
+                "A conversa sai do inbox e o contato fica fora da operação: sem IA, sem follow-up, sem campanha e sem envio. O histórico continua no banco e volta à vista ao desmarcar; follow-ups e campanhas cancelados não voltam.",
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
