@@ -14480,6 +14480,33 @@ export const DICIONARIO: Traducoes = {
   "Outra renovação desta conta está em curso (ou o recurso está desligado). Aguarde alguns segundos e tente de novo.": { es: "Otra renovación de esta cuenta está en curso (o el recurso está desactivado). Espere unos segundos e intente de nuevo." },
   "A OpenAI recusou a renovação do login. Gere o link de novo e conecte a conta outra vez.": { es: "OpenAI rechazó la renovación del inicio de sesión. Genere el enlace de nuevo y conecte la cuenta otra vez." },
   "Esta credencial guarda o login por assinatura da empresa, não uma chave de API. Use Conectar ou Desconectar na tela de Credenciais.": { es: "Esta credencial guarda el inicio de sesión por suscripción de la empresa, no una clave de API. Use Conectar o Desconectar en la pantalla de Credenciales." },
+
+  // ─── #2387, ação em lote de pausa/retomada — Central de Conexões ─────────
+  // Os rótulos dos dois botões e as frases de `frasesDoLoteDePausa`
+  // (components/connections/ConnectionsClient.tsx). As contagens passam por
+  // `contar()`/`enumerar()`, cuja chave o guarda de tela NÃO resolve (é o cego
+  // C: `t(singular)` com o argumento vindo do call site) — por isto cada palavra
+  // avulsa vive aqui com a entrada dela: sem ela, quem escolheu espanhol vê
+  // "3 canais pausados agora" em português no meio de uma frase traduzida.
+  "Pausar todas": { es: "Pausar todas" },
+  "Retomar todas": { es: "Reanudar todas" },
+  "Não foi possível mudar o estado dos canais.": { es: "No se pudo cambiar el estado de los canales." },
+  "Não foi possível pausar": { es: "No se pudo pausar" },
+  "Não foi possível retomar": { es: "No se pudo reanudar" },
+  "Feito:": { es: "Hecho:" },
+  "Nada mudou:": { es: "Nada cambió:" },
+  canal: { es: "canal" },
+  canais: { es: "canales" },
+  "canal pausado agora": { es: "canal pausado ahora" },
+  "canais pausados agora": { es: "canales pausados ahora" },
+  "canal reativado agora": { es: "canal reactivado ahora" },
+  "canais reativados agora": { es: "canales reactivados ahora" },
+  "canal já estava pausado": { es: "canal ya estaba pausado" },
+  "canais já estavam pausados": { es: "canales ya estaban pausados" },
+  "canal já estava reativado": { es: "canal ya estaba reactivado" },
+  "canais já estavam reativados": { es: "canales ya estaban reactivados" },
+  "canal arquivado fica de fora": { es: "canal archivado queda fuera" },
+  "canais arquivados ficam de fora": { es: "canales archivados quedan fuera" },
 };
 
 /**
