@@ -236,7 +236,7 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
                 {t("Autorizar IA para leads deste formulário")}
               </label>
               <Switch id="authorize-ai-on-capture" checked={Boolean(autorizaIA)}
-                disabled={!podeGerirWebhooks || update.isPending}
+                disabled={!podeGerirWebhooks || update.isPending || (!temAssinatura && !autorizaIA)}
                 onCheckedChange={(ativa) => update.mutate(
                   { id: source.id, authorize_ai_on_capture: ativa },
                   { onSuccess: (res) => setAutorizacaoIA({ id: source.id, ativa: res.data.authorize_ai_on_capture }) },
@@ -245,6 +245,9 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
             <p className="text-sm text-muted-foreground">
               {t("Autoriza somente novos envios completos com consentimento explícito para atendimento automatizado. Não retoma contatos bloqueados ou em atendimento humano. O agente e o canal precisam estar configurados para atender.")}
             </p>
+            {!temAssinatura && <p className="text-sm text-muted-foreground">
+              {t("Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.")}
+            </p>}
             <p className="text-sm text-muted-foreground">
               {t("O integrador deve enviar ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Envios antigos e repetidos não são liberados.")}
             </p>

@@ -2,6 +2,8 @@
 
 Na configuração da fonte, **Autorizar IA para leads deste formulário** permite conceder elegibilidade para IA a um contato recebido por uma nova captação. Nasce desligada; não publica agente, conecta canal ou ativa regra de automação. Desligar interrompe novas concessões, sem reescrever autorizações existentes. A configuração exige a mesma permissão de gestão da fonte.
 
+A fonte precisa ter assinatura configurada: o integrador no servidor assina o corpo bruto com HMAC-SHA256 e envia o header `X-Deskcomm-Signature`, como a captação assinada existente. Não expor o segredo no navegador. Sem assinatura, a fonte continua captando para humano, mas não pode habilitar a concessão de IA. Não remover a assinatura enquanto a opção estiver ligada.
+
 O integrador deve colher um aceite específico para atendimento automatizado, independente do aceite de privacidade, e enviar no topo do JSON:
 
 ```json

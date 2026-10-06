@@ -60,7 +60,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   sql(`delete from public.conversations where organization_id='${org}';
-    update public.webhook_sources set authorize_ai_on_capture=true,is_active=true where id='${source}';
+    update public.webhook_sources set authorize_ai_on_capture=true,is_active=true,secret_encrypted='synthetic-cipher' where id='${source}';
     update public.contacts set ai_authorized_at=null,ai_authorized_reason=null,force_human=false,is_blocked=false,is_anonymized=false,is_personal=false,
       blocked_at=null,anonymized_at=null,is_merged_into=null,merged_at=null,phone_number='+5511999990000',consent='{}' where id='${contact}';
     update public.crm_leads set source='webhook',source_metadata='{"webhook_source_id":"${source}"}',organization_id='${org}',contact_id='${contact}' where id='${lead}';
@@ -89,6 +89,7 @@ describe("form origin authorization", () => {
   it.each([
     "update public.webhook_sources set authorize_ai_on_capture=false",
     "update public.webhook_sources set is_active=false",
+    "update public.webhook_sources set secret_encrypted=null",
     "update public.contacts set force_human=true",
     "update public.contacts set is_blocked=true",
     "update public.contacts set is_personal=true",

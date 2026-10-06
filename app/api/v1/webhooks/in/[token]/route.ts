@@ -704,7 +704,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     respondiMapped.consent.detectedVia !== "not_found" &&
     !respondiMapped.consent.granted;
   if (source.authorize_ai_on_capture && contactId) {
-    const autorizou = await autorizarCaptacaoParaIA(admin, {
+    const autorizou = sourceSecret !== null && await autorizarCaptacaoParaIA(admin, {
       organizationId: source.organization_id, sourceId: source.id,
       leadId: String(lead.id), contactId, requestId,
     });

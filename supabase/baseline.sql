@@ -45436,6 +45436,7 @@ as $function$
           and w.webhook_source_id = s.id and w.lead_id = l.id and w.contact_id = p_contact_id
         where s.id = p_source_id and s.organization_id = p_organization_id
           and s.is_active and s.kind = 'lead_capture' and s.authorize_ai_on_capture
+          and s.secret_encrypted is not null
           and w.outcome = 'criado' and w.request_id = p_request_id
           and w.received_at > now() - interval '5 minutes'
           and w.fields ->> 'submission_status' = 'completed'
