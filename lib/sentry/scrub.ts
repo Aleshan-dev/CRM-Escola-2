@@ -93,8 +93,12 @@ function apagarCpfETelefone(trecho: string): string {
       // Números em formato internacional (+DDI), ANTES de tudo: sem esta
       // passada o `+351912345678` caía no padrão de CPF e saía como
       // `+[CPF]8` (issue #2345). Cobre `+351912345678` e `+351 912 345 678`;
-      // os +55 continuam atendidos pelo padrão brasileiro logo abaixo.
-      .replace(/\+\d{1,3}[\s.-]?\(?\d{2,3}\)?[\s.-]?\d{3}[\s.-]?\d{3,4}/g, "[PHONE]")
+      // os +55 ficam com o padrão brasileiro logo abaixo — o `(?!55)` cumpre
+      // isso e mantém o número brasileiro saindo exatamente como antes. O último
+      // bloco é `\d{3,}`, não `\d{3,4}`, para não sobrar dígito no fim de número
+      // estrangeiro (`+49 30 12345678` saía `[PHONE]8`). Sem as duas peças,
+      // `+55 11 987654321` saía `[PHONE]21`.
+      .replace(/\+(?!55)\d{1,3}[\s.-]?\(?\d{2,3}\)?[\s.-]?\d{3}[\s.-]?\d{3,}/g, "[PHONE]")
       // Telefone como se escreve no Brasil: +55 opcional, DDD opcional (com ou
       // sem parênteses), 8 ou 9 dígitos (o 9 da frente pode vir solto), e hífen,
       // ponto, espaço ou nada entre os blocos — `11-98765-4321` e `11.98765.4321`
