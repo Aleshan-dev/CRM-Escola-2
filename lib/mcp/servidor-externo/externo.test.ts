@@ -434,4 +434,40 @@ describe("o turno do agente enxerga e chama a ferramenta remota (#2147)", () => 
     expect(auditoria.action).toBe("mcp.tool_called");
     expect(auditoria.metadata).toMatchObject({ tool_name: "erp_achar", success: true });
   });
+
+  it("servidor registrado mas agente SEM escolha: nada remoto monta (item 7)", () => {
+    const supabase = bancoDeMentira();
+    const montadas = pickToolsFromMcp({
+      supabase: supabase as never,
+      ctx: contexto(supabase),
+      auth,
+      toolIds: ["crm_search_products"],
+      handoffToolEnabled: false,
+      handoffSignal: { triggered: false },
+      servidorMcpExterno: {
+        servidor: { endpoint: base, chave: CHAVE },
+        ferramentas: [{ name: "erp_achar" }],
+      },
+    });
+
+    expect(Object.keys(montadas)).toEqual(["crm_search_products"]);
+    expect(montadas.erp_achar).toBeUndefined();
+  });
+
+  it("agente com escolha mas SEM servidor registrado: o catálogo é o de antes (item 7)", () => {
+    const supabase = bancoDeMentira();
+    const montadas = pickToolsFromMcp({
+      supabase: supabase as never,
+      ctx: contexto(supabase),
+      auth,
+      toolIds: ["crm_search_products", toolIdRemoto("erp_achar", "escrita")],
+      handoffToolEnabled: false,
+      handoffSignal: { triggered: false },
+      // `servidorMcpExterno` ausente = `carregarServidorMcpExterno` devolveu
+      // `null`: sem registro, sem descoberta, sem rede.
+    });
+
+    expect(Object.keys(montadas)).toEqual(["crm_search_products"]);
+    expect(montadas.erp_achar).toBeUndefined();
+  });
 });
