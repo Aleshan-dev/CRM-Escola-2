@@ -112,3 +112,54 @@ describe("o override por diálogo continua valendo (twMerge)", () => {
     expect(saida.trim().split("\n").length).toBeGreaterThanOrEqual(1);
   });
 });
+
+/**
+ * A ANIMAÇÃO NÃO PODE DECIDIR A POSIÇÃO DE QUEM ANCORA DIFERENTE.
+ *
+ * `ds-modal` roda com `animation-fill-mode: both`, e o valor FINAL de um
+ * keyframe continua valendo depois que a animação termina. Enquanto
+ * `ds-modal-entra` terminava num `-50% -50%` cravado, esse valor vencia o
+ * `translate-y-0` de qualquer diálogo que escolhesse outro ancoramento — e o
+ * Tailwind não tem como ganhar dessa disputa.
+ *
+ * Aconteceu com a paleta de comandos (⌘K): ela abria em `top-[10%]`, a animação
+ * a puxava meia altura para cima do próprio ponto, e ela saía cortada no topo da
+ * tela. O defeito não existia antes de as classes de animação passarem a gerar
+ * CSS de verdade — era uma armadilha carregada, não um erro visível.
+ *
+ * O conserto foi parametrizar o deslocamento. Esta cerca prova que ele continua
+ * parametrizado: um keyframe que volte a cravar o número reprova aqui, antes de
+ * alguém descobrir pela tela.
+ */
+describe("a animação de modal respeita quem ancora diferente", () => {
+  const css = fs.readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8");
+
+  function corpoDoKeyframe(nome: string): string {
+    const i = css.indexOf(`@keyframes ${nome}`);
+    expect(i, `keyframe ${nome} sumiu`).toBeGreaterThan(-1);
+    return css.slice(i, css.indexOf("}\n", css.indexOf("}", css.indexOf("to {", i))) + 1);
+  }
+
+  for (const nome of ["ds-modal-entra", "ds-modal-sai"]) {
+    it(`${nome} lê o deslocamento de variável, e não de número cravado`, () => {
+      const corpo = corpoDoKeyframe(nome);
+      expect(
+        corpo,
+        `${nome} precisa ler --ds-modal-y: sem isso ele sobrescreve o ancoramento de quem abre fora do centro`,
+      ).toMatch(/var\(--ds-modal-y/);
+      expect(corpo).toMatch(/var\(--ds-modal-x/);
+      // O número cravado é exatamente o que causou o defeito da paleta.
+      expect(
+        /translate:\s*-50%\s+-50%/.test(corpo),
+        `${nome} voltou a cravar "-50% -50%" — isso vence o translate de quem ancora diferente`,
+      ).toBe(false);
+    });
+  }
+
+  it("o padrão da variável mantém o diálogo comum centralizado", () => {
+    // Quem NÃO declara a variável continua recebendo -50%: a correção não pode
+    // ter custado a centralização de todos os outros diálogos do produto.
+    expect(corpoDoKeyframe("ds-modal-entra")).toMatch(/var\(--ds-modal-y,\s*-50%\)/);
+  });
+});
+

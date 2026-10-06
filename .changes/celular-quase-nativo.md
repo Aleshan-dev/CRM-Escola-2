@@ -24,8 +24,6 @@ O que sobra é deliberado: links de texto dentro de lista (texto não é control
 
 **Três consertos de leitura na agenda**, todos medidos em 360px: o cartão de conectar o Google espremia a frase em ~100px e a quebrava em seis linhas — agora empilha; o cabeçalho cortava a data em "5 de outu…" — agora quebra em duas linhas e diz o dia inteiro; e os avatares de quem atende se sobrepunham com 32px, o que tornava impossível acertar o certo — agora ficam separados no celular e voltam a se sobrepor no laptop.
 
-**Campo de texto não dá mais zoom no iPhone.** O Safari amplia a página inteira quando um campo recebe foco com fonte menor que 16px, e os campos do produto usavam 14px: tocar a busca, ou o campo de resposta da conversa, saltava a escala da tela — e sair do campo não desfazia o salto. No celular os campos passam a 16px; no laptop seguem como eram.
-
 **O funil desliza coluna por coluna.** Cada etapa ocupa 85% da largura no celular (em vez de 320px fixos, que deixavam a etapa seguinte como uma fatia de poucos pixels) e a rolagem encaixa numa etapa inteira por gesto. E a caixa de seleção do card, que só aparecia no passar do mouse, agora é visível onde não existe mouse — sem ela, a ação em lote "Mover para…" era inalcançável e arrastar era a única forma de mover um card no celular.
 
 **Áreas seguras (notch e indicador de home).** O documento declara `viewport-fit=cover` pela primeira vez, que é o pré-requisito técnico para `env(safe-area-inset-*)` devolver qualquer valor diferente de zero. Com ele, a barra de abas, o aviso de chamada recebida e o indicador de navegação deixam de nascer por baixo da barra de status e do indicador de home no iOS em tela cheia.
