@@ -183,4 +183,20 @@ describe("perfil de Portugal (issue #1946)", () => {
     expect(HOLIDAYS_PT_ISO).toContain(`${alvo}-12-25`);
     expect(feriadosDePortugalDoAno(alvo)).toHaveLength(12);
   });
+
+  it("depois de 2030 o calendário segue a Páscoa oficial (#2346)", () => {
+    // Páscoa: 2031-04-13, 2035-03-25, 2038-04-25 (US Census Bureau, tabela 2000–2099).
+    // Sexta-feira Santa = Páscoa − 2; Corpo de Deus = Páscoa + 60.
+    const esperados = [
+      "2031-04-11",
+      "2031-06-12",
+      "2035-03-23",
+      "2035-05-24",
+      "2038-04-23",
+      "2038-06-24",
+    ];
+    for (const d of esperados) {
+      expect(HOLIDAYS_PT_ISO).toContain(d);
+    }
+  });
 });
