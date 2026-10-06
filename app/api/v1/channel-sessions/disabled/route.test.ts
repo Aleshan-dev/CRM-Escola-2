@@ -35,6 +35,9 @@ const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const SUMIU = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+/** `n` UUIDs válidos e distintos — a fronteira do teto se mede com ids que o formato aceita. */
+const lote = (n: number) =>
+  Array.from({ length: n }, (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${i.toString(16).padStart(12, "0")}`);
 
 /** Linhas que a leitura devolve (o `in` do mock já recorta pelos ids pedidos). */
 let linhas: { id: string; metadata: Record<string, unknown> | null; archived_at: string | null }[] = [];
@@ -239,7 +242,9 @@ describe("ação em lote de pausa/retomada", () => {
       { disabled: "sim", ids: [A] },
       { disabled: true, ids: [] },
       { disabled: true, ids: ["nao-e-uuid"] },
-      { disabled: true, ids: Array.from({ length: MAX_LOTE + 1 }, (_, i) => `${A.slice(0, 8)}${i.toString(16).padStart(2, "0")}${A.slice(10)}`) },
+      // UUIDs VÁLIDOS: com ids malformados o 422 vinha do formato, e tirar o
+      // `.max(MAX_LOTE)` da rota deixava este caso verde.
+      { disabled: true, ids: lote(MAX_LOTE + 1) },
       { disabled: true, ids: [A], descarte: true },
     ]) {
       const response = await PATCH(req(body));
@@ -248,5 +253,13 @@ describe("ação em lote de pausa/retomada", () => {
     }
     expect(createAdminClient).not.toHaveBeenCalled();
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it("exatamente MAX_LOTE ids passa pelo teto (51 é que não passa)", async () => {
+    const ids = lote(MAX_LOTE);
+    const response = await PATCH(req({ disabled: true, ids }));
+    expect(response.status).toBe(200);
+    // `linhas` vazio: nenhum existe nesta organização, então os 50 caem em falharam.
+    expect((await response.json()).data).toMatchObject({ pedidos: MAX_LOTE, alterados: 0, falharam: ids });
   });
 });
