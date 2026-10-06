@@ -5537,5 +5537,7 @@
   "Autorizar IA para leads deste formulário": "授权 AI 接待此表单的潜在客户",
   "Autoriza somente novos envios completos com consentimento explícito para atendimento automatizado. Não retoma contatos bloqueados ou em atendimento humano. O agente e o canal precisam estar configurados para atender.": "仅授权明确同意自动接待的新完整提交。不会恢复已封禁或正在人工接待的联系人。需先配置代理和渠道。",
   "O integrador deve enviar ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Envios antigos e repetidos não são liberados.": "集成需发送 ai_service_consent: true、submission_status: completed 和 ai_service_consent_version（已接受声明的版本）。仅接受隐私政策不授权 AI。旧提交和重复提交不会获授权。",
-  "Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.": "授权 AI 前请先配置来源签名。移除签名前，请先关闭 AI 授权。"
+  "Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.": "授权 AI 前请先配置来源签名。移除签名前，请先关闭 AI 授权。",
+  "Atendimento por IA autorizado pelo consentimento explícito deste formulário.": "已根据此表单中的明确同意授权 AI 接待。",
+  "Este envio não concedeu nova autorização de IA. Confira o consentimento e o estado do contato antes de configurar o atendimento.": "此次提交未授予新的 AI 授权。配置接待前，请先核对同意情况和联系人状态。"
 }
