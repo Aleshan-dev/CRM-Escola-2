@@ -166,15 +166,18 @@ export async function resolverModeloDoPonto(
       }
       const coerente = await padraoDaOrganizacao(organizationId, credencialUtilizavel(daOrg), purpose);
       if (coerente !== null) return devolver(coerente, providerEfetivo ?? "", coerente.modelId, coerente.origem, motivo);
-      logarResolucaoDeModelo(logger, {
-        organization_id: organizationId,
-        purpose,
-        provider: providerEfetivo ?? "",
-        model: idPadrao,
-        origem: "padrao",
-        motivo: `${motivo} — e a organização não tem par próprio`,
-      });
-      return null;
+      // PISO, não silêncio: sem par próprio executável, o default do produto
+      // segue rodando pelo PRÓPRIO provedor dele, como antes da régua — uma
+      // VPS que classificava com a chave Anthropic da instalação não para de
+      // classificar ao atualizar. O aviso vai no log com o motivo.
+      const piso = await padraoDaInstalacao(provedorNaturalDoModelo(idPadrao), padrao, { purpose, organizationId });
+      return devolver(
+        piso === null ? null : { model: piso, modelId: idPadrao, origem: "padrao" },
+        provedorNaturalDoModelo(idPadrao) ?? "",
+        idPadrao,
+        "padrao",
+        `${motivo} — e a organização não tem par próprio executável: o default do produto roda como piso`,
+      );
     }
     const model = await padraoDaInstalacao(providerDoPadrao, padrao, { purpose, organizationId });
     if (model === null) return null;

@@ -861,8 +861,9 @@ async function buildContext(input: BuildContextInput): Promise<GuardDecision> {
         // Sem `|| DEFAULT_BOT_MODEL` (issue #2377): aquele OU injetava um
         // Claude da Anthropic num agente sem modelo — para uma empresa em
         // OpenAI — no caminho que responde sozinho. `ai_agents.model` é NOT
-        // NULL com default no banco; vindo vazio, o resolvedor cai no par da
-        // organização e, na falta dele, PULA com motivo no log.
+        // NULL com default no banco e a API exige min(1); vindo vazio mesmo assim,
+        // o resolvedor PULA com motivo no log (este ponto não pede queda para o
+        // par da organização).
         model: agent.model,
         system_prompt: agent.system_prompt,
         config: (agent.config as Record<string, unknown>) ?? {},

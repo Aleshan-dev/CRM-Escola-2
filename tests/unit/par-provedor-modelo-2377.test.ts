@@ -107,6 +107,12 @@ describe("par provedor+modelo: o que NÃO é recusado (recusa errada calaria pro
     expect(validarParProvedorModelo("deepseek", "deepseek-chat").valido).toBe(true);
   });
 
+  it("a assinatura (#1672) executa os ids da OpenAI e recusa os de outro fabricante", () => {
+    expect(validarParProvedorModelo("openai-assinatura", "gpt-5").valido).toBe(true);
+    expect(validarParProvedorModelo("openai-assinatura", "openai/gpt-5").valido).toBe(true);
+    expect(validarParProvedorModelo("openai-assinatura", "claude-sonnet-5").valido).toBe(false);
+  });
+
   it("id de família que a régua não conhece passa — sem prova, não se recusa", () => {
     // Whisper, embeddings do Google, modelos futuros de terceiros: ninguém aqui
     // pode afirmar que `whisper-1` não é da OpenAI.

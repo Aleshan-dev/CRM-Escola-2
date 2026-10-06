@@ -31,7 +31,16 @@
  *     O par errado é `openai` + `claude-sonnet-5`: provedor de um, modelo de outro.
  */
 import { logger } from "@/lib/logger";
-import { IDS_DE_PROVEDOR } from "./pontos/provedores";
+import { IDS_DE_PROVEDOR, PROVEDOR_POR_ASSINATURA } from "./pontos/provedores";
+
+/**
+ * Endereço que executa o catálogo de OUTRO fabricante: a assinatura (#1672)
+ * fala com os modelos da OpenAI (`gpt-5`), então o par se confere como `openai`.
+ * Sem isto, todo turno de agente na assinatura era recusado antes de sair.
+ */
+const FABRICANTE_DO_ENDERECO: Readonly<Record<string, string>> = {
+  [PROVEDOR_POR_ASSINATURA]: "openai",
+};
 
 export type ResultadoDoPar =
   | { valido: true }
@@ -108,7 +117,8 @@ function provedorDaFamilia(nome: string): string | null {
  *  3. sem rota, o nome pertence a outro fabricante?
  */
 export function validarParProvedorModelo(provider: unknown, modelId: unknown): ResultadoDoPar {
-  const provedor = String(provider ?? "").trim().toLowerCase();
+  const enderecoBruto = String(provider ?? "").trim().toLowerCase();
+  const provedor = FABRICANTE_DO_ENDERECO[enderecoBruto] ?? enderecoBruto;
   const modelo = String(modelId ?? "").trim();
 
   if (provedor === "") {
