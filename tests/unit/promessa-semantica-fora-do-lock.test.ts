@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   runBeforeSend,
+  semanticPromiseGate,
   type Gate,
   type RunBeforeSendArgs,
 } from '@/lib/agent-engine/guardrails/before-send';
@@ -46,7 +47,7 @@ function poolFalso(eventos: Eventos) {
     }),
     query: vi.fn().mockResolvedValue({ rows: [{ id: 'trace-1' }] }),
   };
-  return { pool: pool as unknown as pg.Pool, cru: pool };
+  return { pool: pool as unknown as pg.Pool, cru: pool, client };
 }
 
 function args(pool: pg.Pool, extras: Partial<RunBeforeSendArgs> = {}): RunBeforeSendArgs {
@@ -201,5 +202,86 @@ describe('memoizarPorCandidata — evidência nova invalida o veredito de antes'
     evidencias = ['catalogo:produto-1'];
     await memo('faço por R$ 90');
     expect(classificar).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Da bancada de @AlecsanderAbreu (#2363), que mediu numa VPS o que a posição
+ * antiga custava: com o classificador dentro da transação, um DDL na fila de
+ * `contacts` fechava um ciclo de travas que o Postgres não detecta (8m47s
+ * `idle in transaction`, worker parado). Os casos de ORDEM acima já prendem a
+ * posição; estes prendem o que a ordem sozinha não diz: a posse do lock não
+ * contém o tempo do modelo, o corpo julgado é o enviado, e o veto real continua
+ * desfazendo a transação.
+ */
+describe('a posse do número não contém o classificador (bancada do #2363)', () => {
+  it('a janela begin→commit não contém o tempo do classificador', async () => {
+    const eventos: Eventos = [];
+    const { pool, client } = poolFalso(eventos);
+    const CLASSIFICADOR_MS = 40;
+    let posseInicio = 0;
+    let posseFim = 0;
+    const original = client.query;
+    client.query = vi.fn(async (sql: string) => {
+      const s = String(sql).toLowerCase().trim();
+      if (s === 'begin') posseInicio = performance.now();
+      if (s === 'commit') posseFim = performance.now();
+      return original(sql);
+    }) as unknown as typeof client.query;
+
+    const r = await runBeforeSend(
+      args(pool, {
+        classifyPromiseSemantic: async () => {
+          await new Promise((resolve) => setTimeout(resolve, CLASSIFICADOR_MS));
+          return NAO_E_PROMESSA;
+        },
+      }),
+    );
+
+    expect(r.status).toBe('sent');
+    expect(posseInicio).toBeGreaterThan(0);
+    expect(posseFim - posseInicio).toBeLessThan(CLASSIFICADOR_MS);
+  });
+
+  it('julga o mesmo corpo que vai ao canal', async () => {
+    const { pool } = poolFalso([]);
+    let julgado = '';
+    let enviado = '';
+    await runBeforeSend(
+      args(pool, {
+        classifyPromiseSemantic: async (corpo: string) => {
+          julgado = corpo;
+          return NAO_E_PROMESSA;
+        },
+        send: async (corpo: string) => {
+          enviado = corpo;
+          return { kind: 'sent', idempotencyKey: 'k', messageId: 'm1' };
+        },
+      }),
+    );
+    expect(julgado).toBe('Consigo te dar 50% de desconto hoje.');
+    expect(enviado).toBe(julgado);
+  });
+
+  it('o veto semântico real continua barrando: sem envio e com a transação desfeita', async () => {
+    const eventos: Eventos = [];
+    const { pool } = poolFalso(eventos);
+    const envio = vi.fn(async () => ({ kind: 'sent' as const, idempotencyKey: 'k', messageId: 'm1' }));
+    const r = await runBeforeSend(
+      args(pool, {
+        body: 'Pode deixar que eu faço de graça para você.',
+        gates: [semanticPromiseGate],
+        classifyPromiseSemantic: async () => ({
+          ...NAO_E_PROMESSA,
+          isPromise: true,
+          suspectPhrase: 'faço de graça',
+        }),
+        send: envio,
+      }),
+    );
+    expect(r.status).toBe('vetoed');
+    expect(envio).not.toHaveBeenCalled();
+    expect(eventos).toContain('rollback');
+    expect(eventos).not.toContain('commit');
   });
 });

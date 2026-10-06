@@ -1197,7 +1197,9 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
  * O que NÃO muda de ordem: a cadeia continua julgando (e o estado sob o lock sendo
  * lido) exatamente quando julgava, o `send` continua acontecendo sob o lock, uma vez
  * por re-run, e o `finalBody` pós-disclosure continua sendo o que vai ao canal. A
- * espera é a única coisa que sai da janela da transação.
+ * espera é uma das duas coisas que saem da janela da transação; a outra é o
+ * classificador semântico de promessa (F4-02), que roda antes de tomar conexão — ver
+ * o porquê no ponto da chamada.
  */
 export async function runBeforeSend(args: RunBeforeSendArgs): Promise<BeforeSendResult> {
   const gates = args.gates ?? BEFORE_SEND_GATES;
@@ -1228,10 +1230,21 @@ export async function runBeforeSend(args: RunBeforeSendArgs): Promise<BeforeSend
   // É uma ida e volta ao modelo por envio. Ela rodava DENTRO da transação, com
   // o `pg_advisory_xact_lock` do número na mão: todo outro envio do MESMO
   // WhatsApp esperava a IA responder, e a conexão (de um pool de 10 para 8 jobs
-  // simultâneos) ficava presa o tempo inteiro. O veredito não depende de nada
-  // lido sob o lock — só do corpo —, então ele é calculado antes e entra no
-  // contexto dos gates no mesmo lugar de sempre. Começa junto com a pausa
-  // humana: o cliente espera o maior dos dois, não a soma.
+  // simultâneos) ficava presa o tempo inteiro.
+  //
+  // E não era só latência: era TRAVAMENTO. Lá dentro, a transação já segurava a
+  // trava de leitura de `contacts` (readStopFlags) enquanto o `runModelCall`
+  // gravava `llm_calls` — que tem FK para `contacts` — por OUTRA conexão do
+  // pool. Com um DDL na fila de `contacts`, o insert esperava o DDL, o DDL
+  // esperava esta transação e esta transação esperava o insert: um ciclo que o
+  // Postgres não detecta, porque uma das arestas mora no processo Node. Medido
+  // numa VPS por @AlecsanderAbreu (#2363), em 2026-10-02: 8m47s `idle in
+  // transaction`, o worker inteiro parado e ~10 min de 503 até alguém encerrar
+  // o DDL à mão.
+  //
+  // O veredito não depende de nada lido sob o lock — só do corpo —, então ele é
+  // calculado antes e entra no contexto dos gates no mesmo lugar de sempre.
+  // Começa junto com a pausa humana: o cliente espera o maior dos dois, não a soma.
   const [, semanticPromise] = await Promise.all([
     // Fora do lock (nem conexão tomada): aqui não existe transação aberta para segurar.
     args.esperaForaDoLock ? args.esperaForaDoLock() : undefined,
