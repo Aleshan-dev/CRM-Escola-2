@@ -277,6 +277,46 @@ async function apagarAssinaturaSemId(
   await deleteAtProvider(key, `webhooks/settings?webhookId=${encodeURIComponent(achada._id)}`);
 }
 /**
+ * Apaga no provedor a assinatura de webhook de UM canal social (issue #2419).
+ *
+ * Cobre os dois estados da referência: com `metadata.social_webhook_id` apaga
+ * pelo id; sem ele reconcilia pela URL do token ainda válido — a mesma
+ * `apagarAssinaturaSemId` do #2364. Devolve `"sem_integracao"` quando a chave do
+ * perfil já saiu do banco (perfil desvinculado): sem chave não há como falar com
+ * o provedor, e o chamador registra e segue em best-effort, no mesmo contrato do
+ * ramo da Meta em `channel-sessions/[id]`.
+ *
+ * Erro de provedor LANÇA — o chamador decide entre falhar fechado (como
+ * `disconnectSocialAccount`) ou seguir em best-effort (como o DELETE da Central
+ * de Conexões). 404 no DELETE é "já saiu" e converge, via `deleteAtProvider`.
+ */
+export async function apagarAssinaturaSocial(
+  db: SupabaseClient,
+  org: string,
+  channelId: string,
+): Promise<"apagada" | "sem_integracao"> {
+  const integration = await readSocialIntegration(db, org);
+  if (!integration) return "sem_integracao";
+  const { data: channel, error } = await db
+    .from("channel_sessions")
+    .select("metadata")
+    .eq("organization_id", org)
+    .eq("id", channelId)
+    .maybeSingle();
+  if (error)
+    throw new SocialError("Não foi possível ler o canal para apagar o webhook.", 500);
+  const webhookId: unknown = channel?.metadata?.social_webhook_id;
+  if (typeof webhookId === "string" && webhookId.length > 0) {
+    await deleteAtProvider(
+      integration.key,
+      `webhooks/settings?webhookId=${encodeURIComponent(webhookId)}`,
+    );
+  } else {
+    await apagarAssinaturaSemId(db, org, channelId, integration.key);
+  }
+  return "apagada";
+}
+/**
  * Stops the inbox for one account and, with `removeAccount`, disconnects it from the provider.
  * Provider calls run first: if one fails the channel stays intact and the action can be retried.
  * Conversations are kept; the channel is archived, never deleted (issue #1314).
