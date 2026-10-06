@@ -293,6 +293,13 @@ export async function runAutomationForEvent(
   }
 
   const context = await buildContext(admin, row);
+  // O pré-check acima só acha o contato pelo payload (`contact_id`/`conversation_id`).
+  // O aniversário (`contact.birthday`) traz o contato em `entity_id`, e o evento de
+  // negócio ou de compromisso traz o contato pelo lead/compromisso: o contexto
+  // hidratado é quem os alcança.
+  if ((context.contact as { is_personal?: boolean } | undefined)?.is_personal === true) {
+    return { consumer_key: AUTOMATION_CONSUMER_KEY, status: "skipped", detail: "contato_pessoal" };
+  }
   const applicable = matched.filter((r) => evaluateConditions(r.conditions ?? [], context));
   if (!applicable.length) {
     return { consumer_key: AUTOMATION_CONSUMER_KEY, status: "ok", detail: "no_match" };
