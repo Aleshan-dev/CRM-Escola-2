@@ -163,6 +163,11 @@ describe("computeDueAt — business day SLA calculator", () => {
     }
   });
 
+  it("o prazo aberto no fim de 2030 salta o 1º de janeiro de 2031 (#2413)", () => {
+    // Na lista à mão, 2031 não tinha feriado nenhum: o D+7 de 20/12/2030 caía em 01/01/2031.
+    expect(computeDueAt(d("2030-12-20"), 7).toISOString().slice(0, 10)).toBe("2031-01-02");
+  });
+
   it("a cobertura alcança o ano atual + 2 — senão o prazo conta sem feriados (#2413)", () => {
     const alvo = new Date().getFullYear() + 2;
     expect(ULTIMO_ANO_COBERTO).toBeGreaterThanOrEqual(alvo);
@@ -179,6 +184,10 @@ describe("computeDueAt — business day SLA calculator", () => {
       [2038, "2038-03-08", "2038-03-09", "2038-04-23", "2038-06-24"],
     ];
     for (const [ano, segunda, terca, sextaSanta, corpoDeDeus] of ancorados) {
+      // A lista que o prazo consome, não só a função: a #2413 era a LISTA parar em 2030.
+      for (const dia of [`${ano}-01-01`, segunda, terca, sextaSanta, corpoDeDeus]) {
+        expect(HOLIDAYS_BR_ISO).toContain(dia);
+      }
       const feriados = feriadosDoBrasilDoAno(ano);
       expect(feriados).toContain(segunda);
       expect(feriados).toContain(terca);
