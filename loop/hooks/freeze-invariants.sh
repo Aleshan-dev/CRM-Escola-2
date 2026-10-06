@@ -9,6 +9,38 @@
 # comentário — #1324, e com o MODO do arquivo intacto: `chmod +x` deixa os blobs
 # idênticos) passa sem válvula: não é exceção, é o eixo certo. Ver o bloco
 # "O QUE o `M` mudou" abaixo.
+#
+# ── O invariante que a PRÓPRIA branch criou ────────────────────────────────────
+#
+# "Pré-existente" é pré-existente NA MAIN. Um `M` cujo caminho não existe em
+# `origin/main` NEM em `git merge-base HEAD origin/main` foi criado depois de a
+# branch sair da main, e a main nunca teve versão nenhuma dele — muito menos a
+# forte. Editá-lo é, do ponto de vista da main, ADICIONAR: o PR que o leva o
+# mostra inteiro como arquivo novo, e é ali que ele é revisado. Passa como `A`.
+# Antes disto o segundo commit da branch sobre o próprio invariante era barrado
+# (o `M` é contra HEAD) e a única saída era a válvula, gasta duas vezes só por
+# isso: 9d396d061 (#2260) e 2b2121922 (#2452), ambos invariantes NOVOS de PR de
+# contribuidor ajustados na triagem. Válvula de rotina é como a guarda morre.
+#
+# As duas referências, e o que cada uma sustenta (caso no teste irmão):
+#   · a merge-base: a branch HERDOU o caminho e a main o apagou depois — a ponta
+#     não o tem, mas a branch não o criou (NOVO-MAIN-APAGOU);
+#   · a ponta: o invariante da branch JÁ ENTROU na main por squash, sem
+#     parentesco com o commit da branch — a merge-base não o tem (NOVO-APOS-FETCH).
+# Só `M`: `D` e `R` seguem acusados mesmo para invariante próprio (rename é
+# delete disfarçado, e o lado apagado de um `R` é da main).
+#
+# ⚠️ Falha FECHADA sem a ref: sem `origin/main` (fork sem o remote, clone raso,
+# remote da main com outro nome — `upstream/main` NÃO é consultada, como nas
+# condições 2 e 6) a `merge-base` falha e o `M` segue acusado, como antes.
+#
+# ⚠️ LIMITE medido (caso LIMITE-REF-VELHA): com a ref LOCAL `origin/main` velha,
+# um invariante que a main ganhou depois do último fetch, mas que já está no
+# HEAD (a branch o criou e o PR entrou, ou a branch de um PR de fork trouxe uma
+# main mais nova que a sua ref), passa por "nunca esteve na main". O hook não vai
+# à rede; a doutrina de branches manda `git fetch` antes de trabalhar, e depois
+# do fetch ele é acusado (NOVO-APOS-FETCH). O PR contra a main real o mostra
+# como `M` para quem revisa.
 set -euo pipefail
 
 [ "${DESKCOMM_GOV_INVARIANTS_EDIT:-0}" = "1" ] && exit 0
@@ -365,6 +397,20 @@ mudanca_so_de_comentario() {
   [ "$antes" = "$depois" ]
 }
 
+# $1 caminho de um `M`; 0 = a main nunca teve este caminho: nem a ponta (`origin/main`) nem o
+# ponto de onde esta branch saiu dela (a merge-base). Sem `origin/main`, ou sem ancestral comum,
+# a `merge-base` falha e a função devolve 1 — o `M` segue acusado. Ver "O invariante que a
+# PRÓPRIA branch criou" no cabeçalho.
+criado_nesta_branch() {
+  local base
+  base=$(git merge-base HEAD origin/main 2>/dev/null) || return 1
+  [ -n "$base" ] || return 1
+  if git rev-parse --quiet --verify "origin/main:$1" >/dev/null 2>&1 \
+    || git rev-parse --quiet --verify "$base:$1" >/dev/null 2>&1; then
+    return 1
+  fi
+}
+
 if [ -n "$violations" ]; then
   mantidos=''
   while IFS= read -r linha; do
@@ -378,7 +424,8 @@ if [ -n "$violations" ]; then
         # citado pelo git: nome cru não acha o blob -> não decidível aqui, segue acusado
         ;;
       *)
-        if [ "${status:0:1}" = "M" ] && mudanca_so_de_comentario "$caminho"; then
+        if [ "${status:0:1}" = "M" ] \
+          && { criado_nesta_branch "$caminho" || mudanca_so_de_comentario "$caminho"; }; then
           continue
         fi
         ;;

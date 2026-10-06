@@ -534,6 +534,146 @@ git -C "$add" add tests/invariants/novinho.test.ts
 r=$(rodar "$add" freeze-invariants.sh)
 assert_exit "$(exit_de "$r")" 0 "ADD: acrescentar invariante novo segue liberado"
 
+# ── o invariante que a PRÓPRIA branch criou: editá-lo é ADICIONAR, do ponto de vista da main ──
+# A main nunca teve a versão forte, então não há eval congelado a proteger: o PR que leva o
+# arquivo à main o mostra INTEIRO como adição, e é ali que ele é revisado. O `M` contra HEAD
+# barrava o segundo commit da branch sobre o próprio invariante, e a única saída era a
+# válvula — usada só por isso em 9d396d061 (#2260) e 2b2121922 (#2452).
+# A regra: `M` cujo caminho NÃO existe em `origin/main` NEM em `merge-base HEAD origin/main`
+# passa. Cada metade tem o caso que a sustenta (NOVO-MAIN-APAGOU → a merge-base;
+# NOVO-APOS-FETCH → a ponta), a falha fechada sem a ref tem o seu (NOVO-SEM-REF, NOVO-UPSTREAM)
+# e o limite medido está escrito como caso (LIMITE-REF-VELHA).
+NOVO=tests/invariants/novo-da-branch.test.ts
+NOVO_ACENTO='tests/invariants/novo da branção.test.ts'
+MARCA_SEGUNDO='it("MARCADOR-SEGUNDO-COMMIT", () => {});'
+# $1 destino, $2 caminho: a branch cria o invariante num commit próprio e ENCENA uma edição dele
+montar_novo() {
+  preparar "$1" "$principal" "$BASE_DA_BRANCH"
+  inv "" "$MARCA_BRANCH" "" > "$1/$2"; commitar "$1" "a branch cria o invariante"
+  inv "" "$MARCA_SEGUNDO" "" > "$1/$2"; git -C "$1" add -- "$2"
+}
+# o status encenado do caminho, cru (sem a citação do quotepath)
+status_de() { git -C "$1" -c core.quotepath=false diff --cached --name-status -- "$2" | cut -f1; }
+
+# CASO NOVO-DA-BRANCH · o falso positivo, pelo caminho de produção
+nb="$TMP/novo-da-branch"; montar_novo "$nb" "$NOVO"
+if [ "$(status_de "$nb" "$NOVO")" = "M" ] \
+   && [ -z "$(git -C "$nb" rev-parse -q --verify "origin/main:$NOVO")" ] \
+   && [ -z "$(git -C "$nb" rev-parse -q --verify "$(git -C "$nb" merge-base HEAD origin/main):$NOVO")" ]; then
+  ok "NOVO-DA-BRANCH: a premissa — status M, e o caminho não está em origin/main nem na merge-base"
+else falha "NOVO-DA-BRANCH: a premissa (M, ausente da main e da merge-base)" "$(git -C "$nb" diff --cached --name-status)"; fi
+r=$(commitar_pelo_dispatcher "$nb" "a branch ajusta o invariante que ela criou")
+assert_exit "$(exit_de "$r")" 0 "NOVO-DA-BRANCH: editar o invariante que a PRÓPRIA branch criou passa SEM válvula"
+if tem_marcador "$nb" "$NOVO" SEGUNDO-COMMIT; then ok "NOVO-DA-BRANCH: e a edição entrou no HEAD — a consequência, não só o exit"
+else falha "NOVO-DA-BRANCH: a edição entrou no HEAD" "não entrou: o commit foi recusado"; fi
+
+# CASO NOVO-ACENTO · o mesmo, com ESPAÇO e ACENTO no nome e `core.quotepath` no padrão (true)
+na="$TMP/novo-acento"; montar_novo "$na" "$NOVO_ACENTO"
+if git -C "$na" diff --cached --name-status | grep -q '^M	"tests/invariants/novo da bran'; then ok "NOVO-ACENTO: o git CITA o caminho no name-status padrão (a premissa)"
+else falha "NOVO-ACENTO: o git cita o caminho" "$(git -C "$na" diff --cached --name-status)"; fi
+r=$(commitar_pelo_dispatcher "$na" "a branch ajusta o invariante acentuado que ela criou")
+assert_exit "$(exit_de "$r")" 0 "NOVO-ACENTO: invariante próprio com espaço e acento também passa sem válvula"
+if tem_marcador "$na" "$NOVO_ACENTO" SEGUNDO-COMMIT; then ok "NOVO-ACENTO: e a edição entrou no HEAD"
+else falha "NOVO-ACENTO: a edição entrou no HEAD" "não entrou: o commit foi recusado"; fi
+
+# CASO NOVO-SEM-REF · sem `origin/main` (fork sem o remote, clone raso) não há como provar que a
+# main nunca teve o caminho → falha FECHADA, o comportamento de antes.
+ns="$TMP/novo-sem-ref"; montar_novo "$ns" "$NOVO"
+git -C "$ns" remote remove origin
+if [ -z "$(git -C "$ns" rev-parse -q --verify origin/main)" ]; then ok "NOVO-SEM-REF: origin/main não resolve (a premissa)"
+else falha "NOVO-SEM-REF: origin/main não resolve" "a ref ainda resolve"; fi
+r=$(commitar_pelo_dispatcher "$ns" "edita o invariante proprio sem a ref da main")
+assert_exit "$(exit_de "$r")" 1 "NOVO-SEM-REF: sem origin/main a edição SEGUE acusada — falha FECHADA"
+assert_contains "$(saida_de "$r")" "$NOVO" "NOVO-SEM-REF: e quem bloqueou foi o freeze (a mensagem nomeia o invariante)"
+
+# CASO NOVO-UPSTREAM · o remote da main tem OUTRO nome. O hook resolve a main SÓ por
+# `origin/main` (como as condições 2 e 6); `upstream/main` não é consultada. Invariante DA MAIN
+# editado nesse clone segue acusado — sem `origin/main`, nada é liberado.
+nu="$TMP/novo-upstream"; preparar "$nu" "$principal" "$BASE_DA_BRANCH"
+git -C "$nu" remote rename origin upstream
+printf 'it("MARCADOR-REESCRITO-PELA-SESSAO", () => {});\n' > "$nu/$INV"; git -C "$nu" add "$INV"
+if [ -n "$(git -C "$nu" rev-parse -q --verify "upstream/main:$INV")" ] && [ -z "$(git -C "$nu" rev-parse -q --verify origin/main)" ]; then
+  ok "NOVO-UPSTREAM: o invariante está em upstream/main e origin/main não existe (a premissa)"
+else falha "NOVO-UPSTREAM: a premissa (upstream/main tem, origin/main ausente)" "a montagem não encena o caso"; fi
+r=$(commitar_pelo_dispatcher "$nu" "edita invariante da main num clone com upstream")
+assert_exit "$(exit_de "$r")" 1 "NOVO-UPSTREAM: invariante da main editado com o remote chamado upstream SEGUE acusado"
+assert_contains "$(saida_de "$r")" "$INV" "NOVO-UPSTREAM: e quem bloqueou foi o freeze"
+
+# CASO NOVO-MAIN-APAGOU · o caminho está na MERGE-BASE e a main o APAGOU depois. A ponta não o
+# tem, mas a branch o herdou da main — não o criou. É o caso que sustenta a metade da
+# merge-base: sem ela, editar o invariante que a branch herdou passaria.
+principal_apaga="$TMP/principal_apaga"; mkdir -p "$principal_apaga/tests/invariants"
+git -C "$principal_apaga" init -q -b main
+inv > "$principal_apaga/$INV"; printf '# leia\n' > "$principal_apaga/README.md"
+commitar "$principal_apaga" "base com o invariante"
+BASE_APAGA=$(git -C "$principal_apaga" rev-parse HEAD)
+git -C "$principal_apaga" rm -q "$INV"; commitar "$principal_apaga" "a main apaga o invariante"
+nma="$TMP/novo-main-apagou"; preparar "$nma" "$principal_apaga" "$BASE_APAGA"
+inv "" "$MARCA_BRANCH" "" > "$nma/$INV"; git -C "$nma" add "$INV"
+if [ -z "$(git -C "$nma" rev-parse -q --verify "origin/main:$INV")" ] \
+   && [ -n "$(git -C "$nma" rev-parse -q --verify "$(git -C "$nma" merge-base HEAD origin/main):$INV")" ]; then
+  ok "NOVO-MAIN-APAGOU: o caminho está na merge-base e NÃO na ponta (a premissa)"
+else falha "NOVO-MAIN-APAGOU: a premissa (na merge-base, fora da ponta)" "a montagem não encena o caso"; fi
+r=$(commitar_pelo_dispatcher "$nma" "edita o invariante que a main apagou depois")
+assert_exit "$(exit_de "$r")" 1 "NOVO-MAIN-APAGOU: invariante herdado da main SEGUE acusado, mesmo ausente da ponta"
+assert_contains "$(saida_de "$r")" "$INV" "NOVO-MAIN-APAGOU: e quem bloqueou foi o freeze"
+
+# CASO NOVO-APOS-FETCH · o invariante da branch ENTROU na main (squash do PR: commit novo, sem
+# parentesco com o da branch). A merge-base não o tem; só a PONTA o tem — é o caso que sustenta
+# a metade `origin/main`. E ele mede o limite do risco (i): a ref LOCAL velha.
+principal_sq="$TMP/principal_sq"; mkdir -p "$principal_sq"
+git -C "$principal_sq" init -q -b main
+printf '# leia\n' > "$principal_sq/README.md"; commitar "$principal_sq" "base"
+BASE_SQ=$(git -C "$principal_sq" rev-parse HEAD)
+sq="$TMP/novo-apos-fetch"; preparar "$sq" "$principal_sq" "$BASE_SQ"
+mkdir -p "$sq/tests/invariants"
+inv "" "$MARCA_BRANCH" "" > "$sq/$NOVO"; commitar "$sq" "a branch cria o invariante"
+mkdir -p "$principal_sq/tests/invariants"; git -C "$sq" show "HEAD:$NOVO" > "$principal_sq/$NOVO"
+commitar "$principal_sq" "squash do PR da branch: o invariante entra na main"
+inv "" "$MARCA_SEGUNDO" "" > "$sq/$NOVO"; git -C "$sq" add "$NOVO"
+# LIMITE-REF-VELHA · ⚠️ caso que PINA um limite, não um acerto. Sem fetch, a ref local não sabe
+# que a main já tem o arquivo, e a edição passa. O hook não vai à rede (é pre-commit) e a
+# doutrina de branches manda `git fetch` antes de trabalhar; o próximo assert prova que o fetch
+# fecha. Se alguém fechar este limite sem rede, este caso fica vermelho — inverta-o.
+if [ -z "$(git -C "$sq" rev-parse -q --verify "origin/main:$NOVO")" ] && [ -n "$(git -C "$principal_sq" rev-parse -q --verify "main:$NOVO")" ]; then
+  ok "LIMITE-REF-VELHA: a main TEM o invariante e a ref local origin/main NÃO sabe (a premissa)"
+else falha "LIMITE-REF-VELHA: a premissa (main tem, ref local não)" "a montagem não encena o caso"; fi
+r=$(rodar "$sq" freeze-invariants.sh)
+assert_exit "$(exit_de "$r")" 0 "LIMITE-REF-VELHA: com a ref local VELHA a edição passa (limite declarado no cabeçalho do hook)"
+git -C "$sq" fetch -q origin
+r=$(rodar "$sq" freeze-invariants.sh)
+assert_exit "$(exit_de "$r")" 1 "NOVO-APOS-FETCH: depois do fetch, o invariante que entrou na main SEGUE acusado"
+assert_contains "$(saida_de "$r")" "$NOVO" "NOVO-APOS-FETCH: e a mensagem nomeia o invariante"
+# e a branch que TROUXE a main: o merge (add/add idêntico) entra limpo, e a merge-base passa a ter o arquivo
+git -C "$sq" checkout -q HEAD -- "$NOVO"
+git -C "$sq" merge -q --no-edit origin/main >/dev/null 2>&1; rc=$?
+assert_exit "$rc" 0 "NOVO-TROUXE-A-MAIN: o merge da main (add/add idêntico) entra limpo (a premissa)"
+if [ -n "$(git -C "$sq" rev-parse -q --verify "$(git -C "$sq" merge-base HEAD origin/main):$NOVO")" ]; then ok "NOVO-TROUXE-A-MAIN: e a merge-base agora tem o arquivo"
+else falha "NOVO-TROUXE-A-MAIN: a merge-base tem o arquivo" "não tem"; fi
+inv "" "$MARCA_SEGUNDO" "" > "$sq/$NOVO"; git -C "$sq" add "$NOVO"
+r=$(commitar_pelo_dispatcher "$sq" "edita o invariante depois de trazer a main")
+assert_exit "$(exit_de "$r")" 1 "NOVO-TROUXE-A-MAIN: depois de trazer a main, editar SEGUE acusado"
+
+# CASO REN-MAIN · rename de invariante da main, fora de merge — rename é delete disfarçado
+rm_="$TMP/ren-main"; preparar "$rm_" "$principal" "$BASE_DA_BRANCH"
+git -C "$rm_" mv "$INV" tests/invariants/renomeado-pela-sessao.test.ts
+# (sem pathspec: limitado ao destino, o git não vê o lado apagado e mostra `A` — o hook lê o diff inteiro)
+if git -C "$rm_" -c core.quotepath=false diff --cached --name-status | grep -q '^R[0-9]*	tests/invariants/exemplo-congelado'; then ok "REN-MAIN: o git formou o par R (a premissa)"
+else falha "REN-MAIN: o git formou o par R" "$(git -C "$rm_" diff --cached --name-status)"; fi
+r=$(commitar_pelo_dispatcher "$rm_" "renomeia invariante da main")
+assert_exit "$(exit_de "$r")" 1 "REN-MAIN: renomear invariante da main SEGUE acusado (o destino ausente da main não o libera)"
+
+# CASO REN-PARA-PROPRIO · o disfarce em dois passos: copiar o invariante da main para um caminho
+# NOVO (A, passa) e, no commit seguinte, apagar o original. O segundo passo é `D` → acusado.
+rp="$TMP/ren-para-proprio"; preparar "$rp" "$principal" "$BASE_DA_BRANCH"
+git -C "$rp" show "HEAD:$INV" > "$rp/tests/invariants/copia-da-sessao.test.ts"
+git -C "$rp" add tests/invariants/copia-da-sessao.test.ts
+r=$(commitar_pelo_dispatcher "$rp" "copia o invariante")
+assert_exit "$(exit_de "$r")" 0 "REN-PARA-PROPRIO: a cópia para caminho novo passa (é A — a regra de sempre)"
+git -C "$rp" rm -q "$INV"
+r=$(commitar_pelo_dispatcher "$rp" "apaga o original")
+assert_exit "$(exit_de "$r")" 1 "REN-PARA-PROPRIO: apagar o original SEGUE acusado — o par não lava o delete"
+
 # CASO R1 · a sessão FORTALECE o invariante e depois o REVERTE para a versão da main, em
 # commit NORMAL. Identidade de CONTEÚDO não distingue isso de "a main chegando": nas duas
 # formas `:$p` == `origin/main:$p`. Este caso EXPIRA o antigo CASO CO, que encenava o mesmo
