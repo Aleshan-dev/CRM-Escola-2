@@ -12193,10 +12193,14 @@ export const DICIONARIO: Traducoes = {
   "Canais sem conta no perfil": { es: "Canales sin cuenta en el perfil" },
   "Estas conexões apontam para contas que saíram do perfil no provedor (por exemplo, conta removida e recriada por lá). Exclua a linha órfã para fechar o aviso.": { es: "Estas conexiones apuntan a cuentas que salieron del perfil en el proveedor (por ejemplo, una cuenta eliminada y recreada allí). Elimina la línea huérfana para cerrar el aviso." },
   "Canal excluído. A lista atualiza sem a linha órfã.": { es: "Canal eliminado. La lista se actualiza sin la línea huérfana." },
-  "Excluir": { es: "Eliminar" },
   "Excluir o canal órfão?": { es: "¿Eliminar el canal huérfano?" },
   "A linha sai da lista e os avisos dela são fechados. As conversas já recebidas continuam no CRM.": { es: "La línea sale de la lista y se cierran sus avisos. Las conversaciones ya recibidas siguen en el CRM." },
   "Excluir canal": { es: "Eliminar canal" },
+  "Desvincular perfil": { es: "Desvincular perfil" },
+  "Desvincular o perfil?": { es: "¿Desvincular el perfil?" },
+  "O perfil sai do CRM. Só funciona sem canais sociais ativos: arquive ou exclua os canais antes. Dá para vincular outro perfil depois.": { es: "El perfil sale del CRM. Solo funciona sin canales sociales activos: archiva o elimina los canales antes. Después puedes vincular otro perfil." },
+  "Perfil desvinculado. Dá para vincular outro perfil.": { es: "Perfil desvinculado. Puedes vincular otro perfil." },
+  "Salvar atualiza a chave em todos os canais deste perfil, inclusive os arquivados.": { es: "Guardar actualiza la clave en todos los canales de este perfil, incluidos los archivados." },
 
   // Extensões declarativas — interface e mensagens literais da API.
   "Extensões": { es: "Extensiones" },

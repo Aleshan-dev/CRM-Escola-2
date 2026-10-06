@@ -24,6 +24,13 @@ export async function readSocialIntegration(db: SupabaseClient, org: string) {
     );
   return { profileId: data.profile_id as string, key };
 }
+/**
+ * Salva a chave do perfil e ressincroniza a cópia por canal (spec 22, D1).
+ *
+ * O update abaixo NÃO filtra arquivamento de propósito: ele alcança ativas E
+ * arquivadas, porque a arquivada pode voltar e uma cópia velha nela é a
+ * divergência que prende a faixa. Travado por `sincronia.test.ts`.
+ */
 export async function configureSocialIntegration(
   db: SupabaseClient,
   org: string,
@@ -65,6 +72,56 @@ export async function configureSocialIntegration(
       "Credencial salva; não foi possível atualizar os canais. Salve novamente.",
       500,
     );
+}
+/**
+ * Desvincula o perfil social da organização (spec 22, D2).
+ *
+ * Apaga `channel_integrations` e NADA mais: se existir canal social ativo
+ * (não arquivado), recusa com 409 e nomeia a saída — arquivar ou excluir os
+ * canais antes. Nunca arquiva sozinho. Os avisos de saúde das sessões sociais
+ * são fechados em best-effort, no mesmo contrato de `channel-sessions/[id]`.
+ */
+export async function desvincularPerfilSocial(db: SupabaseClient, org: string) {
+  const ativos = await socialChannels(db, org);
+  if (ativos.length > 0)
+    throw new SocialError(
+      "Há canais sociais ativos. Arquive ou exclua os canais antes de desvincular o perfil.",
+      409,
+    );
+  const { data: removida, error: deleteError } = await db
+    .from("channel_integrations")
+    .delete()
+    .eq("organization_id", org)
+    .select("organization_id")
+    .maybeSingle();
+  if (deleteError) throw new SocialError("Não foi possível desvincular o perfil.", 500);
+  if (!removida) throw new SocialError("Nenhum perfil vinculado para desvincular.", 404);
+  let avisosFechados: "resolvido" | "sem_mudanca" | "falhou" = "sem_mudanca";
+  try {
+    const { data: sessoes, error: sessoesError } = await db
+      .from("channel_sessions")
+      .select("id")
+      .eq("organization_id", org)
+      .eq("provider", SOCIAL_PROVIDER);
+    if (sessoesError) throw sessoesError;
+    let fechou = false;
+    for (const sessao of (sessoes ?? []) as { id: string }[]) {
+      const estado = await resolverSaudeDaConexaoRemovida(db, {
+        id: sessao.id,
+        organization_id: org,
+        status: "STOPPED",
+      });
+      if (estado === "resolvido") fechou = true;
+    }
+    if (fechou) avisosFechados = "resolvido";
+  } catch (err) {
+    avisosFechados = "falhou";
+    logger.warn("Falha ao fechar os avisos das conexões sociais desvinculadas", {
+      organization_id: org,
+      erro: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return { desvinculado: true as const, avisos_fechados: avisosFechados };
 }
 export async function socialChannels(db: SupabaseClient, org: string) {
   const { data, error } = await db

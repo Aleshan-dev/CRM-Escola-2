@@ -65,6 +65,7 @@ export function RedesSociaisClient() {
     null,
   );
   const [excluding, setExcluding] = useState<Orphaned | null>(null);
+  const [confirmandoDesvincular, setConfirmandoDesvincular] = useState(false);
   const load = () => query.refetch();
   async function togglePausado(account: Account) {
     if (!account.channel) return;
@@ -93,6 +94,20 @@ export function RedesSociaisClient() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível excluir o canal.");
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function desvincularPerfil() {
+    setBusy("unlink");
+    setError(null);
+    try {
+      await apiClient.post("/api/v1/channels/social", { action: "unlink" });
+      toast.success(t("Perfil desvinculado. Dá para vincular outro perfil."));
+      setConfirmandoDesvincular(false);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível desvincular o perfil.");
     } finally {
       setBusy(null);
     }
@@ -194,6 +209,11 @@ export function RedesSociaisClient() {
             />
             <p className="text-xs text-muted-foreground">
               {t("A chave fica cifrada no servidor e não é exibida novamente.")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Salvar atualiza a chave em todos os canais deste perfil, inclusive os arquivados.",
+              )}
             </p>
           </div>
           <Button
@@ -414,9 +434,36 @@ export function RedesSociaisClient() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          <Button variant="ghost" className="self-start" onClick={() => setEditing(!editing)}>
-            {t("Alterar credencial")}
-          </Button>
+          <div className="flex flex-wrap gap-2 self-start">
+            <Button variant="ghost" onClick={() => setEditing(!editing)}>
+              {t("Alterar credencial")}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!!busy}
+              onClick={() => setConfirmandoDesvincular(true)}
+            >
+              {t("Desvincular perfil")}
+            </Button>
+          </div>
+          <AlertDialog open={confirmandoDesvincular} onOpenChange={(open) => !open && setConfirmandoDesvincular(false)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("Desvincular o perfil?")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t(
+                    "O perfil sai do CRM. Só funciona sem canais sociais ativos: arquive ou exclua os canais antes. Dá para vincular outro perfil depois.",
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void desvincularPerfil()}>
+                  {t("Desvincular")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <AlertDialog open={!!removing} onOpenChange={(open) => !open && setRemoving(null)}>
             <AlertDialogContent>
               <AlertDialogHeader>

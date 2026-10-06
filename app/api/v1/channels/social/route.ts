@@ -17,6 +17,7 @@ import { listSocialAccounts, socialRequest, SocialError } from "@/lib/channels/s
 import {
   readSocialIntegration,
   configureSocialIntegration,
+  desvincularPerfilSocial,
   socialChannels,
   connectSocialInbox,
   disconnectSocialAccount,
@@ -50,6 +51,7 @@ const inputSchema = z.discriminatedUnion("action", [
       remove_account: z.boolean(),
     })
     .strict(),
+  z.object({ action: z.literal("unlink") }).strict(),
 ]);
 function publicBase(): string {
   const url = new URL(env.NEXT_PUBLIC_APP_URL);
@@ -161,6 +163,8 @@ export async function POST(req: Request) {
         body.account_id,
         body.remove_account,
       );
+    } else if (body.action === "unlink") {
+      result = await desvincularPerfilSocial(db, auth.org.orgId);
     } else {
       const config = await readSocialIntegration(db, auth.org.orgId);
       if (!config) throw new SocialError("Configure a integração primeiro.", 422);
@@ -204,16 +208,21 @@ export async function POST(req: Request) {
     }
     void audit({
       action:
-        body.action === "disconnect" ? "channel.social_disconnected" : "channel.social_configured",
+        body.action === "disconnect"
+          ? "channel.social_disconnected"
+          : body.action === "unlink"
+            ? "channel.social_desvinculado"
+            : "channel.social_configured",
       organizationId: auth.org.orgId,
       actorUserId: auth.user.id,
       resourceType: "social_connections",
       requestId,
       metadata: {
         operation: body.action,
-        ...(body.action === "disconnect"
-          ? { account_id: body.account_id, ...(result as object) }
+        ...(body.action === "disconnect" || body.action === "unlink"
+          ? { ...(result as object) }
           : {}),
+        ...(body.action === "disconnect" ? { account_id: body.account_id } : {}),
       },
     });
     return ok(result, { requestId, headers });

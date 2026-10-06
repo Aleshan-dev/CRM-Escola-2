@@ -118,3 +118,23 @@ it("shows orphaned channels and excludes them through channel-sessions", async (
     expect(h.remove).toHaveBeenCalledWith("/api/v1/channel-sessions/ch-orfa"),
   );
 });
+it("asks before unlinking the profile and posts unlink on confirm", async () => {
+  h.get.mockResolvedValue({
+    data: {
+      configured: true,
+      label: "Partner",
+      networks: [{ id: "instagram", label: "Instagram" }],
+      accounts: [],
+      orphaned_channels: [],
+    },
+  });
+  h.post.mockResolvedValue({ data: { desvinculado: true } });
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Desvincular perfil" }));
+  expect(h.post).not.toHaveBeenCalled();
+  await screen.findByText("Desvincular o perfil?");
+  fireEvent.click(screen.getByRole("button", { name: /^Desvincular$/ }));
+  await vi.waitFor(() =>
+    expect(h.post).toHaveBeenCalledWith("/api/v1/channels/social", { action: "unlink" }),
+  );
+});

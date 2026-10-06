@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   accounts: vi.fn(),
   limit: vi.fn(),
   disconnect: vi.fn(),
+  unlink: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: h.role }));
 vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: h.mfa }));
@@ -21,6 +22,7 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: h.limit }));
 vi.mock("@/lib/channels/social/store", () => ({
   readSocialIntegration: h.read,
   configureSocialIntegration: h.configure,
+  desvincularPerfilSocial: h.unlink,
   socialChannels: h.channels,
   connectSocialInbox: vi.fn(),
   disconnectSocialAccount: h.disconnect,
@@ -167,4 +169,18 @@ it("disconnects under the trusted tenant and audits the outcome", async () => {
     }),
   );
   expect((await call({ action: "disconnect", account_id: "a".repeat(24) })).status).toBe(400);
+});
+it("unlinks the profile under the trusted tenant and audits without secrets", async () => {
+  h.unlink.mockResolvedValue({ desvinculado: true, avisos_fechados: "sem_mudanca" });
+  const response = await call({ action: "unlink" });
+  expect(response.status).toBe(200);
+  expect(h.unlink).toHaveBeenCalledWith({}, "trusted");
+  expect(h.audit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "channel.social_desvinculado",
+      organizationId: "trusted",
+      metadata: expect.objectContaining({ operation: "unlink", desvinculado: true }),
+    }),
+  );
+  expect(JSON.stringify(h.audit.mock.calls)).not.toContain("secret-input");
 });
