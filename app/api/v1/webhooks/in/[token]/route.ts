@@ -44,7 +44,7 @@ import {
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { ApiError } from "@/lib/api/types";
-import { autorizarCaptacaoParaIA, camposDeAutorizacaoDoFormulario } from "@/lib/ai/elegibilidade/formulario";
+import { autorizarCaptacaoParaIA, camposDaCaptacao } from "@/lib/ai/elegibilidade/formulario";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { kickLocalPipeline } from "@/lib/dev/kick-local-pipeline";
 
@@ -309,7 +309,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     capturedName: mapped.name,
     capturedPhone: mapped.phone,
     capturedEmail: mapped.email,
-    fields: { ...mapped.custom_fields, ...(source.authorize_ai_on_capture ? camposDeAutorizacaoDoFormulario(payload) : {}) },
+    fields: camposDaCaptacao(mapped.custom_fields, payload, source.authorize_ai_on_capture),
     utm: mapped.source_metadata,
   };
 

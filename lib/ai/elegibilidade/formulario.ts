@@ -15,6 +15,19 @@ export function camposDeAutorizacaoDoFormulario(payload: Record<string, unknown>
   };
 }
 
+/**
+ * Os campos de autorização entram PRIMEIRO: `limitarCampos` guarda só os 60
+ * iniciais, e um formulário grande cortaria o consentimento — ou a recusa,
+ * que é o lado aberto da falha (a revogação não aconteceria).
+ */
+export function camposDaCaptacao(
+  camposDoFormulario: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  autorizaIA: boolean,
+): Record<string, unknown> {
+  return { ...(autorizaIA ? camposDeAutorizacaoDoFormulario(payload) : {}), ...camposDoFormulario };
+}
+
 /** A decisão e a escrita são atômicas no banco; falha deixa a captação para humano. */
 export async function autorizarCaptacaoParaIA(
   admin: SupabaseClient,
