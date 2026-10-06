@@ -249,7 +249,7 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
               {t("Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.")}
             </p>}
             <p className="text-sm text-muted-foreground">
-              {t("O integrador deve enviar ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Envios antigos e repetidos não são liberados.")}
+              {t("O integrador deve enviar external_id, ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Sem external_id, o envio não concede nem renova a autorização; reenviar com o mesmo external_id não libera de novo. Uma recusa (false) sempre revoga.")}
             </p>
           </section>
 

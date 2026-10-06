@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { limitarCampos } from "@/lib/webhooks/captacao";
+import { ttlDaAutorizacaoMs } from "./gate";
 import { autorizarCaptacaoParaIA, camposDaCaptacao, camposDeAutorizacaoDoFormulario } from "./formulario";
 const input = {
   organizationId: "org",
@@ -58,7 +59,19 @@ describe("form authorization adapter", () => {
       p_lead_id: "lead",
       p_contact_id: "contact",
       p_request_id: "request",
+      p_ttl_ms: ttlDaAutorizacaoMs(process.env),
     });
+  });
+  // A renovação no banco usa a régua do gate, não um default próprio.
+  it("sends the gate TTL knob to the database", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    vi.stubEnv("AI_ALLOWLIST_TTL_DAYS", "3");
+    try {
+      await autorizarCaptacaoParaIA({ rpc } as unknown as SupabaseClient, input);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(rpc.mock.calls[0][1].p_ttl_ms).toBe(3 * 24 * 60 * 60 * 1000);
   });
   it("keeps the lead available for human care on database failure", async () => {
     const rpc = vi.fn().mockRejectedValue(new Error("database unavailable"));

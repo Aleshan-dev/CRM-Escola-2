@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
+import { ttlDaAutorizacaoMs } from "@/lib/ai/elegibilidade/gate";
 
 /** Reservados: preserva os tipos do envio, sem converter privacidade em consentimento. */
 export function camposDeAutorizacaoDoFormulario(payload: Record<string, unknown>) {
@@ -28,7 +29,11 @@ export function camposDaCaptacao(
   return { ...(autorizaIA ? camposDeAutorizacaoDoFormulario(payload) : {}), ...camposDoFormulario };
 }
 
-/** A decisão e a escrita são atômicas no banco; falha deixa a captação para humano. */
+/**
+ * A decisão e a escrita são atômicas no banco; falha deixa a captação para humano.
+ * A validade vai do servidor para o banco: a renovação de uma autorização vencida
+ * usa a MESMA régua do gate (`AI_ALLOWLIST_TTL_DAYS`).
+ */
 export async function autorizarCaptacaoParaIA(
   admin: SupabaseClient,
   input: {
@@ -46,6 +51,7 @@ export async function autorizarCaptacaoParaIA(
       p_lead_id: input.leadId,
       p_contact_id: input.contactId,
       p_request_id: input.requestId,
+      p_ttl_ms: ttlDaAutorizacaoMs(process.env),
     });
     if (error) throw error;
     return data === true;
