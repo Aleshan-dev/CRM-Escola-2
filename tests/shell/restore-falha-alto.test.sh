@@ -9,7 +9,8 @@
 # "already exists" e "extension is not available" até num banco VAZIO — o que
 # era o problema medido: com `-v ON_ERROR_STOP=1 --single-transaction` o
 # restore morria em Supabase novo, Postgres 17 puro e database nova (rc=3,
-# 0 tabelas), e sem elas os mesmos dumps entravam com rc=0 e 110 tabelas.
+# 0 tabelas), e sem elas, nos dois primeiros, o mesmo dump entrou com rc=0 e
+# 110 tabelas.
 #
 # Duas provas, e elas são o par:
 #
@@ -59,6 +60,9 @@ case " $* " in *" psql "*) ;; *) exit 0 ;; esac
 for a in "$@"; do
   case "$a" in
     *"pg_tables"*)
+      # DUBLE_CONTAGEM (mesmo vazio) troca a resposta: a conexão "deu certo"
+      # (rc 0), mas o que voltou não é um número.
+      if [ -n "${DUBLE_CONTAGEM+x}" ]; then printf '%s' "$DUBLE_CONTAGEM"; exit 0; fi
       if [ "${DUBLE_BANCO_EXISTE:-0}" = "1" ]; then printf '118\n'; else printf '0\n'; fi
       exit 0 ;;
   esac
@@ -112,7 +116,7 @@ echo "banco que já tem o schema: paramos ANTES do psql com a mensagem certa (#2
 : > "$DUBLE_LOG"
 RC_EXISTE="$(rodar_restore "$WORK/existe.txt" 1)"
 check "sai com rc diferente de 0 (o die do script)" diferente "$RC_EXISTE" 0
-check "diz que o banco já tem o schema" contem "$WORK/existe.txt" "já tem o schema"
+check "diz que o banco já tem as tabelas do sistema" contem "$WORK/existe.txt" "já tem as tabelas do sistema"
 check "diz que nada foi alterado no banco" contem "$WORK/existe.txt" "nada foi alterado"
 check "não imprime '✓ banco restaurado'" nao_contem "$WORK/existe.txt" "✓ banco restaurado"
 check "o psql do restore nem é chamado (só a checagem da contagem)" igual "$(grep -c 'psql' "$DUBLE_LOG")" 1
@@ -128,6 +132,18 @@ check "o dublê emitiu o erro de schema do dump real" contem "$WORK/vazio.txt" '
 check "o dublê emitiu o erro de extensão do dump real" contem "$WORK/vazio.txt" 'extension "pg_net" is not available'
 check "o psql não recebe ON_ERROR_STOP=1 (sem ela ele segue e sai 0)" nao_contem "$DUBLE_LOG" "ON_ERROR_STOP"
 check "o psql do restore foi chamado (2 chamadas: checagem + restore)" igual "$(grep -c 'psql' "$DUBLE_LOG")" 2
+
+echo "contagem com rc 0 mas sem número (vazia ou lixo): falha fechada, o restore não roda:"
+for resposta in "" "NOTICE:  algo no stdout"; do
+  : > "$DUBLE_LOG"
+  RC_LIXO="$( ( cd "$PROJ" && printf 'RESTAURAR\n' \
+      | DUBLE_CONTAGEM="$resposta" bash "$KIT_DIR/restore.sh" backups/db-20261002-030000.sql.gz \
+    ) > "$WORK/lixo.txt" 2>&1; printf '%s' "$?")"
+  check "[$resposta]: sai com rc diferente de 0" diferente "$RC_LIXO" 0
+  check "[$resposta]: diz que não conseguiu conferir" contem "$WORK/lixo.txt" "Não consegui conferir"
+  check "[$resposta]: não imprime '✓ banco restaurado'" nao_contem "$WORK/lixo.txt" "✓ banco restaurado"
+  check "[$resposta]: o psql do restore nem é chamado" igual "$(grep -c 'psql' "$DUBLE_LOG")" 1
+done
 
 [ "$FAILS" -eq 0 ] || { echo "✖ $FAILS falha(s)" >&2; exit 1; }
 echo "ok: restore.sh para antes num banco existente e restaura num banco vazio mesmo com os erros do dump"
