@@ -99,6 +99,9 @@ function responderA(mensagem: any): any | null {
               properties: { consulta: { type: "string", description: "O que procurar" } },
               required: ["consulta"],
             },
+            // Declara leitura de verdade (item 8): sem isto a ferramenta sairia
+            // como ESCRITA e o gate de funil a recusaria por vacuidade.
+            annotations: { readOnlyHint: true },
           },
         ],
       },

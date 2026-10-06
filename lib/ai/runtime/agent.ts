@@ -613,10 +613,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       supabase: admin,
     };
     const handoffSignal: RuntimeHandoffSignal = { triggered: false };
-    // #2147 — servidor MCP externo que a instalação registrou. `null` quando
-    // não há registro (ou o servidor não respondeu): o turno nem abre rede, e
-    // as ferramentas de antes continuam sendo as únicas.
-    const servidorExterno = await carregarServidorMcpExterno(admin, run.organization_id);
+    // #2147 — servidor MCP externo que o dono da instalação registrou. `null`
+    // quando não há registro (ou o servidor não respondeu), e também quando o
+    // TURNO TEM CONTATO (item 8, escolha (b)): sem o identificador do contato
+    // na chamada ao servidor remoto, a leitura de lá poderia devolver dado de
+    // outro cliente. Cobre o Conversador e o Operador, os dois passam por aqui.
+    const servidorExterno = await carregarServidorMcpExterno(admin, run.organization_id, {
+      ...(contatoDoTurno ? { contatoDoTurno } : {}),
+    });
     const tools = pickToolsFromMcp({
       supabase: admin,
       ctx,

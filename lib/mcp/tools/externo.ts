@@ -37,8 +37,13 @@
  */
 import { z } from "zod";
 
-import { chamarFerramentaRemota, type FerramentaRemota } from "@/lib/mcp/servidor-externo/chamada";
-import type { ServidorMcpExterno } from "@/lib/mcp/servidor-externo/registro";
+import {
+  chamarFerramentaRemota,
+  type FerramentaRemota,
+  type OpcoesDeChamada,
+} from "@/lib/mcp/servidor-externo/chamada";
+import type { EscolhaRemota } from "@/lib/mcp/servidor-externo/ids";
+import { hostDoEndpoint, type ServidorMcpExterno } from "@/lib/mcp/servidor-externo/registro";
 import type { McpToolDefinition } from "@/lib/mcp/types";
 import { logger } from "@/lib/logger";
 
@@ -140,14 +145,15 @@ export function definirFerramentasRemotas(
       // direito de saber que aquilo é consulta a outro sistema.
       description: `${ferramenta.description ?? ferramenta.name} (servidor MCP externo)`,
       inputSchema: shapeDaFerramenta(ferramenta),
-      category: "read",
+      category: ehLeitura ? "read" : "write",
       requiresRole: "agent",
-      requiresScope: "mcp:read",
+      requiresScope: ehLeitura ? "mcp:read" : "mcp:write",
       handler: async (input) => {
         const resultado = await chamarFerramentaRemota(
           servidor,
           ferramenta.name,
           (input ?? {}) as Record<string, unknown>,
+          opcoes,
         );
         return resultado.dados === undefined
           ? { texto: resultado.texto }

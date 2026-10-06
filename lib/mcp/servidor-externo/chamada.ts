@@ -45,6 +45,12 @@ import type { ServidorMcpExterno } from "./registro";
 export interface FerramentaRemota {
   name: string;
   description?: string;
+  /**
+   * `annotations.readOnlyHint` do protocolo — DECLARAÇÃO do servidor remoto,
+   * não garantia (#2147, item 8). Serve de metade da prova de "isto é leitura";
+   * a outra metade é a marca de quem administra, em `tool_ids`.
+   */
+  somenteLeitura?: boolean;
   inputSchema?: {
     type?: string;
     properties?: Record<string, unknown>;
@@ -188,6 +194,10 @@ export async function listarFerramentasDoServidor(
       ...(typeof ferramenta.description === "string"
         ? { description: ferramenta.description }
         : {}),
+      // `annotations.readOnlyHint === true` EXATAMENTE: ausente, `false` ou
+      // outro valor é "não declarado como leitura", que vira escrita na
+      // classificação (item 8) — a declaração do servidor não é garantia.
+      ...(ferramenta.annotations?.readOnlyHint === true ? { somenteLeitura: true } : {}),
       ...(ferramenta.inputSchema ? { inputSchema: ferramenta.inputSchema } : {}),
     })) as FerramentaRemota[];
 }

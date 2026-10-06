@@ -17,6 +17,14 @@ const pickToolsFromMcp = vi.fn((_input: Record<string, unknown>): Record<string,
   throw new Error("parou_na_montagem");
 });
 
+/**
+ * Grava os argumentos da carga do servidor MCP externo (#2147, item 8): a
+ * ESCOLHA (b) é que o CONTATO chegue aqui — turno com conversa não carrega
+ * servidor remoto nenhum, e repassar o contato é a única forma de isso valer
+ * para os DOIS montadores (Conversador e Operador).
+ */
+const carregarServidorMcpExterno = vi.fn(async (..._argumentos: unknown[]) => null);
+
 vi.mock("@/lib/ai/runtime/tools", () => ({ pickToolsFromMcp }));
 vi.mock("@/lib/ai/runtime/mcp_token", () => ({
   mintEphemeralToken: vi.fn(async () => ({ id: "tok-1" })),
@@ -40,9 +48,7 @@ vi.mock("@/lib/ai/credentials", () => ({
  * `supabase.from is not a function` antes de qualquer asserção sobre o contato.
  * Devolver `null` mantém o recado da função: sem registro, não há chave nova.
  */
-vi.mock("@/lib/mcp/servidor-externo/carregar", () => ({
-  carregarServidorMcpExterno: vi.fn(async () => null),
-}));
+vi.mock("@/lib/mcp/servidor-externo/carregar", () => ({ carregarServidorMcpExterno }));
 const finalizeRun = vi.fn(async (_args: Record<string, unknown>) => {});
 vi.mock("@/lib/ai/runtime/finalize", () => ({ finalizeRun, sendFinalResponse: vi.fn() }));
 
@@ -73,8 +79,15 @@ function entregue(): Record<string, unknown> {
 
 beforeEach(() => {
   pickToolsFromMcp.mockClear();
+  carregarServidorMcpExterno.mockClear();
   finalizeRun.mockClear();
 });
+
+/** O 3º argumento de `carregarServidorMcpExterno` — é ele que carrega o contato. */
+function opcoesDaCarga() {
+  expect(carregarServidorMcpExterno, "o servidor externo nem foi consultado").toHaveBeenCalled();
+  return carregarServidorMcpExterno.mock.calls.at(-1)![2] as Record<string, unknown> | undefined;
+}
 
 describe("motor: buildMcpTurnTools repassa o contato do turno", () => {
   async function montar(contactId: string | null) {
@@ -93,8 +106,14 @@ describe("motor: buildMcpTurnTools repassa o contato do turno", () => {
     expect((await montar(CONTATO)).contatoDoTurno).toBe(CONTATO);
   });
 
-  it("ensaio sem cliente: nada é inventado", async () => {
+  it("turno com cliente: o MESMO contato diz à carga do servidor externo que não carregue nada (item 8)", async () => {
+    await montar(CONTATO);
+    expect(opcoesDaCarga()).toMatchObject({ contatoDoTurno: CONTATO });
+  });
+
+  it("ensaio sem cliente: nada é inventado, nem o contato na carga externa", async () => {
     expect(await montar(null)).not.toHaveProperty("contatoDoTurno");
+    expect(opcoesDaCarga()).toEqual({});
   });
 });
 
@@ -142,6 +161,11 @@ describe("runtime antigo: runAgent repassa o contato do turno", () => {
     expect(entregue().contatoDoTurno).toBe(CONTATO);
   });
 
+  it("turno de conversa: a carga do servidor externo recebe o contato e não carrega nada (item 8)", async () => {
+    await rodar({ contact_id: CONTATO, conversation_id: "conv-1" });
+    expect(opcoesDaCarga()).toMatchObject({ contatoDoTurno: CONTATO });
+  });
+
   it("linha sem contato: vale o dono da conversa", async () => {
     await rodar({ contact_id: null, conversation_id: "conv-1" }, { contact_id: DONO_DA_CONVERSA });
     expect(entregue().contatoDoTurno).toBe(DONO_DA_CONVERSA);
@@ -157,5 +181,6 @@ describe("runtime antigo: runAgent repassa o contato do turno", () => {
   it("controle: ensaio sem conversa monta sem contatoDoTurno", async () => {
     await rodar({ contact_id: null, conversation_id: null });
     expect(entregue()).not.toHaveProperty("contatoDoTurno");
+    expect(opcoesDaCarga()).toEqual({});
   });
 });

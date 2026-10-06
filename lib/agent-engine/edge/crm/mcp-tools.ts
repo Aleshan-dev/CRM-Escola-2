@@ -132,8 +132,13 @@ export async function buildMcpTurnTools(
   const handoffSignal: RuntimeHandoffSignal = { triggered: false };
 
   // #2147 — servidor MCP externo registrado pela instalação; `null` = sem
-  // registro e nenhuma chamada de rede.
-  const servidorExterno = await carregarServidorMcpExterno(cfg.supabase, ids.organizationId);
+  // registro e nenhuma chamada de rede. `ids.contactId` presente = turno de
+  // conversa, e aí também `null` (item 8, escolha (b)): o servidor remoto não
+  // recebe o contato do turno, então uma leitura dele poderia devolver dado de
+  // OUTRO cliente ao modelo e do modelo ao contato.
+  const servidorExterno = await carregarServidorMcpExterno(cfg.supabase, ids.organizationId, {
+    ...(ids.contactId ? { contatoDoTurno: ids.contactId } : {}),
+  });
 
   const tools = pickToolsFromMcp({
     supabase: cfg.supabase,
