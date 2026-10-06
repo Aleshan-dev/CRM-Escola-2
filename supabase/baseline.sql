@@ -45411,7 +45411,7 @@ grant execute on function public.fn_contato_pessoal_remove_trechos_do_rag(uuid,u
 notify pgrst,'reload schema';
 
 
--- ---- Autorização por fonte de formulário (migration 0575) ----
+-- ---- Autorização por fonte de formulário (migration 0577) ----
 -- manifest: Autorização opcional por fonte de formulário, vinculada à captação completa com consentimento explícito e sem retomar atendimento humano.
 alter table public.webhook_sources
   add column if not exists authorize_ai_on_capture boolean not null default false;
