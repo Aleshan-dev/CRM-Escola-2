@@ -1504,13 +1504,13 @@ export const DICIONARIO: Traducoes = {
   "DPO email": { es: "Email del DPO" },
   "Retenção de mídia (dias)": { es: "Retención de archivos multimedia (días)" },
   "Limpeza automática de mídia antiga": { es: "Limpieza automática de multimedia antigua" },
-  "Ligado: apaga a mídia com mais de {n} dias.": {
-    es: "Activado: elimina la multimedia con más de {n} días.",
+  "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.": {
+    es: "Activado: elimina la multimedia y los archivos adjuntos de notas internas con más de {n} días.",
   },
-  "Desligado: a mídia das conversas não é apagada por idade.": {
-    es: "Desactivado: la multimedia de las conversaciones no se elimina por antigüedad.",
+  "Desligado: a mídia das conversas e os anexos de nota interna não são apagados por idade.": {
+    es: "Desactivado: la multimedia de las conversaciones y los archivos adjuntos de notas internas no se eliminan por antigüedad.",
   },
-  "Ao ligar, a mídia de mensagem com mais de {n} dias começará a ser apagada.": { es: "Al activarlo, la multimedia de mensajes con más de {n} días comenzará a eliminarse." },
+  "Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.": { es: "Al activarlo, la multimedia de mensajes y los archivos adjuntos de notas internas con más de {n} días comenzarán a eliminarse." },
   "URL política de privacidade": { es: "URL de la política de privacidad" },
   "Informações pessoais. Email só pode ser trocado em breve.": {
     es: "Información personal. Pronto podrás cambiar el email.",
