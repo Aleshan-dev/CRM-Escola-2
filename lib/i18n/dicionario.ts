@@ -14520,7 +14520,6 @@ export const DICIONARIO: Traducoes = {
   "canal arquivado fica de fora": { es: "canal archivado queda fuera" },
   "canais arquivados ficam de fora": { es: "canales archivados quedan fuera" },
   // ─── Videochamada (Jitsi Meet, #2440) ───
-  Vídeo: { es: "Vídeo" },
   Videochamada: { es: "Videollamada" },
   "Sala de videochamada": { es: "Sala de videollamada" },
   "A sala é esta conversa: envie o link pelo chat e o contato entra pelo celular, sem instalar nada.":

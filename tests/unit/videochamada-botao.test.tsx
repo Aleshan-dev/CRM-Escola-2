@@ -15,8 +15,14 @@ import { VideoCallButton } from "@/components/inbox/VideoCallButton";
  */
 
 const sendMock = vi.hoisted(() => vi.fn());
+const copiarMock = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/inbox/useSendMessage", () => ({
   useSendMessage: () => ({ mutate: sendMock, isPending: false }),
+}));
+// O componente usa o helper (regra do repo: cliente nunca chama
+// navigator.clipboard na mão — em http://IP não existe isSecureContext).
+vi.mock("@/lib/clipboard", () => ({
+  copyToClipboard: (texto: string) => copiarMock(texto) as Promise<boolean>,
 }));
 
 const CONVERSA = "3f1d2b7c-9a44-4e11-8f21-5b6c7d8e9f00";
@@ -30,6 +36,8 @@ function injetaServidor(valor: string | undefined) {
 describe("VideoCallButton", () => {
   beforeEach(() => {
     sendMock.mockReset();
+    copiarMock.mockReset();
+    copiarMock.mockResolvedValue(true);
     sendMock.mockImplementation((_args: unknown, cb?: { onSuccess?: () => void }) => {
       cb?.onSuccess?.();
     });
@@ -85,16 +93,16 @@ describe("VideoCallButton", () => {
 
   it("'Copiar link' não toca na API: é só clipboard", async () => {
     injetaServidor("https://meet.jit.si");
+    copiarMock.mockReset();
+    copiarMock.mockResolvedValue(true);
     const user = userEvent.setup();
-    const clipboard = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText: clipboard } });
 
     render(<VideoCallButton conversationId={CONVERSA} />);
     await user.click(screen.getByTestId("btn-videochamada"));
     await user.click(await screen.findByTestId("btn-copiar-link-video"));
 
     await waitFor(() =>
-      expect(clipboard).toHaveBeenCalledWith(
+      expect(copiarMock).toHaveBeenCalledWith(
         `https://meet.jit.si/deskcomm-${CONVERSA}`,
       ),
     );

@@ -329,6 +329,13 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
       "é a DEFINIÇÃO de DEFAULT_APP_NAME — o valor que aparece quando o operador não configurou marca nenhuma. Se esta linha sumir, some o padrão",
     marcas: ["deskcommcrm"],
   },
+  // ─── PROTOCOLO (contínuo) ───
+  "lib/video/jitsi.ts": {
+    categoria: "PROTOCOLO",
+    motivo:
+      "prefixo da sala de videochamada (<prefixo>-<conversationId>) na URL do Jitsi. O link é repassado pelo chat e vira o convite da sala: renomear separa quem já tem o link de quem entrar depois, e duas abertas da mesma conversa cairiam em salas diferentes. Não vem de branding() justamente porque não pode mudar junto com a marca",
+    marcas: ["deskcomm"],
+  },
 };
 
 /**

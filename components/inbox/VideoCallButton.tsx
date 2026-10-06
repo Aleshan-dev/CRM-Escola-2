@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useT } from "@/hooks/i18n/useT";
+import { copyToClipboard } from "@/lib/clipboard";
 import { VideoCamera } from "@/lib/ui/icons";
-import { salaDeVideo, servidorDeVideo, urlDaSala } from "@/lib/video/jitsi";
+import { servidorDeVideo, urlDaSala } from "@/lib/video/jitsi";
 
 interface Props {
   /** A conversa que vira a sala: `deskcomm-<conversationId>`. */
@@ -49,12 +50,12 @@ export function VideoCallButton({ conversationId }: Props) {
 
   const copiar = useCallback(async () => {
     if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success(t("Link da videochamada copiado."));
-    } catch {
+    // `copyToClipboard` (e não `navigator.clipboard` na mão): self-host em
+    // http://IP não tem isSecureContext, e lá o clipboard direto nem existe.
+    const ok = await copyToClipboard(url);
+    if (ok) toast.success(t("Link da videochamada copiado."));
+    else
       toast.error(t("Não consegui copiar o link. Selecione e copie da barra de endereço."));
-    }
   }, [url, t]);
 
   const enviarLink = useCallback(() => {
