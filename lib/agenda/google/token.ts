@@ -41,7 +41,7 @@ async function pedirToken(corpo: URLSearchParams, agora: Date): Promise<LeituraD
     // Sem resposta do Google, nada foi decidido do lado de lá. Quem chama
     // classifica com `classificarErroDoGoogle`, que lê isso como transitório.
     const motivo = erro instanceof Error ? erro.message : String(erro);
-    return { ok: false, motivo: "resposta_invalida", detalhe: `sem resposta do Google: ${motivo}` };
+    return { ok: false, motivo: "resposta_invalida", detalhe: `sem resposta do Google: ${motivo}`, status: null };
   }
 
   // O corpo é lido MESMO em erro: é nele que vem `{"error":"invalid_grant"}`,
@@ -56,10 +56,11 @@ async function pedirToken(corpo: URLSearchParams, agora: Date): Promise<LeituraD
       ok: false,
       motivo: "resposta_invalida",
       detalhe: `HTTP ${resposta.status} com corpo ilegível`,
+      status: resposta.status,
     };
   }
 
-  return lerRespostaDeToken(bruto, { agora });
+  return lerRespostaDeToken(bruto, { agora, status: resposta.status });
 }
 
 /** Troca o `code` do consentimento pelo primeiro par de tokens. */
