@@ -1,5 +1,9 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
-import { provedorOferecido } from "@/lib/ai/pontos/provedores-oferecidos";
+import {
+  MENSAGEM_PROVEDOR_DESLIGADO,
+  provedorDesligadoNaInstalacao,
+  provedorOferecido,
+} from "@/lib/ai/pontos/provedores-oferecidos";
 /**
  * GET/PUT /api/v1/ai/providers — a configuração de IA de cada ponto do sistema.
  *
@@ -562,13 +566,8 @@ export async function PATCH(req: NextRequest): Promise<Response> {
  * ponto ou no padrão que a tela nem oferece.
  */
 async function provedorDesligado(provider: string): Promise<Response | null> {
-  const oferece = await provedorOferecido(createAdminClient());
-  if (oferece(provider)) return null;
-  return fail(
-    "provedor_desligado",
-    "a assinatura do ChatGPT está desligada nesta instalação — quem administra o servidor liga em Recursos opcionais",
-    422,
-  );
+  if (!(await provedorDesligadoNaInstalacao(createAdminClient(), provider))) return null;
+  return fail("provedor_desligado", MENSAGEM_PROVEDOR_DESLIGADO, 422);
 }
 
 function instalacaoTemChaveDeIa(): boolean {

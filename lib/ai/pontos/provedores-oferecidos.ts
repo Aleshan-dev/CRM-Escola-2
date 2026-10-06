@@ -20,10 +20,34 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { moduloLigado } from "@/lib/instalacao/modulos";
 
-import { ehProvedorSuportado, PROVEDOR_POR_ASSINATURA } from "./provedores";
+import { ehProvedorSuportado, IDS_DE_PROVEDOR, PROVEDOR_POR_ASSINATURA } from "./provedores";
+
+/** A recusa de toda escrita que tenta gravar um provedor desligado (422 `provedor_desligado`). */
+export const MENSAGEM_PROVEDOR_DESLIGADO =
+  "a assinatura do ChatGPT está desligada nesta instalação — quem administra o servidor liga em Recursos opcionais";
 
 export async function provedorOferecido(db: SupabaseClient): Promise<(id: string) => boolean> {
   const assinaturaLigada = await moduloLigado(db, "login_codex");
   return (id) =>
     ehProvedorSuportado(id) && (id !== PROVEDOR_POR_ASSINATURA || assinaturaLigada);
+}
+
+/** Os ids que a tela oferece — o servidor filtra, o componente de cliente só desenha. */
+export async function idsDosProvedoresOferecidos(db: SupabaseClient): Promise<string[]> {
+  const oferece = await provedorOferecido(db);
+  return IDS_DE_PROVEDOR.filter(oferece);
+}
+
+/**
+ * Para quem ESCREVE: o provedor está desligado nesta instalação? Só consulta o
+ * banco quando o id é o da assinatura — as outras escritas não pagam a leitura.
+ * O `db` precisa ser o cliente de serviço (`platform_config` não tem policy);
+ * com outro, a leitura falha e a resposta é "desligado".
+ */
+export async function provedorDesligadoNaInstalacao(
+  db: SupabaseClient,
+  id: string | undefined,
+): Promise<boolean> {
+  if (id !== PROVEDOR_POR_ASSINATURA) return false;
+  return !(await moduloLigado(db, "login_codex"));
 }
