@@ -66,6 +66,8 @@ describe("trocarCodigoPorToken", () => {
     const r = await trocarCodigoPorToken(APP, "c", { agora: AGORA });
     expect(r).toMatchObject({ ok: false, motivo: "erro_do_google" });
     if (!r.ok) expect(r.detalhe).toContain("invalid_grant");
+    // O status viaja junto (#2393): é ele que faz a frase dizer HTTP 400.
+    if (!r.ok) expect(r.status).toBe(400);
   });
 
   it("rede caída não lança — vira recusa legível", async () => {
@@ -73,6 +75,8 @@ describe("trocarCodigoPorToken", () => {
     const r = await trocarCodigoPorToken(APP, "c", { agora: AGORA });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.detalhe).toContain("sem resposta do Google");
+    // Sem resposta HTTP, o status é `null` — não inventa 0 nem 500.
+    if (!r.ok) expect(r.status).toBeNull();
   });
 
   it("corpo que não é JSON também não lança", async () => {
@@ -85,6 +89,7 @@ describe("trocarCodigoPorToken", () => {
     const r = await trocarCodigoPorToken(APP, "c", { agora: AGORA });
     expect(r).toMatchObject({ ok: false, motivo: "resposta_invalida" });
     if (!r.ok) expect(r.detalhe).toContain("502");
+    if (!r.ok) expect(r.status).toBe(502);
   });
 
   it("desiste depois de um prazo, em vez de pendurar a requisição", async () => {

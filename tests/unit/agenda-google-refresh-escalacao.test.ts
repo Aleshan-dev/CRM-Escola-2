@@ -179,6 +179,20 @@ describe("classificarErroDoGoogle — `invalid_grant` com descrição", () => {
       expect(estadoDaConexaoApos(c.desfecho)).toBeNull();
     }
   });
+
+  it("recusa SEM motivo reconhecido: o status decide — HTTP 400 é `permanente`, sem status é `transitorio` (#2393)", () => {
+    // É a mudança que acompanha o status: a régua de `transitorio` já era
+    // "status â null ou >= 500"; o que faltava era o status CHEGAR aqui.
+    const comStatus = classificarErroDoGoogle({ error: "algo_desconhecido", status: 400 }, "token");
+    expect(comStatus.desfecho).toBe("permanente");
+    expect(estadoDaConexaoApos(comStatus.desfecho)).toBe("error");
+    expect(comStatus.mensagem).toContain("HTTP 400");
+
+    const semStatus = classificarErroDoGoogle({ error: "sem resposta do Google: fetch failed" }, "token");
+    expect(semStatus.desfecho).toBe("transitorio");
+    expect(estadoDaConexaoApos(semStatus.desfecho)).toBeNull();
+    expect(semStatus.mensagem).toContain("sem resposta");
+  });
 });
 
 describe("agenda-google-refresh — a rodada que precisa ESCALAR para reconectar", () => {
@@ -228,5 +242,22 @@ describe("agenda-google-refresh — a rodada que precisa ESCALAR para reconectar
 
     expect(resumo).toMatchObject({ reautenticar: 1, falhas: 0 });
     expect(atualizacoes[0]?.campos).toMatchObject({ status: "token_expired" });
+  });
+
+  it("recusa 400 SEM motivo reconhecido vira `error`, e a frase diz HTTP 400 (#2393)", async () => {
+    // Antes do status, esta mesma recusa caía em `transitorio`: a conexão
+    // seguia saudável repetindo para sempre, e a tela dizia "sem resposta"
+    // para um Google que respondeu.
+    linhas = [conexao()];
+    vi.mocked(fetch).mockResolvedValue(respostaHttp({ error: "algo_desconhecido" }, 400));
+
+    const { renovarAgendasDoGoogle } = await carregarRota();
+    const resumo = await renovarAgendasDoGoogle(admin(), { agora: AGORA });
+
+    expect(resumo).toMatchObject({ renovadas: 0, reautenticar: 0, falhas: 1 });
+    expect(atualizacoes[0]?.campos).toMatchObject({ status: "error" });
+    const frase = String(atualizacoes[0]?.campos.last_sync_error);
+    expect(frase).toContain("HTTP 400");
+    expect(frase).not.toContain("sem resposta");
   });
 });
