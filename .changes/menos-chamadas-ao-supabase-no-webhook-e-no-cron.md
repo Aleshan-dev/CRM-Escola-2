@@ -9,3 +9,5 @@ Cada evento que o WhatsApp entrega ao CRM (mensagem, confirmação de leitura, m
 A conferência de mensagens que ficaram presas em "enviando" passou de uma vez por minuto para uma vez a cada 5 minutos. Ela só marca como falha a mensagem presa há mais de 5 minutos, então rodar a cada minuto não adiantava a correção; o efeito é que uma mensagem presa pode levar até 10 minutos (antes, até 6) para aparecer como falha e gerar o aviso na Central.
 
 Não há nada a configurar na atualização.
+
+Contribuição de @automatikpg-ux (#2469).
