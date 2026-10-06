@@ -159,6 +159,12 @@ describe("o worker responde com a chave da instalação", () => {
     // cadastrada) roda a cada evento do worker de sentimento. A única leitura
     // de `organizations` que lhe cabe é a da procura por credencial; a do
     // provedor só serve a id BARE e seria descartada aqui.
+    //
+    // O provedor da organização deste cenário é a ANTHROPIC, que é o que o
+    // teste descreve (chave Anthropic no ambiente). Com `openai` gravado, o par
+    // `openai + anthropic/claude-haiku-4-5` é recusado de propósito pela régua
+    // nova da issue #2377 — e este teste não é sobre a régua.
+    estado.settings = { llm: { provider: "anthropic" } };
     envMock.ANTHROPIC_API_KEY = "sk-ant";
 
     const resolvido = await resolverModeloDoPonto(

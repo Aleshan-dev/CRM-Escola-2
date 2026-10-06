@@ -20,7 +20,7 @@ import type { ServiceBoundary } from "@/lib/atendimento/fronteira";
 
 import { generateText, type LanguageModel } from "ai";
 
-import { DEFAULT_BOT_MODEL, gatewayConfig, gatewayHeaders } from "@/lib/ai/gateway";
+import { gatewayConfig, gatewayHeaders } from "@/lib/ai/gateway";
 import { embedText } from "@/lib/ai/embed";
 import { MODELO_DE_EMBEDDING_DO_GOOGLE } from "@/lib/ai/embeddings/chave";
 import { getBudgetStatus, type BudgetStatus } from "@/lib/ai/budget/check";
@@ -858,7 +858,12 @@ async function buildContext(input: BuildContextInput): Promise<GuardDecision> {
         // decisão que a lê ("este agente atende?") ficava sem o dado.
         paused_at: agent.paused_at,
         id: agent.id,
-        model: agent.model || DEFAULT_BOT_MODEL,
+        // Sem `|| DEFAULT_BOT_MODEL` (issue #2377): aquele OU injetava um
+        // Claude da Anthropic num agente sem modelo — para uma empresa em
+        // OpenAI — no caminho que responde sozinho. `ai_agents.model` é NOT
+        // NULL com default no banco; vindo vazio, o resolvedor cai no par da
+        // organização e, na falta dele, PULA com motivo no log.
+        model: agent.model,
         system_prompt: agent.system_prompt,
         config: (agent.config as Record<string, unknown>) ?? {},
         guardrails: (agent.guardrails as Record<string, unknown>) ?? {},
