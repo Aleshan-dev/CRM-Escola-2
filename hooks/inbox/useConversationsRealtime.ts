@@ -1,5 +1,5 @@
 "use client";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
@@ -174,6 +174,20 @@ export function useConversationsRealtime(
     // chega de fora enquanto ninguém olha, e voltar para a aba é quando a
     // defasagem aparece. Segunda rede — a primeira é o Realtime.
     refetchOnWindowFocus: true,
+    // #2366 — A LISTA NÃO VOLTA AO SKELETON NUM REFETCH.
+    //
+    // A chave desta query muda depois de a primeira resposta chegar: quando
+    // `/ai/automatico-ativo` responde, `comandosDaFila` troca `aguardando` por
+    // `aguardando,automatico` e o react-query abre uma query NOVA, que nasce
+    // sem dado. Sem isto a primeira resposta é DESCARTADA, a tela cai no
+    // skeleton e um segundo GET sai ~2 s depois — medido no trace do #2360
+    // (run 37340942770): 1 a 3 s de tela vazia a cada carga do inbox.
+    //
+    // `keepPreviousData` é o keep-previous do react-query v5: a lista anterior
+    // fica na tela até a chave nova responder (ou falhar), e o `isLoading` do
+    // `ConversationList` volta a significar só "primeira carga" — que é
+    // justamente o único momento em que o skeleton tem o que dizer.
+    placeholderData: keepPreviousData,
   });
 
   const onChange = useCallback(() => agendarRecargaDasConversas(qc), [qc]);
