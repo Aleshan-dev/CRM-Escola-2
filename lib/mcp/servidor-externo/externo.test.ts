@@ -222,17 +222,25 @@ describe("registro em organizations.settings.mcp_externo (#2147)", () => {
 
     expect(gravado.mcp_externo).toBeUndefined();
     expect(gravado.conversions).toEqual({ meta_page_id: "111" });
-    expect(lerServidorMcpExterno(gravado)).toBeNull();
+    expect(lerEndpointMcpExterno(gravado)).toBeNull();
   });
 
-  it("a leitura recusa o que não dá para chamar: sem registro, URL que não é http(s), chave vazia", () => {
-    expect(lerServidorMcpExterno(undefined)).toBeNull();
-    expect(lerServidorMcpExterno(null)).toBeNull();
-    expect(lerServidorMcpExterno({})).toBeNull();
-    expect(lerServidorMcpExterno({ mcp_externo: { endpoint: "erp.loja/mcp", chave: CHAVE } })).toBeNull();
-    expect(lerServidorMcpExterno({ mcp_externo: { endpoint: "ftp://erp.loja", chave: CHAVE } })).toBeNull();
-    expect(lerServidorMcpExterno({ mcp_externo: { endpoint: "https://erp.loja", chave: "" } })).toBeNull();
-    expect(lerServidorMcpExterno({ mcp_externo: { endpoint: 12, chave: CHAVE } })).toBeNull();
+  it("a leitura recusa o que não dá para chamar: sem registro, URL que não é http(s)", () => {
+    expect(lerEndpointMcpExterno(undefined)).toBeNull();
+    expect(lerEndpointMcpExterno(null)).toBeNull();
+    expect(lerEndpointMcpExterno({})).toBeNull();
+    expect(lerEndpointMcpExterno({ mcp_externo: { endpoint: "erp.loja/mcp" } })).toBeNull();
+    expect(lerEndpointMcpExterno({ mcp_externo: { endpoint: "ftp://erp.loja" } })).toBeNull();
+    expect(lerEndpointMcpExterno({ mcp_externo: { endpoint: 12 } })).toBeNull();
+  });
+
+  it("endereço com SEGREDO DENTRO não é registrável (item 5)", () => {
+    // `?token=`, `#` e `user:senha` virariam dado eterno na trilha append-only e
+    // no logger — a doutrina do repo proíbe chave em query string, e aqui ela
+    // nem chega a ser gravada.
+    expect(lerEndpointMcpExterno({ mcp_externo: { endpoint: "https://erp.loja/mcp?token=abc" } })).toBeNull();
+    expect(lerEndpointMcpExterno({ mcp_externo: { endpoint: "https://erp.loja/mcp#abc" } })).toBeNull();
+    expect(lerEndpointMcpExterno({ mcp_externo: { endpoint: "***@erp.loja/mcp" } })).toBeNull();
   });
 });
 

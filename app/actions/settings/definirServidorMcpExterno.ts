@@ -150,16 +150,16 @@ export async function definirServidorMcpExterno(
     resourceId: org.orgId,
     metadata: {
       // FORMA, nunca credencial: a CHAVE do ERP não entra na trilha, nem em
-      // texto corrido. O endpoint é host de configuração (a leitura já recusa
-      // URL com usuário/senha embutido), então ele sim é o que o operador
-      // precisa encontrar ao investigar "de onde vêm essas ferramentas".
-      endpoint: settings.mcp_externo
-        ? (settings.mcp_externo as { endpoint?: unknown }).endpoint ?? null
-        : null,
-      registrado: settings.mcp_externo !== undefined,
+      // texto corrido, nem os últimos 4. E o endpoint vai SÓ como HOST (item 5):
+      // `api_audit_log` é append-only e um `?token=` no endereço viveria lá
+      // para sempre. O host é o que o operador precisa encontrar ao investigar
+      // "de onde vêm essas ferramentas".
+      endpoint: temRegistro ? hostDoEndpoint(endpoint) : null,
+      registrado: temRegistro,
+      chave_presente: temRegistro,
     },
   });
 
   revalidatePath("/app/settings", "layout");
-  return { ok: true };
+  return { ok: true, chaveUltimos4: temRegistro ? chave.slice(-4) : null };
 }

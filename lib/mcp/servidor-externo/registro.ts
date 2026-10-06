@@ -22,13 +22,15 @@
  *
  * ── O que é validado na LEITURA ─────────────────────────────────────────────
  *
- * Endpoint http(s) e chave preenchida. URL sem esquema, `ftp://`, chave vazia
- * ou bolso malformado viram `null`, e `null` significa "não há servidor
- * registrado": o turno segue exatamente como antes, sem abrir rede nenhuma.
- * Endpoint com usuário/senha embutido também é recusado — a credencial do ERP
- * é a `chave`, e embutir segredo em URL faria o host aparecer em log, em
- * histórico de git e na tela.
+ * Endpoint http(s), sem usuário/senha embutido e SEM querystring nem
+ * fragmento (item 5): um ERP que autentica por `?token=` deixaria o segredo no
+ * `api_audit_log` (append-only) e no `logger.warn` de `carregar.ts`. A
+ * credencial do ERP é a `chave`, e ela agora mora cifrada. Bolso malformado vira
+ * `null`, e `null` significa "não há servidor registrado": o turno segue
+ * exatamente como antes, sem abrir rede nenhuma.
  */
+import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
+
 export const BOLSO_MCP_EXTERNO = "mcp_externo";
 
 /** O que se guarda e o que se chama: endereço do servidor e chave de acesso. */
@@ -134,5 +136,5 @@ export function mesclarServidorMcpExterno(
     return atual;
   }
 
-  return { ...atual, [BOLSO_MCP_EXTERNO]: { endpoint, chave } };
+  return { ...atual, [BOLSO_MCP_EXTERNO]: { endpoint } };
 }
