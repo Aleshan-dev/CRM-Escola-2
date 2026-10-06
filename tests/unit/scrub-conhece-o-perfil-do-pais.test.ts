@@ -53,6 +53,11 @@ describe("scrub da telemetria com os padrões do perfil do país", () => {
     expect(scrubMessage("doc 123.456.789-09 ok")).toBe("doc [CPF] ok");
     expect(scrubMessage("zap +49 30 12345678 ok")).toBe("zap [PHONE] ok");
     expect(scrubMessage("em 2026-09-23T18:46:39Z")).toBe("em 2026-09-23T18:46:39Z");
+
+    // Efeito NOVO e declarado: o CEP brasileiro tambem e padrao do perfil, e
+    // aplicar todos os perfis faz o scrub apaga-lo. Antes saia inteiro — e sair
+    // apagado aqui e menos vazamento, nao mais.
+    expect(scrubMessage("cep 01310-100 ok")).toBe("cep [CEP] ok");
   });
 
   // Sem esta linha o scrub poderia voltar a ter três regex copiadas de cabeça
