@@ -154,13 +154,19 @@ declare `REVERSE_PROXY=traefik` no `.env` — aí a escolha é sua e ele segue s
 
 > ⚠️ **Um dump do `backup.sh` não restaura por cima de um banco que já existe.** O dump sai
 > com `--no-owner --no-privileges` e **sem `--clean`**: ele não tem `DROP` nem `TRUNCATE`, e
-> os `CREATE TABLE` não têm `IF NOT EXISTS`. Num banco que já tem o schema, o `restore.sh`
-> roda o `psql` com `-v ON_ERROR_STOP=1 --single-transaction` e **falha de propósito na
-> primeira instrução** — sem alterar nada —, em vez de seguir por cima de ~2.800 erros
-> "already exists" e imprimir "✓ banco restaurado" sobre um banco que não restaurou. Para
-> voltar um backup num banco populado, esvazie o schema da aplicação antes de rodar o
-> restore, ou restaure num banco novo. (Restaurar por cima "limpo" exigiria gerar o dump com
-> `--clean --if-exists`, o que muda o formato do dump — decisão do mantenedor, issue #2120.)
+> os `CREATE TABLE` não têm `IF NOT EXISTS`. Antes de pedir a confirmação, o `restore.sh`
+> conta as tabelas de `public` e, se o banco já tem o schema, **para com mensagem própria** —
+> nada é alterado e o `psql` nem é chamado. Para voltar um backup num banco populado,
+> esvazie o schema da aplicação antes de rodar o restore, ou restaure num banco novo.
+>
+> O `psql` roda **sem** `-v ON_ERROR_STOP=1 --single-transaction`. Essas flags faziam o
+> restore falhar também em **banco vazio**: o dump traz os schemas internos (`auth`,
+> `storage`, `realtime`, `vault`) e extensões como `pg_net`, que já existem num Supabase
+> novo — medido em Supabase novo, Postgres 17 puro e database nova, as três deram `rc=3` e
+> 0 tabelas, quando sem elas os mesmos dumps entravam com `rc=0` e 110 tabelas. Sem a
+> transação única não há rollback: em falha fatal do `psql`, confira o estado do banco antes
+> de repetir. (Gerar o dump com `--clean --if-exists` mudaria o formato dele — decisão do
+> mantenedor, issue #2120.)
 
 ## Automações e webhooks
 
