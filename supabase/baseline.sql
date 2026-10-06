@@ -47281,7 +47281,6 @@ comment on column public.ai_router_members.pipeline_id is
 comment on column public.ai_router_members.stage_id is
   'Etapa de destino dentro de pipeline_id (#2155). NULL = a primeira etapa aberta do funil.';
 
-<<<<<<< HEAD
 -- ---- 0544: contato pessoal — a coluna e a saída de campanha (spec 21, fatia 1) ----
 -- Espelho idempotente da migration 0544 (é este apêndice que a instalação fresca
 -- aplica; quem atualiza recebe a migration). `is_personal` nasce desligado:
@@ -47307,7 +47306,6 @@ alter table public.campaign_recipients
   ));
 
 notify pgrst, 'reload schema';
-=======
 -- ---- conexão de banco externo: coluna que identifica o cliente (migration 0558) ----
 -- Duas colunas nulas e sempre juntas; na conversa, a consulta do agente é
 -- filtrada por elas com o dado do contato do turno. Recria a view segura com as
@@ -47348,4 +47346,3 @@ create view public.external_db_connections_safe
 
 revoke all on public.external_db_connections_safe from anon;
 grant select on public.external_db_connections_safe to authenticated;
->>>>>>> origin/main
