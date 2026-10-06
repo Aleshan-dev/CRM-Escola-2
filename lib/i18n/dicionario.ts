@@ -37,6 +37,12 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  "Configure a assinatura da fonte antes de autorizar IA. Para remover a assinatura, desligue primeiro a autorização de IA.": { es: "Configura la firma de la fuente antes de autorizar IA. Para quitar la firma, desactiva primero la autorización de IA." },
+  // Autorização por fonte de formulário.
+  "Autorizar IA para leads deste formulário": { es: "Autorizar IA para los leads de este formulario" },
+  "Autoriza somente novos envios completos com consentimento explícito para atendimento automatizado. Não retoma contatos bloqueados ou em atendimento humano. O agente e o canal precisam estar configurados para atender.": { es: "Autoriza solo nuevos envíos completos con consentimiento explícito para atención automatizada. No retoma contactos bloqueados o atendidos por una persona. El agente y el canal deben estar configurados para atender." },
+  "O integrador deve enviar external_id, ai_service_consent: true, submission_status: completed e ai_service_consent_version com a versão do aviso aceito. Aceitar apenas a política de privacidade não autoriza a IA. Sem external_id, o envio não concede nem renova a autorização; reenviar com o mesmo external_id não libera de novo. Uma recusa (false) num envio completo e válido revoga, mesmo sem external_id.": { es: "El integrador debe enviar external_id, ai_service_consent: true, submission_status: completed y ai_service_consent_version con la versión del aviso aceptado. Aceptar solo la política de privacidad no autoriza la IA. Sin external_id, el envío no concede ni renueva la autorización; reenviar con el mismo external_id no vuelve a autorizar. Un rechazo (false) en un envío completo y válido revoca, incluso sin external_id." },
+
   // A conferência de fato (#2231): a terceira camada do before_send.
   "Conferir afirmações de fato na resposta": { es: "Verificar las afirmaciones de hecho de la respuesta" },
   "Lê a resposta que o assistente vai enviar e confere, nas evidências consultadas neste turno, se o que ele afirma sobre o negócio está escrito ali — ou se o material diz o contrário.":
@@ -1524,13 +1530,13 @@ export const DICIONARIO: Traducoes = {
   "DPO email": { es: "Email del DPO" },
   "Retenção de mídia (dias)": { es: "Retención de archivos multimedia (días)" },
   "Limpeza automática de mídia antiga": { es: "Limpieza automática de multimedia antigua" },
-  "Ligado: apaga a mídia com mais de {n} dias.": {
-    es: "Activado: elimina la multimedia con más de {n} días.",
+  "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.": {
+    es: "Activado: elimina la multimedia y los archivos adjuntos de notas internas con más de {n} días.",
   },
-  "Desligado: a mídia das conversas não é apagada por idade.": {
-    es: "Desactivado: la multimedia de las conversaciones no se elimina por antigüedad.",
+  "Desligado: a mídia das conversas e os anexos de nota interna não são apagados por idade.": {
+    es: "Desactivado: la multimedia de las conversaciones y los archivos adjuntos de notas internas no se eliminan por antigüedad.",
   },
-  "Ao ligar, a mídia de mensagem com mais de {n} dias começará a ser apagada.": { es: "Al activarlo, la multimedia de mensajes con más de {n} días comenzará a eliminarse." },
+  "Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.": { es: "Al activarlo, la multimedia de mensajes y los archivos adjuntos de notas internas con más de {n} días comenzarán a eliminarse." },
   "URL política de privacidade": { es: "URL de la política de privacidad" },
   "Informações pessoais. Email só pode ser trocado em breve.": {
     es: "Información personal. Pronto podrás cambiar el email.",
@@ -5394,6 +5400,8 @@ export const DICIONARIO: Traducoes = {
     es: "El agente ya sabe que es el PRIMER mensaje, justo después de que la persona completa el formulario, y recibe todos los campos que respondió. Aquí le indicas qué hacer con ellos. Cuanto más concreto seas, mejor será el mensaje.",
   },
   Atendente: { es: "Asesor" },
+  "Atendentes para mencionar": { es: "Asesores para mencionar" },
+  "Nenhum atendente encontrado.": { es: "Ningún asesor encontrado." },
   "Escolha o atendente": { es: "Elige el asesor" },
   "Endereço (URL)": { es: "Dirección (URL)" },
   "Segredo (opcional)": { es: "Secreto (opcional)" },
@@ -10319,6 +10327,16 @@ export const DICIONARIO: Traducoes = {
   "Ver o que ele aprendeu": { es: "Ver lo que aprendió" },
   "O que o agente sabe": { es: "Lo que el agente sabe" },
   "Não publicado": { es: "No publicado" },
+  // Editor da jornada (Equipe › Atendimento) — issue #2312.
+  "Copiar estes horários para os outros dias úteis": {
+    es: "Copiar estos horarios a los otros días hábiles",
+  },
+  "Limite de 50 janelas por atendente: remova algumas antes de copiar.": {
+    es: "Límite de 50 franjas por atendente: elimina algunas antes de copiar.",
+  },
+  "É isto que ficou gravado — confira os dias e os horários antes de sair.": {
+    es: "Esto es lo que quedó guardado: revisa los días y los horarios antes de salir.",
+  },
   "Conexão do WhatsApp caiu — precisa escanear o QR de novo": {
     es: "Se cayó la conexión de WhatsApp: escanea el QR de nuevo",
   },
@@ -11525,6 +11543,13 @@ export const DICIONARIO: Traducoes = {
   // (LeadTimeline.tsx, TimelineView.tsx, CRMSidePanel.tsx) as traduz na
   // LEITURA com `t(item.reason)`. A chave aqui tem de bater byte a byte com
   // o texto que o backend grava — nunca traduza só um pedaço.
+  // Nota da autorização por fonte de formulário (#2452).
+  "Atendimento por IA autorizado pelo consentimento explícito deste formulário.": {
+    es: "Atención por IA autorizada por el consentimiento explícito de este formulario.",
+  },
+  "Este envio não concedeu nova autorização de IA. Confira o consentimento e o estado do contato antes de configurar o atendimento.": {
+    es: "Este envío no concedió una nueva autorización de IA. Revisa el consentimiento y el estado del contacto antes de configurar la atención.",
+  },
   "Não enviei: o contato pediu para parar de receber mensagens": {
     es: "No envié: el contacto pidió dejar de recibir mensajes",
   },
@@ -14315,6 +14340,31 @@ export const DICIONARIO: Traducoes = {
   },
   "A IA respondeu sem dizer qual opção escolher, então nada foi executado. Tente de novo ou corrija a instrução.": {
     es: "La IA respondió sin decir qué opción elegir, así que no se ejecutó nada. Inténtelo de nuevo o corrija la instrucción.",
+  },
+
+  // ─── interruptor POR EMPRESA do ai_decide (issue #2367) ───
+  "A ação não rodou: o interruptor desta empresa desligou todos os passos a IA decide, então o modelo não foi consultado e nada foi executado. Ligue o interruptor em Configurações, na tela Automações.": {
+    es: "La acción no se ejecutó: el interruptor de esta empresa apagó todos los pasos la IA decide, así que no se consultó al modelo ni se ejecutó nada. Encienda el interruptor en Configuración, en la pantalla Automatizaciones.",
+  },
+  "A ação não rodou: não deu para ler agora o interruptor da IA desta empresa, então o modelo não foi consultado e nada foi executado. As próximas execuções tentam de novo.": {
+    es: "La acción no se ejecutó: no se pudo leer ahora el interruptor de la IA de esta empresa, así que no se consultó al modelo ni se ejecutó nada. Las próximas ejecuciones lo intentan de nuevo.",
+  },
+  // `Automações` já tinha entrada (linha ~5330, chave sem aspas) — só a frase
+  // do motivo e os textos da tela são novos aqui.
+  "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira.": {
+    es: "El único freno del paso en que la IA elige entre las opciones de una regla, para toda la empresa.",
+  },
+  "Não consegui ler agora o estado deste interruptor. Enquanto ele não puder ser lido, nenhum passo a IA decide consulta o modelo. Recarregue a página; se continuar, avise quem cuida da instalação.": {
+    es: "No pude leer ahora el estado de este interruptor. Mientras no se pueda leer, ningún paso la IA decide consulta al modelo. Recargue la página; si continúa, avise a quien administra la instalación.",
+  },
+  "A IA pode decidir entre as opções de uma regra": {
+    es: "La IA puede decidir entre las opciones de una regla",
+  },
+  "Com o interruptor desligado, nenhuma regra consulta o modelo: o passo a IA decide é pulado e o motivo aparece na aba Atividade. As regras sem esse passo continuam rodando igual. O padrão é ligado, para não quebrar regra já gravada.": {
+    es: "Con el interruptor apagado, ninguna regla consulta al modelo: el paso la IA decide se omite y el motivo aparece en la pestaña Actividad. Las reglas sin ese paso siguen funcionando igual. El valor predeterminado es encendido, para no romper reglas ya guardadas.",
+  },
+  "Só um gerente ou administrador da organização pode mudar esta configuração.": {
+    es: "Solo un gerente o administrador de la organización puede cambiar esta configuración.",
   },
 
   // ─── PREVISÃO PONDERADA DO FUNIL (issue #1535) ───
