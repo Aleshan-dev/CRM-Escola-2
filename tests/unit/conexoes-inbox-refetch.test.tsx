@@ -120,15 +120,26 @@ function montar(filtros: ConversationsFilters) {
   return { qc, ...utils, pintar: (f: ConversationsFilters) => utils.rerender(arvore(f)) };
 }
 
+/** A busca na fila — e ela DIZ qual posição faltou, em vez de virar `undefined`. */
+function busca(indice: number) {
+  const chamada = chamadas[indice];
+  if (!chamada) {
+    throw new Error(`nenhum GET na posição ${indice} — a fila tem ${chamadas.length}`);
+  }
+  return chamada;
+}
+
 async function entregar(indice: number, ids: string[]) {
+  const chamada = busca(indice);
   await act(async () => {
-    chamadas[indice].resolver(pagina(ids));
+    chamada.resolver(pagina(ids));
   });
 }
 
 async function falhar(indice: number) {
+  const chamada = busca(indice);
   await act(async () => {
-    chamadas[indice].recusar(new Error("rede fora"));
+    chamada.recusar(new Error("rede fora"));
   });
 }
 
