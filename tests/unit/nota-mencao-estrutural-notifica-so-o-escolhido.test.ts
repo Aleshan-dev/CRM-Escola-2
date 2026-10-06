@@ -173,6 +173,22 @@ describe("POST /notes — menção de atendente (#2372)", () => {
     expect(idasAoAuth).toEqual([ANA_LIMA, ANA_SOUZA, CARLOS]);
   });
 
+  it("id de FORA da empresa no token não gera aviso nem ida ao auth", async () => {
+    // O token é texto que o cliente manda: nada impede alguém de escrever à
+    // mão o id de um usuário de outra organização. Só quem está na membership
+    // da org da sessão pode ser avisado.
+    const resposta = await criarNota("olha isso @[Intrusa](mencao:outra-org-0009)");
+
+    expect(resposta.status).toBe(201);
+    expect(emissões).toEqual([]);
+    expect(idasAoAuth).toEqual([]);
+  });
+
+  it("quem escreve a nota não avisa a si mesmo pelo token", async () => {
+    await criarNota(`lembrete para @[Autor](mencao:${AUTOR})`);
+    expect(emissões).toEqual([]);
+  });
+
   it("sem menção nenhuma, não emite nada", async () => {
     await criarNota("cliente ligou reclamando");
     expect(emissões).toEqual([]);
