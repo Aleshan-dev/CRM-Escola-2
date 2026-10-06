@@ -1,19 +1,20 @@
 /**
- * A consulta de CNPJ precisa MANDAR UM `User-Agent`.
+ * A consulta de CNPJ precisa mandar um `User-Agent` PRÓPRIO — não o do Node.
  *
- * Não é preferência de estilo: a borda que serve a BrasilAPI responde **403** a
- * request sem esse cabeçalho, e o `fetch` do Node não manda um sozinho. Medido
- * contra o mesmo CNPJ, da mesma máquina e no mesmo minuto — 403 com apenas
- * `Accept`, 403 sem header nenhum, 200 com qualquer `User-Agent`.
+ * Não é preferência de estilo. Quando o código não define o cabeçalho, o
+ * `fetch` do Node 22 manda `User-Agent: node` sozinho, e a borda que serve a
+ * BrasilAPI recusa esse valor (403 ou 429; o status variou entre medições).
+ * Sem o cabeçalho, ou com ele vazio, também recusa (429). Com o valor neutro
+ * deste cliente, 200 — contra o mesmo CNPJ, na mesma rodada.
  *
  * O sintoma que isso produzia na tela não dizia nada disso: "Não foi possível
  * consultar o CNPJ", o texto de reserva de `app/app/companies/_client.tsx`, mais
  * uma dica de que seria "bloqueio temporário". Quem a lesse esperaria — e nunca
  * ia funcionar, em instalação nenhuma.
  *
- * Por isso a asserção é sobre a EXISTÊNCIA e o não-vazio do cabeçalho, nunca
- * sobre o texto dele: trocar o valor é livre, apagá-lo quebra a funcionalidade
- * de novo e tem de reprovar aqui.
+ * Por isso a asserção não fixa o texto do cabeçalho, mas reprova os três
+ * valores que a borda recusa: ausente (que o Node troca por `node`), vazio e o
+ * próprio `node`. Trocar por outro valor é livre.
  */
 import { describe, expect, it } from "vitest";
 
@@ -35,7 +36,7 @@ function espiao() {
 }
 
 describe("cliente da BrasilAPI", () => {
-  it("manda um User-Agent não-vazio — sem ele a BrasilAPI responde 403", async () => {
+  it("manda um User-Agent próprio — o padrão do Node, `node`, é recusado pela BrasilAPI", async () => {
     const { chamadas, fetchFn } = espiao();
 
     const r = await createBrasilApiClient({ fetchFn }).lookupCnpj(CNPJ);
@@ -43,9 +44,13 @@ describe("cliente da BrasilAPI", () => {
     expect(r.ok).toBe(true);
     expect(chamadas).toHaveLength(1);
 
+    // Ausente aqui vira `node` no fio: o Node preenche sozinho.
     const ua = chamadas[0]!.headers.get("user-agent");
-    expect(ua, "a BrasilAPI responde 403 quando o User-Agent está ausente").toBeTruthy();
-    expect(ua!.trim().length).toBeGreaterThan(0);
+    expect(ua, "sem User-Agent o Node manda `node`, que a BrasilAPI recusa").toBeTruthy();
+    expect(ua!.trim().length, "User-Agent vazio é recusado pela BrasilAPI").toBeGreaterThan(0);
+    expect(ua!.trim().toLowerCase(), "`node` é o padrão do Node e a BrasilAPI o recusa").not.toBe(
+      "node",
+    );
   });
 
   /*

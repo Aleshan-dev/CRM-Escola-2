@@ -10,28 +10,28 @@ const DEFAULT_BASE = "https://brasilapi.com.br/api";
 const DEFAULT_TIMEOUT_MS = 8_000;
 
 /**
- * SEM `User-Agent`, A BRASILAPI RESPONDE 403 — e o `fetch` do Node não manda um.
+ * O `User-Agent` PADRÃO DO NODE É RECUSADO PELA BRASILAPI — por isso este é explícito.
  *
- * A borda da Vercel que serve a BrasilAPI recusa request sem `User-Agent`.
- * Medido nos dois sentidos, contra o mesmo CNPJ, da mesma máquina e no mesmo
- * minuto:
+ * Quando o código não define o cabeçalho, o `fetch` do Node 22 (o do `.nvmrc`)
+ * manda `User-Agent: node` sozinho. A borda que serve a BrasilAPI recusa esse
+ * VALOR. Medido contra o mesmo CNPJ, da mesma máquina, na mesma rodada:
  *
- *   403  fetch com `{ Accept }` apenas  (era exatamente o que daqui saía)
- *   403  fetch sem header nenhum
- *   200  fetch com qualquer `User-Agent`
+ *   403/429  `User-Agent: node`  (era exatamente o que daqui saía)
+ *   429      sem `User-Agent`, ou com ele vazio
+ *   200      `User-Agent: self-hosted-crm/1.0`, e também `curl/8.7.1`
  *
- * Não era bloqueio temporário nem limite de uso do IP de alguém: era
- * determinístico, e deixava a consulta de CNPJ quebrada em TODA instalação —
- * tanto o lookup do cadastro quanto o enriquecimento de `lib/crm-b2b/enrich.ts`,
+ * O status da recusa variou entre 403 e 429 de uma medição para outra; o 200 do
+ * valor abaixo, não. Não era bloqueio temporário nem limite de uso do IP de
+ * alguém: deixava a consulta de CNPJ quebrada em TODA instalação — o lookup do
+ * cadastro, o enriquecimento de `lib/crm-b2b/enrich.ts` e a importação em lote,
  * que usam este mesmo cliente.
  *
  * O valor é NEUTRO de propósito, e não reusa o `APP_USER_AGENT` de
  * `lib/nuvemshop/config.ts`. Lá o nome do produto está na allowlist de marca
  * porque identifica uma aplicação REGISTRADA na Nuvemshop; aqui não há registro
- * nenhum — a BrasilAPI só exige que o cabeçalho exista. Mandar o nome da marca
- * entregaria o revendedor a um terceiro, variaria por instalação (deixando o
- * tráfego justamente inidentificável) e pediria linha nova numa allowlist que,
- * por doutrina, só encolhe.
+ * nenhum. Mandar o nome da marca entregaria o revendedor a um terceiro,
+ * variaria por instalação (deixando o tráfego justamente inidentificável) e
+ * pediria linha nova numa allowlist que, por doutrina, só encolhe.
  */
 const USER_AGENT = "self-hosted-crm/1.0";
 
