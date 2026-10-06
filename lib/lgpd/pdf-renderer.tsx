@@ -35,6 +35,12 @@ import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-p
 import React from "react";
 
 import { env } from "@/lib/env";
+import { mascaraCpf } from "@/lib/lgpd/mask";
+import {
+  COPIA_DO_NUMERO_3,
+  DIREITOS_DA_ALINEA_E,
+  NAO_INFORMADO_PELO_CONTROLADOR,
+} from "@/lib/legal/art15";
 
 import type { ExportPayload } from "./export-collector";
 
@@ -148,6 +154,40 @@ const noticeStatus: Record<string, string> = {
   dismissed: "Dispensado",
 };
 
+/**
+ * O CPF que o titular informou na conversa, MASCARADO, para a linha do
+ * documento no relatório (issue #2341).
+ *
+ * Antes esta linha dizia "valor no arquivo de dados", mas o `data.json` fica no
+ * Storage e o e-mail ao titular não o entrega — o documento apontava para um
+ * arquivo que quem o lê não tem. A saída escolhida (uma das duas da issue) foi
+ * imprimir o valor mascarado aqui mesmo; a outra — entregar o `data.json` junto
+ * — ficaria de fora porque esse arquivo também carrega campo interno
+ * (`reply_drafts`, `conversation_notes`, `audit_log_extract`).
+ *
+ * QUAL chave: o coletor reconhece o CPF pelo TIPO da pergunta (`cpf`), mas a
+ * chave onde ela grava é o operador que escolhe, e este relatório só enxerga o
+ * nome da chave. Então: das chaves que contêm "cpf", valem as que trazem um
+ * CPF de verdade (`tem_cpf: "sim"` não conta). Com UMA, sai a máscara. Com
+ * duas ou mais valores diferentes (mesmo que uma se chame `cpf`, como
+ * `cpf_responsavel` numa clínica), não há como saber qual é do titular, e sai
+ * a frase sem dígito de ninguém. O conserto de verdade é o coletor expor a
+ * chave que reconheceu. Sem valor achado, a frase sai SEM ponteiro: nunca o
+ * texto antigo.
+ */
+function cpfMascarado(contact: ExportPayload["contact"]): string {
+  const campos = contact?.custom_fields ?? {};
+  const candidatos = new Set(
+    Object.entries(campos)
+      .filter(([chave]) => chave.toLowerCase().includes("cpf"))
+      .map(([, valor]) => (typeof valor === "number" ? String(valor) : valor))
+      .filter((valor): valor is string => typeof valor === "string" && mascaraCpf(valor) !== null)
+      .map((valor) => valor.replace(/\D/g, "")),
+  );
+  const [unico] = candidatos;
+  return (candidatos.size === 1 ? mascaraCpf(unico) : null) ?? "valor não disponível neste relatório";
+}
+
 export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElement {
   const shortId = data.request_id.slice(0, 8);
   // ponytail: o nome antigo, já preso ao fuso deste documento — as ~25 chamadas abaixo não mudam.
@@ -201,6 +241,52 @@ export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElem
           ) : null}
         </View>
 
+        {/* Art. 15.º, n.º 1 — alínea a alínea (issue #2340, doc 88).
+            Sai SÓ quando o coletor emitiu `art15`: Brasil (documento da LGPD,
+            art. 18 II) e país sem autoridade revisada no perfil ficam byte a
+            byte — os fixtures em tests/fixtures/lgpd-brasil-antes-do-doc88/ é
+            que travam isto, não este comentário. */}
+        {data.art15 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Informações exigidas pelo art. 15.º, n.º 1
+            </Text>
+            <View style={styles.row}>
+              <Text style={styles.label}>a) Finalidades:</Text>
+              <Text style={styles.value}>
+                {data.art15.finalidades ?? NAO_INFORMADO_PELO_CONTROLADOR}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>c) Destinatários:</Text>
+              <Text style={styles.value}>
+                {data.art15.destinatarios ?? NAO_INFORMADO_PELO_CONTROLADOR}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>d) Conservação:</Text>
+              <Text style={styles.value}>
+                {data.art15.prazo_conservacao ?? NAO_INFORMADO_PELO_CONTROLADOR}
+              </Text>
+            </View>
+            <View style={styles.itemBlock}>
+              <Text style={styles.small}>e) Direitos</Text>
+              <Text>{DIREITOS_DA_ALINEA_E}</Text>
+            </View>
+            <View style={styles.itemBlock}>
+              <Text style={styles.small}>f) Reclamação a uma autoridade de controlo</Text>
+              <Text>
+                {data.art15.autoridade.nome} · {data.art15.autoridade.site}
+              </Text>
+            </View>
+            <View style={styles.itemBlock}>
+              <Text style={styles.small}>h) Decisões automatizadas</Text>
+              <Text>{data.art15.decisoes_automatizadas}</Text>
+            </View>
+            <Text style={styles.small}>{COPIA_DO_NUMERO_3}</Text>
+          </View>
+        ) : null}
+
         {/* Contact */}
         {data.contact ? (
           <View style={styles.section}>
@@ -230,7 +316,7 @@ export function LgpdExportPdf({ data, unsignedWarning }: Props): React.ReactElem
                 {data.contact.cpf_present
                   ? "Armazenado (criptografado)"
                   : data.contact.cpf_informado_na_conversa
-                    ? "Informado na conversa (valor no arquivo de dados)"
+                    ? `Informado na conversa (${cpfMascarado(data.contact)})`
                     : "—"}
               </Text>
             </View>
