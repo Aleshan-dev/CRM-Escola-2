@@ -137,7 +137,7 @@ async function removerEcoDoProprioEnvio(
     // do mesmo contato — medido em 06/10/2026: envio para `…@lid`, eco
     // `true_5513…@c.us_3EB0…`. O id bare do WhatsApp é único (20+ caracteres
     // aleatórios), então casar pelo SUFIXO `_<bare>` alcança qualquer formato
-    // de chat sem alcançar outra mensagem. Só para id composto do WAHA.
+    // de chat sem alcançar outra mensagem. Só para id composto (`<fromMe>_<chat>_<id>`) do canal.
     const bare = externalId.slice(externalId.lastIndexOf("_") + 1);
     if (bare.length >= 16 && candidatos.some((c) => c.startsWith("true_"))) {
       const { error: erroSufixo } = await supabase
