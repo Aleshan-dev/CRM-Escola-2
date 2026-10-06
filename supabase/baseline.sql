@@ -39395,9 +39395,10 @@ alter table public.organizations
 -- volta a existir e expurga linha `deleted` com mais de 90 dias; a 0435
 -- (#1765) devolve a contagem desse expurgo, que antes não aparecia nem no
 -- retorno nem na trilha; a 0557 (#1534) obedece ao interruptor e marca a
--- mensagem `media_status='expired'` ao expirar. O corpo abaixo é a 0571,
--- EDITADA NO LUGAR: a 0544 (#1887) virou 0571 na fusão com a `origin/main`
--- porque a 0557 já redefinia esta função — o corpo é a UNIÃO das duas e tem
+-- mensagem `media_status='expired'` ao expirar; a 0572 (#1887, PR #2309)
+-- estende a retenção ao anexo de nota interna, sob o MESMO interruptor e a
+-- MESMA pausa LGPD. O corpo abaixo é a 0572 EDITADA NO LUGAR — a 0557 já
+-- redefinia esta função, então o corpo é a UNIÃO das duas e tem
 -- de casar com o da ÚLTIMA migration da cadeia, senão quem instala pelo kit
 -- self-host fica com outra função de quem aplica a cadeia
 -- (apendice-do-baseline-nao-diverge-da-cadeia).
@@ -39611,10 +39612,14 @@ begin
   --     sob pedido LGPD (passo 6d da 0483): uma nota que CONTINUA EXISTINDO
   --     segurava o anexo para sempre, e numa cota de 1 GB dividida com
   --     `whatsapp-media` o bucket crescia sem teto — anexos de até 50 MB
-  --     (issue #1887, opção A escolhida pelo mantenedor).
-  --     O anexo interno passa a seguir a MESMA retenção da mídia de
-  --     conversa: mesmo knob (`organizations.media_retention_days`, piso de
-  --     30 dias) e mesmo desenho do passo 1 — a idade é a da NOTA, a mesma
+  --     (issue #1887; opção A, decisão do mantenedor no PR #2309).
+  --     O anexo interno passa a seguir a MESMA regra da mídia de conversa:
+  --     mesmo knob (`organizations.media_retention_days`, piso de 30 dias),
+  --     MESMO interruptor (`media_retention_enforced`, 0557) e MESMA pausa
+  --     enquanto a organização tem pedido LGPD em andamento — sem os dois, o
+  --     anexo de nota seria a ÚNICA coisa apagada numa organização que
+  --     desligou a limpeza, ou no meio de um atendimento LGPD. Mesmo desenho
+  --     do passo 1 — a idade é a da NOTA, a mesma
   --     medida que a da mensagem, e o arquivo só sai DEPOIS do knob. Nota
   --     viva dentro da retenção não é tocada; é esta linha que o teste de
   --     #1887 cobra (e que reprova se a condição de idade sumir).
@@ -39622,15 +39627,24 @@ begin
   --     com o texto e sem card apontando para arquivo que já saiu do bucket.
   --     Arquivo já removido à mão não quebra a rodada: a linha entra como
   --     `pending` e o worker a fecha como `skipped`, como no passo 1.
-  --     Aqui não existe o "nenhuma OUTRA mensagem usa" do passo 1 porque o
-  --     caminho de anexo é único por upload (`note-<uuid>.<ext>`, rota de
-  --     nota): nenhuma outra nota aponta para ele.
+  --     Aqui não existe o "nenhuma OUTRA mensagem usa" do passo 1: o caminho
+  --     de anexo é único por upload (`note-<uuid>.<ext>`). A rota de nota só
+  --     confere que o caminho é da mesma conversa, então duas notas PODEM
+  --     apontar para o mesmo arquivo por chamada direta à API (pela tela não
+  --     acontece); nesse caso a mais nova perde o anexo quando a mais velha
+  --     vence — caso raro, aceito na decisão.
   with vencidas_da_nota as (
     select n.id, n.organization_id, n.media_storage_path as caminho
       from public.conversation_notes n
       join public.organizations o on o.id = n.organization_id
      where n.media_storage_path is not null
+       and o.media_retention_enforced
        and n.created_at < now() - make_interval(days => greatest(coalesce(o.media_retention_days, 365), 30))
+       and not exists (
+         select 1 from public.lgpd_requests r
+          where r.organization_id = n.organization_id
+            and r.status in ('received', 'processing')
+       )
      order by n.created_at
      limit v_lim
      for update of n skip locked

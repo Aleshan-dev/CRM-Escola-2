@@ -1,5 +1,5 @@
--- manifest: O anexo da nota interna passa a ter retenção por idade, na MESMA régua da mídia de conversa (issue #1887, opção A). A 0483 deixou o bucket `internal-media` FORA da varredura de propósito e o alcança só quando a nota some (passo 2b) ou por pedido LGPD — uma nota que continua existindo segurava o anexo para sempre, e numa cota de 1 GB dividida o bucket crescia sem teto com anexos de até 50 MB. Agora o passo 2c de `fn_enfileirar_midia_vencida` varre `conversation_notes` com o MESMO knob (`organizations.media_retention_days`, piso de 30 dias), mede a idade na NOTA como o passo 1 mede na mensagem, enfileira com bucket `internal-media` e zera os três ponteiros (mesmo que o passo 6d da 0483 faz na redação) — anexo de nota viva DENTRO do knob não é tocado, e arquivo já removido entra como `pending` e sai `skipped` sem quebrar a rodada. Conta em `v_vencidas`: a chave congelada do retorno (0435) não muda. Idempotente (`create or replace`); o corpo vai EDITADO NO LUGAR no bloco da 0435 do `baseline.sql`, espelho da cadeia (`apendice-do-baseline-nao-diverge-da-cadeia`); MANIFEST.md intocado, como manda a tripla desde 02/10/2026. A opção (B) — retenção própria com knob separado — fica de FORA, decisão do mantenedor registrada na issue. Gate: `tests/invariants/retencao-do-anexo-da-nota-por-idade.test.ts`.
--- Fusão do PR #2309: a migration nasceu como 0544 (05/10) e foi numerada 0571 ao trazer a `origin/main`, porque a 0557 (#1534) já redefinia esta função com o interruptor `media_retention_enforced` e a marca `media_status='expired'`. O corpo abaixo é a UNIÃO das duas definições e é a ÚLTIMA da cadeia — é o que `apendice-do-baseline-nao-diverge-da-cadeia` compara com o apêndice do baseline.
+-- manifest: O anexo da nota interna passa a ter retenção por idade, na MESMA régua da mídia de conversa (issue #1887, opção A). A 0483 deixou o bucket `internal-media` FORA da varredura de propósito e o alcança só quando a nota some (passo 2b) ou por pedido LGPD — uma nota que continua existindo segurava o anexo para sempre, e numa cota de 1 GB dividida o bucket crescia sem teto com anexos de até 50 MB. Agora o passo 2c de `fn_enfileirar_midia_vencida` varre `conversation_notes` com o MESMO knob (`organizations.media_retention_days`, piso de 30 dias), o MESMO interruptor (`media_retention_enforced`, 0557: organização com a limpeza desligada não perde anexo de nota) e a MESMA pausa por pedido LGPD em andamento, mede a idade na NOTA como o passo 1 mede na mensagem, enfileira com bucket `internal-media` e zera os três ponteiros (mesmo que o passo 6d da 0483 faz na redação) — anexo de nota viva DENTRO do knob não é tocado, e arquivo já removido entra como `pending` e sai `skipped` sem quebrar a rodada. Conta em `v_vencidas`: a chave congelada do retorno (0435) não muda. Idempotente (`create or replace`); o corpo vai EDITADO NO LUGAR no bloco da 0435 do `baseline.sql`, espelho da cadeia (`apendice-do-baseline-nao-diverge-da-cadeia`); MANIFEST.md intocado, como manda a tripla desde 02/10/2026. Decisão do mantenedor no PR #2309: opção (A); a (B) — prazo próprio para anexo interno — ficou de fora. Gate: `tests/invariants/retencao-do-anexo-da-nota-por-idade.test.ts`.
+-- Fusão do PR #2309: a migration nasceu como 0544 (05/10) e virou 0572 ao trazer a `origin/main`, porque a 0557 (#1534) já redefinia esta função com o interruptor `media_retention_enforced`, a pausa por pedido LGPD e a marca `media_status='expired'` (o número e o carimbo vêm do alocador: o carimbo 20261006120000 da numeração intermediária 0571 era o mesmo da 0567 de outro PR aberto). O corpo abaixo é a UNIÃO das duas definições e é a ÚLTIMA da cadeia — é o que `apendice-do-baseline-nao-diverge-da-cadeia` compara com o apêndice do baseline.
 
 create or replace function public.fn_enfileirar_midia_vencida(p_limite integer default 500)
 returns jsonb
@@ -211,10 +211,14 @@ begin
   --     sob pedido LGPD (passo 6d da 0483): uma nota que CONTINUA EXISTINDO
   --     segurava o anexo para sempre, e numa cota de 1 GB dividida com
   --     `whatsapp-media` o bucket crescia sem teto — anexos de até 50 MB
-  --     (issue #1887, opção A escolhida pelo mantenedor).
-  --     O anexo interno passa a seguir a MESMA retenção da mídia de
-  --     conversa: mesmo knob (`organizations.media_retention_days`, piso de
-  --     30 dias) e mesmo desenho do passo 1 — a idade é a da NOTA, a mesma
+  --     (issue #1887; opção A, decisão do mantenedor no PR #2309).
+  --     O anexo interno passa a seguir a MESMA regra da mídia de conversa:
+  --     mesmo knob (`organizations.media_retention_days`, piso de 30 dias),
+  --     MESMO interruptor (`media_retention_enforced`, 0557) e MESMA pausa
+  --     enquanto a organização tem pedido LGPD em andamento — sem os dois, o
+  --     anexo de nota seria a ÚNICA coisa apagada numa organização que
+  --     desligou a limpeza, ou no meio de um atendimento LGPD. Mesmo desenho
+  --     do passo 1 — a idade é a da NOTA, a mesma
   --     medida que a da mensagem, e o arquivo só sai DEPOIS do knob. Nota
   --     viva dentro da retenção não é tocada; é esta linha que o teste de
   --     #1887 cobra (e que reprova se a condição de idade sumir).
@@ -222,15 +226,24 @@ begin
   --     com o texto e sem card apontando para arquivo que já saiu do bucket.
   --     Arquivo já removido à mão não quebra a rodada: a linha entra como
   --     `pending` e o worker a fecha como `skipped`, como no passo 1.
-  --     Aqui não existe o "nenhuma OUTRA mensagem usa" do passo 1 porque o
-  --     caminho de anexo é único por upload (`note-<uuid>.<ext>`, rota de
-  --     nota): nenhuma outra nota aponta para ele.
+  --     Aqui não existe o "nenhuma OUTRA mensagem usa" do passo 1: o caminho
+  --     de anexo é único por upload (`note-<uuid>.<ext>`). A rota de nota só
+  --     confere que o caminho é da mesma conversa, então duas notas PODEM
+  --     apontar para o mesmo arquivo por chamada direta à API (pela tela não
+  --     acontece); nesse caso a mais nova perde o anexo quando a mais velha
+  --     vence — caso raro, aceito na decisão.
   with vencidas_da_nota as (
     select n.id, n.organization_id, n.media_storage_path as caminho
       from public.conversation_notes n
       join public.organizations o on o.id = n.organization_id
      where n.media_storage_path is not null
+       and o.media_retention_enforced
        and n.created_at < now() - make_interval(days => greatest(coalesce(o.media_retention_days, 365), 30))
+       and not exists (
+         select 1 from public.lgpd_requests r
+          where r.organization_id = n.organization_id
+            and r.status in ('received', 'processing')
+       )
      order by n.created_at
      limit v_lim
      for update of n skip locked
