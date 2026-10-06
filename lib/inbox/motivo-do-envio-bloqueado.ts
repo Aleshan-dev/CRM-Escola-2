@@ -20,8 +20,8 @@ export function motivoDaJanelaFechada(
   t: Traduzir,
 ): string | null {
   if (janela.tipo !== "fechada") return null;
-  // Rede sem modelo aprovado (Instagram/Messenger via `zernio_social`): não há
-  // modelo a oferecer, só esperar o cliente escrever de novo.
+  // Rede sem modelo aprovado (as redes sociais intermediadas): não há modelo
+  // a oferecer, só esperar o cliente escrever de novo.
   if (fonteDeTemplates(provider) === null) {
     return t("Aguarde uma nova mensagem do cliente para reabrir o atendimento nesta rede.");
   }

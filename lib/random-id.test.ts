@@ -42,7 +42,7 @@ describe("randomId — UUID v4 dentro E fora de secure context", () => {
     "lib/branding/logo.ts":
       "o módulo vai ao bundle (CampoDeLogo importa TAMANHO_MAXIMO_DO_LOGO), mas caminhoNovoDoLogo só é chamado em app/api/v1/marca/logo",
     "lib/channels/nome-da-sessao.ts":
-      "nomeDaSessaoNovo só é chamado em lib/channels/connect-waha.ts, que fala com o WAHA pelo servidor",
+      "nomeDaSessaoNovo só é chamado em lib/channels/connect-*, que cria a sessão pelo servidor",
     "lib/followup/nome-da-copia.ts":
       "nomeDaCopia só é chamado em app/api/v1/ai/followup-flows/[id]/duplicate",
     "lib/schemas/_validate.ts": "validação de body das rotas de app/api",
