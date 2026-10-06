@@ -3,7 +3,7 @@
  *
  * Por que existe: o produto já liga para o contato (chamada de voz, spec 18),
  * mas não tem como ver a cara de quem atende. O Jitsi é a rota curta: sala por
- * URL, sem conta, sem instalação do lado do contato — o link chega pelo
+ * URL; o contato entra sem conta e sem instalar nada — o link chega pelo
  * WhatsApp e abre no navegador do celular.
  *
  * Por que a URL vem de `window.__PUBLIC_ENV__` e não de `NEXT_PUBLIC_*`: é a

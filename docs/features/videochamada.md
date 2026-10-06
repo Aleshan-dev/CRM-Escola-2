@@ -1,8 +1,11 @@
 # Videochamada (Jitsi Meet)
 
-O botão **Vídeo** no cabeçalho da conversa abre uma sala de videochamada: o
-atendente entra pela tela, o contato entra pelo link que chega na conversa — sem
-instalar nada, sem conta, sem sair do atendimento.
+O botão **Vídeo** no cabeçalho da conversa abre uma sala de videochamada numa
+**aba nova** do navegador. O contato entra pelo link que chega na conversa, sem
+instalar nada e sem conta. No `meet.jit.si` público, quem abre a sala (o
+operador) precisa entrar com conta Google, GitHub ou Facebook desde 24/08/2023
+([blog do Jitsi](https://jitsi.org/blog/authentication-on-meet-jit-si/)); num
+servidor próprio, a regra é a dele.
 
 A feature nasce **desligada**. Sem `JITSI_SERVER_URL` no `.env`, o botão não
 renderiza: a tela fica igual a de antes, sem aviso e sem erro (`lib/video/jitsi.ts`).
@@ -18,8 +21,8 @@ só se ouve. Os usos que aparecem nos clientes desta instalação:
   infraestrutura de quem presta o cuidado.
 - **Atendimento consultivo** — mostrar a tela, o produto, o formulário, o
   equipamento, o passo a passo de instalação.
-- **Lives e reuniões rápidas da equipe** — a sala serve de sala de reunião sem
-  conta em serviço de terceiro.
+- **Lives e reuniões rápidas da equipe** — a mesma sala serve de sala de
+  reunião rápida.
 
 ## Como funciona
 
@@ -29,7 +32,9 @@ só se ouve. Os usos que aparecem nos clientes desta instalação:
    - **Copiar link** — clipboard, sem tocar em API.
    - **Enviar link na conversa** — passa por `useSendMessage`, ou seja, é uma
      mensagem normal como outra qualquer.
-3. Fechar o diálogo mata a sala. Reabrir gera **outro** link — é outra chamada.
+3. Fechar o diálogo descarta o link **da tela**, não a sala: a sala do Jitsi
+   continua existindo, e o link que já foi enviado no chat segue abrindo a
+   mesma sala. Reabrir o diálogo gera **outro** link — é outra chamada.
 
 ### Por que NOVA ABA e não iframe
 
@@ -54,8 +59,11 @@ manipular a tela de quem abriu.
 
 ### A sala é aleatória e dura uma chamada
 
-`sala-<crypto.randomUUID()>`, gerado **no momento em que o diálogo abre** e
-descartado quando fecha. Nada é gravado, nenhum estado novo no banco.
+`sala-<uuid aleatório>`, gerado por `randomId()` (`lib/random-id.ts`) **no
+momento em que o diálogo abre**, e esquecido pela tela quando ele fecha. Nada é
+gravado, nenhum estado novo no banco. Não é `crypto.randomUUID` cru: o
+navegador só o expõe em contexto seguro, e no self-host em `http://IP` o clique
+em **Vídeo** lançaria `TypeError`.
 
 O formato anterior era `deskcomm-<conversationId>`, e o review do #2441 trocou
 as duas metades dele:
@@ -88,9 +96,11 @@ enxuto, com a **mesma** régua.
    `lib/channels/janela.ts`, o mesmo código do composer, e desabilita o envio.
    **O motivo fica visível** (`data-testid="video-bloqueio"`): a regra não pode
    ser descoberta pelo erro da plataforma.
-2. **Contato bloqueado/anonimizado e conversa encerrada.** Chegam prontos do
-   header (`bloqueio`), montados com os mesmos critérios e os mesmos textos do
-   composer.
+2. **Contato bloqueado/anonimizado e conversa encerrada.** Os textos saem das
+   MESMAS funções do composer (`motivoDoContato` e `motivoDaJanelaFechada`, em
+   `lib/inbox/motivo-do-envio-bloqueado.ts`), inclusive o da rede sem modelo
+   aprovado (`zernio_social`), que manda aguardar o cliente. Conversa encerrada
+   (`encerrada`) só desabilita o envio, sem texto, como o composer faz.
 
 Abrir a sala e copiar o link **não** dependem do canal: a janela fecha a
 mensagem, não o navegador.
@@ -129,17 +139,17 @@ telas discordarem.
 ## Limitações declaradas (não são acidentes)
 
 - **Sem gravação.** Nada é gravado, arquivado nem indexado. Não há `record`.
-- **Sem moderação/JWT do lado do Jitsi.** No servidor público, qualquer pessoa
-  com o link entra (e o link está no histórico da conversa). Quem precisa de
+- **Sem moderação/JWT do lado do Jitsi.** No servidor público, o moderador
+  entra com conta, mas qualquer convidado com o link entra (e o link está no histórico da conversa). Quem precisa de
   trava aponta `JITSI_SERVER_URL` para servidor próprio com JWT — a env aceita
   qualquer origem; o que muda é o endereço, não o desenho do produto.
 - **Não é videochamada do WhatsApp.** A Cloud API não expõe chamada de vídeo;
   o caminho aqui é link de navegador, que é o que o canal já entrega bem.
 - **Fora de `voice_calls`.** Não há linha de chamada, status, duração nem
   transcrição — videochamada não é chamada de voz com imagem.
-- **A sala vale uma chamada.** Fechar o diálogo ou recarregar a página gera outro
-  link; o contato não "reentra" na sala anterior pelo botão. Se precisar de
-  reentrar, é copiar o link que já está na conversa.
+- **O botão gera uma sala por chamada.** Fechar o diálogo ou recarregar a
+  página gera outro link; o botão não volta à sala anterior. Ela não expira:
+  para reentrar, é abrir o link que já está na conversa.
 - **A aba nova sai do CRM.** Não há vídeo da sala embutido na tela de
   atendimento: abrir é abrir o Jitsi na aba dele. É a troca que o
   `Permissions-Policy` do iframe impunha: câmera e microfone só funcionam fora
@@ -147,7 +157,7 @@ telas discordarem.
 
 ## Living System Checklist
 
-1. Entrada: `conversationId`, `provider`, `last_inbound_at` e `bloqueio` do
+1. Entrada: `conversationId`, `provider`, `last_inbound_at`, `bloqueio` e `encerrada` do
    `ConversationHeader` (a conversa selecionada).
 2. Saída: link de sala em nova aba + link enviado por `useSendMessage` (mensagem
    normal, histórico do Inbox).
@@ -174,7 +184,8 @@ telas discordarem.
 
 - `lib/video/jitsi.ts` — servidor (`EH_HTTP`), sala (`novaSala`), URL (puro).
 - `components/inbox/VideoCallButton.tsx` — botão, dialog, janela, copiar/enviar.
-- `components/inbox/ConversationHeader.tsx` — montagem e `bloqueio`.
+- `components/inbox/ConversationHeader.tsx` — montagem, `bloqueio` e `encerrada`.
+- `lib/inbox/motivo-do-envio-bloqueado.ts` — os textos de bloqueio, os mesmos do composer.
 - `lib/env.ts` — `JITSI_SERVER_URL` validada (`.refine().catch()`).
 - `lib/recursos-opcionais/{catalogo,estado}.ts` — a linha no catálogo.
 - `app/public-env-script.tsx` + `types/public-env.d.ts` — injeção em runtime.

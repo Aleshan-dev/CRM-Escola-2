@@ -207,7 +207,8 @@ const schema = z.object({
   // header da conversa (esconde, nunca erro). Quem lê é `servidorDeVideo()`
   // em `lib/video/jitsi.ts`.
   //
-  // `https://meet.jit.si` (público, sem conta) ou o servidor próprio em
+  // `https://meet.jit.si` (público; desde 24/08/2023 quem abre a sala entra
+  // com conta Google/GitHub/Facebook, o convidado não) ou o servidor próprio em
   // Docker/consórcio — a URL é a ORIGEM da aba de videochamada.
   //
   // Validada como URL http(s) desde o review do #2441: depois de trocarmos o
