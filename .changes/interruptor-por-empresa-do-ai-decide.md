@@ -16,8 +16,10 @@ do mesmo gatilho não esperam à toa.
 
 A chave mora em `organizations.settings.automacoes.ai_decide` e o padrão é
 LIGADO: regra gravada depois do #2228 continua decidindo sem ninguém precisar
-ligar nada, e uma falha de leitura não vira freio (o leitor devolve "não deu
-para saber", e quem executa segue como antes). A troca entra no audit log com
+ligar nada. Se não der para ler o interruptor, o passo não consulta o modelo e
+o run registra o motivo próprio `ai_decide_interruptor_ilegivel` (a próxima
+execução tenta de novo; aquele evento não é refeito), e a tela avisa que não
+conseguiu ler em vez de mostrar ligado. A troca entra no audit log com
 `settings.automation_ai_decide_updated`.
 
 Refs #2367
