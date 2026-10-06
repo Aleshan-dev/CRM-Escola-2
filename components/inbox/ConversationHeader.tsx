@@ -38,6 +38,7 @@ import { comandoDaConversa, ROTULO_DO_MOTIVO } from "@/lib/inbox/comando-da-conv
 import { ReassignDialog } from "@/components/inbox/ReassignDialog";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import { DialButton } from "@/components/voice/DialButton";
+import { VideoCallButton } from "@/components/inbox/VideoCallButton";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
@@ -273,6 +274,11 @@ export function ConversationHeader({
         {!conversation.is_group && c?.id && (
           <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
         )}
+        {/* Videochamada (#2440): sem JITSI_SERVER_URL este botão não renderiza,
+            então ele não ocupa lugar nem na instalação que não oferece a feature.
+            A sala é a própria conversa — por isso não depende de telefone, só do
+            link ir pelo chat. */}
+        <VideoCallButton conversationId={conversation.id} />
         {isOpen && (
           <Button
             size="sm"

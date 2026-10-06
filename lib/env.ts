@@ -200,6 +200,18 @@ const schema = z.object({
   // devolve 401 em toda chamada — por isso `getWacallsClient()` exige os dois.
   WACALLS_API_TOKEN: z.string().optional().default(""),
 
+  // ─── Videochamada (Jitsi Meet, #2440) — OPCIONAL, DESLIGADA POR PADRÃO ───
+  //
+  // Mesmo desenho de WACALLS_API_BASE_URL: NUNCA `required()`. Vazio = a
+  // instalação não oferece videochamada e o botão "Vídeo" não aparece no
+  // header da conversa (esconde, nunca erro). Quem lê é `servidorDeVideo()`
+  // em `lib/video/jitsi.ts`.
+  //
+  // `https://meet.jit.si` (público, sem conta) ou o servidor próprio em
+  // Docker/consórcio — a URL é a origem do iframe e também da sala
+  // (`<url>/deskcomm-<conversationId>`).
+  JITSI_SERVER_URL: z.string().optional().default(""),
+
   // ─── Canal Datafy (recorte do #1130) — OPCIONAL, DESLIGADO POR PADRÃO ───
   //
   // Só `true` liga (decisão do dono, doc 54). Vazio = a instalação não oferece o

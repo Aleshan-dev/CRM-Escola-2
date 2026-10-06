@@ -14519,6 +14519,25 @@ export const DICIONARIO: Traducoes = {
   "canais já estavam reativados": { es: "canales ya estaban reactivados" },
   "canal arquivado fica de fora": { es: "canal archivado queda fuera" },
   "canais arquivados ficam de fora": { es: "canales archivados quedan fuera" },
+  // ─── Videochamada (Jitsi Meet, #2440) ───
+  Vídeo: { es: "Vídeo" },
+  Videochamada: { es: "Videollamada" },
+  "Sala de videochamada": { es: "Sala de videollamada" },
+  "A sala é esta conversa: envie o link pelo chat e o contato entra pelo celular, sem instalar nada.":
+    {
+      es: "La sala es esta conversa: envía el enlace por el chat y el contacto entra desde el móvil, sin instalar nada.",
+    },
+  "Link da videochamada copiado.": { es: "Enlace de la videollamada copiado." },
+  "Link da videochamada enviado na conversa.": {
+    es: "Enlace de la videollamada enviado en la conversación.",
+  },
+  "Não consegui copiar o link. Selecione e copie da barra de endereço.": {
+    es: "No pude copiar el enlace. Selecciona y copia desde la barra de direcciones.",
+  },
+  "Não consegui enviar o link. Copie e cole na conversa.": {
+    es: "No pude enviar el enlace. Cópialo y pégalo en la conversación.",
+  },
+  "Enviar link na conversa": { es: "Enviar enlace a la conversación" },
 };
 
 /**
