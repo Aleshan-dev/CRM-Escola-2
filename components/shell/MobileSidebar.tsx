@@ -62,7 +62,10 @@ export function GavetaDeNavegacao({ comoAba = false }: { comoAba?: boolean }) {
                 // a barra lateral já está na tela.
                 "h-11 w-11 md:hidden",
           )}
-          aria-label={t("Abrir navegação")}
+          // Como aba, o nome acessível é o rótulo visível "Mais". Herdar
+          // "Abrir navegação" deixava DOIS controles com o mesmo nome na tela de
+          // celular (este e o hambúrguer da barra de cima).
+          aria-label={comoAba ? undefined : t("Abrir navegação")}
         >
           {comoAba ? <DotsThree size={22} aria-hidden /> : <List size={22} aria-hidden />}
           {comoAba ? (
