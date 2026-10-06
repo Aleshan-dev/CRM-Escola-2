@@ -9,12 +9,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const { authMock, flowsMock, testeMock, updateMock, pipelinesMock, stagesMock, routerDataMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   flowsMock: vi.fn(),
-  pipelinesMock: vi.fn(() => ({ data: undefined })),
-  stagesMock: vi.fn(() => ({ data: undefined })),
+  // O tipo de retorno explícito evita que o tsc infira `undefined` do default
+  // e reprove os mockReturnValue de teste (#2415).
+  pipelinesMock: vi.fn((): { data: unknown } => ({ data: undefined })),
+  stagesMock: vi.fn((): { data: unknown } => ({ data: undefined })),
   testeMock: vi.fn(() => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, data: undefined as unknown })),
   updateMock: vi.fn(async () => ({})),
   // #2415 — o que o React Query devolve no refetch: undefined = sem query em cache.
-  routerDataMock: vi.fn(() => ({ data: undefined })),
+  routerDataMock: vi.fn((): { data: unknown } => ({ data: undefined })),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
