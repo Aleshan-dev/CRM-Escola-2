@@ -171,13 +171,13 @@ describe("registro em organizations.settings.mcp_externo (#2147)", () => {
     expect(gravado.conversions).toEqual({ meta_page_id: "111" });
     expect(gravado.proposals).toEqual({ enabled: true });
     expect(gravado.llm).toEqual({ provider: "openai" });
-    expect(gravado.mcp_externo).toEqual({ endpoint: "https://erp.loja/mcp", chave: CHAVE });
+    // E o bolso do MCP externo NÃO guarda mais a chave (item 3): ela vive
+    // cifrada nas colunas, que a RLS não entrega a membro nenhum.
+    expect(gravado.mcp_externo).toEqual({ endpoint: "https://erp.loja/mcp" });
+    expect(JSON.stringify(gravado)).not.toContain(CHAVE);
 
     // E a leitura devolve o que foi gravado.
-    expect(lerServidorMcpExterno(gravado)).toEqual({
-      endpoint: "https://erp.loja/mcp",
-      chave: CHAVE,
-    });
+    expect(lerEndpointMcpExterno(gravado)).toBe("https://erp.loja/mcp");
   });
 
   it("endpoint vazio apaga o registro e devolve os outros bolsos como estavam", () => {

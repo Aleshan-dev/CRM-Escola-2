@@ -1,6 +1,6 @@
 /**
- * A ponte entre o REGISTRO (o jsonb) e o TURNO: lê, descobre e devolve pronto
- * para `pickToolsFromMcp` montar (#2147).
+ * A ponte entre o REGISTRO (jsonb + colunas cifradas) e o TURNO: lê, descobre
+ * e devolve pronto para `pickToolsFromMcp` montar (#2147).
  *
  * ── Por que a descoberta mora aqui e não dentro do montador ─────────────────
  *
@@ -126,7 +126,7 @@ export async function carregarServidorMcpExterno(
   } catch (err) {
     logger.warn("servidor MCP externo registrado nao respondeu — turno segue sem as ferramentas dele", {
       organization_id: organizationId,
-      endpoint: servidor.endpoint,
+      endpoint: hostDoEndpoint(endpoint),
       error: err instanceof Error ? err.message : String(err),
     });
     return null;
