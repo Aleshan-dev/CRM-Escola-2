@@ -229,7 +229,7 @@ export async function registrarUrgenciaDoJev(pool: pg.Pool, r: RegistroDaUrgenci
       insert into public.llm_calls
         (organization_id, contact_id, job_id, purpose, provider, model,
          input_tokens, output_tokens, cost_cents, latency_ms, status, origem_da_escolha)
-      values ($1, $12, $5, 'jev_sinal_de_urgencia', 'typesafe', $13, $14, $15, $16, $11, 'ok', $17)`,
+      values ($1, $12, $6, 'jev_sinal_de_urgencia', 'typesafe', $13, $14, $15, $16, $11, 'ok', $17)`,
       [
         r.organizationId,
         TAREFA_DA_URGENCIA.id,
