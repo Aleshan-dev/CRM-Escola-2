@@ -121,7 +121,30 @@ function aplicarPadroesDoPerfil(texto: string, fase: "antes" | "depois"): string
   return saida;
 }
 
-export function scrubMessage(input: string): string {
+/**
+ * O telefone brasileiro. O segundo é o mesmo padrão como era antes do #2418
+ * (separador depois do `55` só espaço), usado só com `perfisDePais: false`.
+ */
+const TELEFONE_BR =
+  /(^|[^\w-])(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[-.\s]?)?(?:9[-.\s]?\d{4}|\d{4,5})[-.\s]?\d{4}(?![\w-])/g;
+const TELEFONE_BR_ANTES_DO_2418 =
+  /(^|[^\w-])(?:\+?55\s?)?(?:\(?\d{2}\)?[-.\s]?)?(?:9[-.\s]?\d{4}|\d{4,5})[-.\s]?\d{4}(?![\w-])/g;
+
+/**
+ * `perfisDePais: false` devolve a saída de ANTES do #2418: sem os padrões dos
+ * perfis e com o `+55` aceitando só espaço depois dele. Existe para UM chamador,
+ * a conferência de campo personalizado (`lib/mcp/conferencia-de-campos.ts`), que
+ * não é telemetria — ela pergunta ao Jev se o valor CRU que a IA quer gravar
+ * ("CEP é 01310-100?") foi dito nas mensagens que saem daqui. Lá, máscara a mais
+ * não protege nada (o valor vai ao Jev pela pergunta de qualquer jeito) e faz a
+ * conferência recusar o CEP ou o telefone que o cliente acabou de digitar.
+ * Telemetria (Sentry e os demais textos do Jev) usa o padrão, com todos os perfis.
+ */
+export interface OpcoesDoScrub {
+  perfisDePais?: boolean;
+}
+
+export function scrubMessage(input: string, { perfisDePais = true }: OpcoesDoScrub = {}): string {
   return input
     // Chave do Jev (`apikey_<hex>_<hex>`) solta no texto. PRIMEIRO, porque os
     // padrões de CPF e telefone abaixo comeriam pedaços numéricos dela e
@@ -131,18 +154,18 @@ export function scrubMessage(input: string): string {
     // endereço e deixar o resto dele passar.
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[EMAIL]")
     .split(UUID)
-    .map((trecho, i) => (i % 2 === 1 ? trecho : apagarCpfETelefone(trecho)))
+    .map((trecho, i) => (i % 2 === 1 ? trecho : apagarCpfETelefone(trecho, perfisDePais)))
     .join("");
 }
 
-function apagarCpfETelefone(trecho: string): string {
+function apagarCpfETelefone(trecho: string, perfisDePais: boolean): string {
   // O IBAN (e o que mais o `PERFIL_VEM_ANTES` declarar) primeiro: a cadeia de
   // telefone comeria os blocos de 4 dígitos dele por dentro.
-  const comIban = aplicarPadroesDoPerfil(trecho, "antes");
+  const comIban = perfisDePais ? aplicarPadroesDoPerfil(trecho, "antes") : trecho;
   const aposCadeia = comIban
     // Números em formato internacional (+DDI), ANTES de tudo: sem esta
-    // passada o `+351****5678` caía no padrão de CPF e saía como
-    // `+[CPF]8` (issue #2345). Cobre `+351****5678` e `+351 912 345 678`;
+    // passada o `+351912345678` caía no padrão de CPF e saía como
+    // `+[CPF]8` (issue #2345). Cobre `+351912345678` e `+351 912 345 678`;
     // os +55 ficam com o padrão brasileiro logo abaixo — o `(?!55)` cumpre
     // isso e mantém o número brasileiro saindo exatamente como antes. O último
     // bloco é `\d{3,}`, não `\d{3,4}`, para não sobrar dígito no fim de número
@@ -158,10 +181,7 @@ function apagarCpfETelefone(trecho: string): string {
       // padrões de baixo seguem pegando o número colado em outro texto.
       // O separador depois do `55` é `[\s.-]`, não `\s`: sem isso `+55-11-98765-4321`
       // saía inteiro e `+55.11.98765.4321` saía `+55.[PHONE]` (#2418).
-      .replace(
-        /(^|[^\w-])(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[-.\s]?)?(?:9[-.\s]?\d{4}|\d{4,5})[-.\s]?\d{4}(?![\w-])/g,
-        "$1[PHONE]",
-      )
+      .replace(perfisDePais ? TELEFONE_BR : TELEFONE_BR_ANTES_DO_2418, "$1[PHONE]")
       // CPF com qualquer separador entre os blocos (ponto, espaço, hífen ou nada):
       // `123 456 789 09` e `123.456.789.09` também são CPF de quem digita rápido.
       .replace(/\d{3}[.\s-]?\d{3}[.\s-]?\d{3}[.\s-]?\d{2}/g, "[CPF]")
@@ -176,7 +196,7 @@ function apagarCpfETelefone(trecho: string): string {
   // DEPOIS é o que preserva o resultado de antes — o NIF sem prefixo e o
   // `+351 912 345 678` já saíram `[PHONE]` acima, e o perfil não acha mais
   // dígito nenhum para trocar.
-  return aplicarPadroesDoPerfil(aposCadeia, "depois");
+  return perfisDePais ? aplicarPadroesDoPerfil(aposCadeia, "depois") : aposCadeia;
 }
 
 /**

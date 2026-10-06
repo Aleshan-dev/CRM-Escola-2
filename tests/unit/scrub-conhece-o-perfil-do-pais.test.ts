@@ -70,3 +70,26 @@ describe("scrub da telemetria com os padrões do perfil do país", () => {
     expect(fonte).toMatch(/aplicarPadroesDoPerfil\(/);
   });
 });
+
+// A conferência de campo personalizado (`lib/mcp/conferencia-de-campos.ts`) não
+// é telemetria: ela pergunta ao Jev se o valor CRU ("CEP é 01310-100?") foi dito
+// nas mensagens que saem do scrub. Com `[CEP]` na mensagem, a conferência
+// recusaria o CEP que o cliente digitou. Por isso ela pede a saída de antes do
+// #2418 — e a telemetria segue com todos os perfis. Os dois lados, exatos.
+describe("perfisDePais: false — a saída de antes do #2418, só para a conferência de campo", () => {
+  const casos: Array<[entrada: string, conferencia: string, telemetria: string]> = [
+    ["meu cep é 01310-100", "meu cep é 01310-100", "meu cep é [CEP]"],
+    ["zap +55-11-98765-4321 ok", "zap +55-11-98765-4321 ok", "zap [PHONE] ok"],
+    ["zap +55.11.98765.4321 ok", "zap +55.[PHONE] ok", "zap [PHONE] ok"],
+    ["nif PT123456789 ok", "nif PT123456789 ok", "nif [NIF] ok"],
+    ["lote 9333 443", "lote 9333 443", "lote [CODIGO_POSTAL]"],
+    ["pagamento PT50 0002 0123 1234 5678 9015 4 ok", "pagamento PT50 [PHONE] [PHONE] 9015 4 ok", "pagamento [IBAN] ok"],
+    ["doc 123.456.789-09 ok", "doc [CPF] ok", "doc [CPF] ok"],
+    ["zap +55 11 98765-4321 ok", "zap [PHONE] ok", "zap [PHONE] ok"],
+  ];
+
+  it.each(casos)("%s", (entrada, conferencia, telemetria) => {
+    expect(scrubMessage(entrada, { perfisDePais: false })).toBe(conferencia);
+    expect(scrubMessage(entrada)).toBe(telemetria);
+  });
+});
