@@ -27,7 +27,6 @@ import {
   LIMIAR_SUPORTE,
   decidirAfirmacoes,
   frasesParaConferir,
-  perguntasDaAfirmacao,
   renderVetoDeAfirmacao,
 } from "@/lib/agent-engine/guardrails/factual-claim";
 import {
@@ -35,16 +34,15 @@ import {
   BEFORE_SEND_GATES,
   evaluateBeforeSend,
   factualClaimGate,
+  semanticPromiseGate,
   type GateContext,
 } from "@/lib/agent-engine/guardrails/before-send";
-import {
-  PROMISE_SEMANTIC_INSTRUCTION,
-  semanticPromiseGate,
-} from "@/lib/agent-engine/guardrails/promise/semantic";
+import { PROMISE_SEMANTIC_INSTRUCTION } from "@/lib/agent-engine/guardrails/promise/semantic";
 import type { EvidenciaComercial } from "@/lib/agent-engine/guardrails/promise/evidencias-comerciais";
 import {
   conferirAfirmacoes,
   criarConferidorDeAfirmacoes,
+  perguntasDaAfirmacao,
 } from "@/lib/ai/decisao/afirmacao-de-fato";
 import { TAREFA_DA_AFIRMACAO_DE_FATO } from "@/lib/ai/decisao/tarefas";
 
@@ -190,13 +188,13 @@ describe("as perguntas tipadas — uma por frase, três por frase", () => {
       "contradicts_1",
     ]);
     for (const p of Object.values(perguntas)) expect(p.tipo).toBe("noul");
-    expect(perguntas.claim_0.instrucao).toContain("Abrimos às 8h.");
-    expect(perguntas.supported_0.instrucao).toContain("in any wording or format");
+    expect(perguntas["claim_0"]!.instrucao).toContain("Abrimos às 8h.");
+    expect(perguntas["supported_0"]!.instrucao).toContain("in any wording or format");
   });
 
   it("a forma 'in any format' é exigência da issue: '14h' contra '14:00' casaria só com ela", () => {
     const perguntas = perguntasDaAfirmacao(["O check-in é às 12h."]);
-    expect(perguntas.supported_0.instrucao).toMatch(/any wording or format/i);
+    expect(perguntas["supported_0"]!.instrucao).toMatch(/any wording or format/i);
   });
 });
 
@@ -306,7 +304,10 @@ describe("os três exemplos da tabela, dublados", () => {
       [semanticPromiseGate, factualClaimGate],
     );
     expect(cadeia.veto?.gate).toBe("semantic_promise");
-    expect(cadeia.trace.find((t) => t.gate === "factual_claim")?.verdict).toBe("skipped");
+    // O primeiro veto da cadeia é o da F4-02: esta camada nem é a que barra.
+    expect(
+      cadeia.trace.filter((t) => t.verdict === "veto").map((t) => t.gate)[0],
+    ).toBe("semantic_promise");
   });
 });
 
