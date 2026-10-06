@@ -67,6 +67,7 @@ import type { ProviderRegistry } from '../edge/llm/providers';
 import { HANDOFF_REASON_ORCAMENTO } from '../edge/llm/orcamento';
 import { abreAvisoDoEspelhoRecusado, mirrorLeadStageToCrm } from '../edge/crm/move-lead-stage';
 import { insertInboxItem } from '../db/repository';
+import { criarConferidorDeAfirmacoes } from '@/lib/ai/decisao/afirmacao-de-fato';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { moverLeadParaEtapaDeHandoff } from '@/lib/leads/handoff-stage-move';
 import { detectUrgencySignal } from '../guardrails/sinal-de-urgencia';
@@ -195,7 +196,7 @@ import {
   carregarFontesQueProvamOferta,
   criarEvidenciasComerciaisDoTurno,
 } from '../guardrails/promise/evidencias-comerciais';
-import { classifyPromise } from '../guardrails/promise/semantic';
+import { classifyPromise, memoizarPorCandidata } from '../guardrails/promise/semantic';
 import { expectativaDeAtendimento } from '@/lib/escalacao/disponibilidade';
 import {
   montarBriefingDaPassagem,
@@ -204,6 +205,7 @@ import {
 import { diffCheckpoint } from '@/lib/leads/checkpoint-diff';
 import { emitAgentActivityForContact } from '@/lib/leads/agent-activity';
 import { resolveActiveLeadForContact, type LeadCandidate } from '@/lib/leads/active-lead';
+import { aplicaDestinoDaIntencao } from './destino-da-intencao';
 import { recalculaScoreDoLead } from '@/lib/leads/score-writer';
 import {
   JAILBREAK_ESCALATION_LEVEL,
@@ -220,6 +222,7 @@ import {
   type ManipulacaoDoJev,
 } from '@/lib/ai/decisao/manipulacao';
 import type { DependenciasDoPonto } from '@/lib/ai/decisao/ponto';
+import { perguntarUrgenciaAoJev, registrarUrgenciaDoJev } from '@/lib/ai/decisao/urgencia';
 import { fusoDaOrganizacao } from './fuso-da-org';
 import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
@@ -487,6 +490,15 @@ export const AGENT_TOOL_DEFS = {
  * que o modelo não fez não vale um cliente sem resposta.
  */
 export const MAX_VETOS_DE_VOCABULARIO_INTERNO = 2;
+
+/**
+ * Quantos vetos de `clinical_claim` o turno tolera antes do fail-safe. A saída aqui é
+ * a OPOSTA da do vocabulário interno: aquele solta o envio, este NUNCA solta — uma
+ * frase com diagnóstico ou dose não sai por insistência do modelo. O que o fail-safe
+ * faz é chamar a equipe (abre um caso), e aí o modelo tem uma saída honesta: dizer que
+ * a equipe vai falar com a pessoa, que agora é verdade.
+ */
+export const MAX_VETOS_DE_AFIRMACAO_CLINICA = 2;
 
 /**
  * O mesmo degrau para o veto de `false_empty_inbound`, e pela mesma assimetria.
@@ -2036,6 +2048,10 @@ async function executarTurnoDoAgente(
         inbound: liveJob().kind === 'inbound_turn',
       }, { log: runLog, jev: deps.jev });
   const agentConfig = routed.config;
+  // #2155 — o destino do card. `in` porque o ramo de preview/campanha devolve um
+  // objeto literal SEM estes campos: sem a guarda, o tipo da união recusa a leitura.
+  const destinoPipelineId = 'destinationPipelineId' in routed ? (routed.destinationPipelineId ?? null) : null;
+  const destinoStageId = 'destinationStageId' in routed ? (routed.destinationStageId ?? null) : null;
   if (
     !preview &&
     agentConfig?.operationMode === 'assisted' &&
@@ -2202,6 +2218,54 @@ async function executarTurnoDoAgente(
     } catch (err) {
       runLog.warn('decisão do router não gravada', {
         error: (err instanceof Error ? err.message : String(err)).slice(0, 120),
+      });
+    }
+  }
+  // #2155 — A INTENÇÃO TAMBÉM DIZ PARA ONDE O CARD VAI. O roteador escolhia o
+  // agente e o card ficava no funil de entrada: o agente do produto não escrevia
+  // nele, a conversa morria no time errado. Aplicado DEPOIS da decisão de
+  // roteamento (mesmo agente, mesma intenção) e ANTES do turno do agente, para
+  // que ele já responda com o card no funil certo. Silencioso por design: card
+  // já no destino, destino já ocupado e alvo ambíguo não são erro (ver
+  // `destino-da-intencao.ts`).
+  if (!preview && destinoPipelineId !== null) {
+    try {
+      const destino = await aplicaDestinoDaIntencao({
+        admin: deps.crmCfg.supabase,
+        organizationId: tenantId,
+        contactId: leadId,
+        destinoPipelineId,
+        destinoStageId,
+        handlerCtx: {
+          organization_id: tenantId,
+          actor: {
+            type: 'ai_agent',
+            id: 'agent-engine',
+            role: 'ai_operator',
+            ...(agentConfig === null ? {} : { agent_id: agentConfig.agentId }),
+          },
+          requestId: liveJob().id,
+        },
+      });
+      runLog.info('destino da intenção aplicado', {
+        status: destino.status,
+        pipeline_id: destinoPipelineId,
+        intent: routed.intentName,
+        ...(destino.error === undefined ? {} : { error: destino.error }),
+        ...(destino.origemId === undefined ? {} : { origem: destino.origemId }),
+        ...(destino.cloneId === undefined ? {} : { clone: destino.cloneId }),
+      });
+    } catch (err) {
+      // Nunca derruba a resposta ao lead por causa do destino do card.
+      //
+      // A recusa da RÉGUA (#2297, caminho 1) não chega mais aqui: ela é
+      // capturada dentro de `aplicaDestinoDaIntencao`, que conhece o negócio de
+      // origem e abre o aviso na Central antes de devolver `recusado` — este
+      // `catch` é a rede para o que não é recusa prevista (falha de banco na
+      // leitura, por exemplo), e segue sem aviso porque não há negócio a apontar.
+      runLog.warn('destino da intenção não aplicado', {
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 160),
+        pipeline_id: destinoPipelineId,
       });
     }
   }
@@ -2647,11 +2711,14 @@ async function executarTurnoDoAgente(
   // Gate 5 da cadeia (F4-02/F4-08): closure do classificador semântico com tenant/lead/job da
   // ROW do job fechados dentro (regra dura nº 1) — resolvido pelo seam agnóstico. undefined =
   // camada off (gate no-op). CUSTO: uma chamada de modelo POR ENVIO quando ligada.
+  //
+  // Memo POR CORPO e por evidências, por turno (`memoizarPorCandidata`): os
+  // fail-safes de vocabulário e de promessa re-rodam a cadeia com o MESMO texto.
   const semanticClassifier = camadaLigada(
     camadas.promessa_semantica,
     deps.knobs.promiseSemantic?.enabled === true,
   )
-    ? (candidate: string) =>
+    ? memoizarPorCandidata((candidate: string) =>
         classifyPromise(
           pool,
           deps.llmCfg,
@@ -2662,8 +2729,27 @@ async function executarTurnoDoAgente(
             ...argsAux(deps.knobs.promiseSemantic?.model),
           },
           { ...(deps.registry !== undefined ? { registry: deps.registry } : {}), log: runLog },
-        )
+        ),
+        // As evidências crescem entre o veto e o reenvio; o veredito de antes
+        // da consulta não vale para a mesma frase depois dela.
+        () => JSON.stringify(evidenciasComerciais.ler()),
+      )
     : undefined;
+  // Conferência de fato (#2231): a TERCEIRA camada do before_send, depois da
+  // F4-01/F4-02. A evidência é lida NA HORA (nasce no meio do turno) e a
+  // chamada tem UMA requisição por turno fechada aqui: os re-runs dos
+  // fail-safes reaproveitam o resultado em cache, sem pagar de novo.
+  const conferirAfirmacoes = criarConferidorDeAfirmacoes(
+    createAdminClient(),
+    {
+      organizationId: tenantId,
+      conversationId: input.conversationId || null,
+      contactId: leadId || null,
+      agentId: agentConfig?.agentId ?? null,
+      lerEvidencias: () => evidenciasComerciais.ler(),
+    },
+    deps.jev ?? {},
+  );
   let outOfTablePromiseAttempted = false;
   // Spec 15 (Wave 4 lê este flag): true quando open_human_case abriu um caso NESTE
   // turno — aqui só declara e seta; o consumo (ex.: guardrail de promessa) é da Wave 4.
@@ -2676,6 +2762,9 @@ async function executarTurnoDoAgente(
   // (`internal_vocabulary_leak`): 1º veto no turno ensina o modelo a reescrever; persistir
   // solta o envio com registro. Por turno (closure), nunca cross-turno.
   let internalVocabularyVetoCount = 0;
+  // Contador do fail-safe do gate de afirmação clínica (`clinical_claim`): 1º veto ensina;
+  // persistir abre caso para a equipe — e o envio continua barrado. Por turno (closure).
+  let clinicalClaimVetoCount = 0;
   // Uma recusa deste tipo devolve o texto confirmado ao modelo para que ele
   // reescreva antes de falar com o cliente. Não gasta envio nem toca no canal.
   let falseEmptyInboundVetoCount = 0;
@@ -2731,6 +2820,9 @@ async function executarTurnoDoAgente(
   // as tools do modelo rodam em passos anteriores do mesmo loop, o valor já está certo
   // quando o modelo decide mandar a resposta.
   let agendaToolCalledThisTurn = false;
+  // Lido pelo `casePromiseGate` (#1873): true só depois de `schedule_followup` AGENDAR com
+  // sucesso neste turno. Libera apenas a promessa de retorno do próprio assistente.
+  let followupAgendadoNesteTurno = false;
   const outcomes: ChannelSendResult[] = [];
   // Citações acumuladas por buscas de conhecimento DESTE turno — anexadas à
   // próxima outbound enviada (shape de lib/ai/citations/types, que a UI já lê).
@@ -3200,6 +3292,11 @@ async function executarTurnoDoAgente(
             // não é dele, e a única saída seria o silêncio. O follow-up determinístico
             // idem (ver GateContext.internalVocabularyEnforced).
             enforceInternalVocabulary: true,
+            // Afirmação clínica: mesma razão do vocabulário (só o corpo do MODELO), e
+            // só para a organização que ligou a camada — ver
+            // `GateContext.clinicalClaimEnforced`. Sem linha, desligada: não há padrão de
+            // ambiente para uma proteção que só faz sentido em saúde.
+            enforceClinicalClaim: camadaLigada(camadas.afirmacao_clinica, false),
             // Mesmo padrão do vocabulário interno: só o `send_message` arma — é o único
             // corpo escrito pelo modelo. `active` é ter QUALQUER ferramenta de agenda:
             // um agente que só CONSULTA promete "vou verificar" igual, e enquanto a
@@ -3210,6 +3307,10 @@ async function executarTurnoDoAgente(
               ferramentas: agentConfig === null ? [] : ferramentasDeAgendaDoAgente(agentConfig.toolIds),
               toolCalledThisTurn: agendaToolCalledThisTurn,
             },
+            followup: {
+              disponivel: rawTools.schedule_followup !== undefined,
+              agendadoNesteTurno: followupAgendadoNesteTurno,
+            },
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }
               : {}),
@@ -3218,6 +3319,10 @@ async function executarTurnoDoAgente(
             ...(semanticClassifier !== undefined
               ? { classifyPromiseSemantic: semanticClassifier }
               : {}),
+            // Conferência de fato (#2231): só o `send_message` arma, pelo mesmo
+            // motivo do vocabulário interno — é o único corpo escrito pelo
+            // modelo. Um `null` devolvido (não conferido) é fail-open.
+            conferirAfirmacoes,
             // Pausa humana do turno, paga FORA do lock do número (issue #654). Antes ela
             // era paga dentro do `send` logo abaixo (via `antesDaPrimeira`), e o `send`
             // só acontece com o `pg_advisory_xact_lock` do canal na mão — cada turno
@@ -3368,6 +3473,54 @@ async function executarTurnoDoAgente(
               hasOpenCase: true,
               openedCaseThisTurn: true,
             });
+          }
+          if (chain.status === 'vetoed' && chain.code === 'clinical_claim') {
+            // Fail-safe do gate de afirmação clínica. Ao contrário do vocabulário interno,
+            // este NUNCA solta o envio: não existe "frase com diagnóstico, mas melhor que
+            // silêncio". O que muda na insistência é que o sistema chama a equipe — abre um
+            // caso com a frase barrada — e o erro devolvido ao modelo passa a dizer que a
+            // equipe foi acionada, para ele avisar a pessoa sem repetir a afirmação. A
+            // resposta seguinte passa pelo `case_promise` porque o caso agora existe.
+            clinicalClaimVetoCount += 1;
+            if (
+              clinicalClaimVetoCount >= MAX_VETOS_DE_AFIRMACAO_CLINICA &&
+              agentConfig?.casesEnabled === true &&
+              !openedCaseThisTurn &&
+              !hasOpenCase
+            ) {
+              const auto = await openCase(
+                pool,
+                {
+                  tenantId,
+                  conversationId: input.conversationId,
+                  agentId: agentConfig?.agentId ?? null,
+                },
+                {
+                  title: 'Pergunta clínica que precisa de um profissional',
+                  summary: body, // a mensagem que o assistente tentou enviar e foi barrada
+                  blocker:
+                    'Aberto automaticamente: o assistente insistiu numa afirmação clínica ' +
+                    '(diagnóstico, remédio, promessa de resultado ou câncer) e o envio foi barrado.',
+                  source: 'guardrail_autofallback',
+                  contextSnapshot: buildCaseContextSnapshot(),
+                },
+              );
+              if (auto.ok) {
+                openedCaseThisTurn = true;
+                moverParaHandoffBestEffort('clinical_claim_autofallback');
+                return {
+                  ok: false,
+                  error: {
+                    code: chain.code,
+                    message:
+                      'A mensagem continua barrada. A equipe já foi acionada: diga à pessoa, ' +
+                      'em uma frase, que um profissional da equipe vai falar com ela, sem ' +
+                      'repetir nada sobre diagnóstico, remédio ou resultado.',
+                  },
+                };
+              }
+            }
+            return { ok: false, error: { code: chain.code, message: chain.message } };
           }
           if (chain.status === 'vetoed' && chain.code === 'internal_vocabulary_leak') {
             // Fail-safe do gate de vazamento — O CLIENTE NUNCA FICA SEM RESPOSTA.
@@ -3730,6 +3883,7 @@ async function executarTurnoDoAgente(
           if (!res.ok) {
             return res; // erro de ensino (payload / data no passado / fora da janela)
           }
+          followupAgendadoNesteTurno = true;
           return {
             ok: true,
             status: 'agendado',
@@ -3941,7 +4095,7 @@ async function executarTurnoDoAgente(
           {
             organizationId: tenantId,
             jobId: preview?.runId ?? liveJob().id,
-            ...(leadId ? { contactId: leadId } : {}),
+            contactId: leadId || null,
           },
           configDoTurno,
           runLog,
@@ -4762,6 +4916,10 @@ async function executarTurnoDoAgente(
       // produto, não deste guardrail), abre um alerta CRÍTICO na Central agora, pra um
       // humano poder responder manualmente pelo próprio WhatsApp enquanto o número
       // aquece. Dedupe por (kind, ref) — não reabre um já aberto pra esta conversa.
+      //
+      // A REGRA continua decidindo (#2232): ela decide; onde não, o Jev só OPINA (R3),
+      // nasce em observação e, com "Avisar a equipe", abre o MESMO alerta
+      // `kind='handoff'`, sem a frase do cliente (#1747).
       if (inboundsPendentes.some((texto) => detectUrgencySignal(texto))) {
         await insertInboxItem(
           pool,
@@ -4784,6 +4942,55 @@ async function executarTurnoDoAgente(
             error: err instanceof Error ? err.message : String(err),
           });
         });
+      } else if (!preview) {
+        const mensagemRepresada = inboundsPendentes[inboundsPendentes.length - 1] ?? '';
+        const urgencia = await perguntarUrgenciaAoJev(
+          pool,
+          {
+            organizationId: tenantId,
+            conversationId: input.conversationId || null,
+            messageId: input.inboundMessageId ?? null,
+            contactId: leadId || null,
+            jobId: liveJob().id,
+            mensagem: mensagemRepresada,
+          },
+          deps.jev,
+        );
+        if (urgencia !== null) {
+          await registrarUrgenciaDoJev(pool, {
+            organizationId: tenantId,
+            contactId: leadId || null,
+            conversationId: input.conversationId || null,
+            messageId: input.inboundMessageId ?? null,
+            jobId: liveJob().id,
+            urgencia,
+          });
+          if (urgencia.percebeu && urgencia.estado === 'decidindo') {
+            await insertInboxItem(
+              pool,
+              tenantId,
+              {
+                kind: 'handoff',
+                severity: 'critical',
+                title: 'Lead com risco percebido pelo modelo de decisão represado pelo cap de envio',
+                body:
+                  `A regra de urgência de hoje não reconheceu o risco, mas o modelo de decisão ` +
+                  `percebeu, numa mensagem represada, risco à segurança ou à saúde ` +
+                  `(origem: percebido pelo modelo de decisão, visível só para a equipe). O ` +
+                  `número está em warm-up/bateu o cap diário (${veto.code}) — a resposta ` +
+                  `automática só sai em ${veto.nextAllowedAt.toISOString()}. Considere ` +
+                  `responder manualmente pelo WhatsApp enquanto o número aquece.`,
+                refKind: 'conversation',
+                refId: input.conversationId,
+              },
+              'kind_e_ref',
+            ).catch((err) => {
+              runLog.warn('alerta de urgência percebida pelo modelo represada falhou (best-effort)', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+          }
+        }
       }
       throw new JobSettledError(
         'cap de envio atingido — job reagendado para a próxima abertura, sem mensagem enviada',

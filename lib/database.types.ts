@@ -2770,8 +2770,10 @@ export type Database = {
           intent_description: string
           intent_name: string
           organization_id: string
+          pipeline_id: string | null
           position: number
           router_id: string
+          stage_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2783,8 +2785,10 @@ export type Database = {
           intent_description: string
           intent_name: string
           organization_id: string
+          pipeline_id?: string | null
           position?: number
           router_id: string
+          stage_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2796,8 +2800,10 @@ export type Database = {
           intent_description?: string
           intent_name?: string
           organization_id?: string
+          pipeline_id?: string | null
           position?: number
           router_id?: string
+          stage_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2828,6 +2834,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "ai_routers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_router_members_pipeline_mesma_org"
+            columns: ["organization_id", "pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "crm_pipelines"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "ai_router_members_stage_mesma_org"
+            columns: ["organization_id", "stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["organization_id", "id"]
           },
         ]
       }
@@ -4444,6 +4464,7 @@ export type Database = {
           is_anonymized: boolean
           is_blocked: boolean
           is_merged_into: string | null
+          is_personal: boolean
           kind: string
           last_activity_at: string | null
           locale: string | null
@@ -4487,6 +4508,7 @@ export type Database = {
           is_anonymized?: boolean
           is_blocked?: boolean
           is_merged_into?: string | null
+          is_personal?: boolean
           kind?: string
           last_activity_at?: string | null
           locale?: string | null
@@ -4530,6 +4552,7 @@ export type Database = {
           is_anonymized?: boolean
           is_blocked?: boolean
           is_merged_into?: string | null
+          is_personal?: boolean
           kind?: string
           last_activity_at?: string | null
           locale?: string | null
@@ -8171,6 +8194,7 @@ export type Database = {
           legal_name: string
           locale: string
           media_retention_days: number
+          media_retention_enforced: boolean
           onboarded_at: string | null
           onboarding_state: Json
           privacy_policy_url: string | null
@@ -8198,6 +8222,7 @@ export type Database = {
           legal_name: string
           locale?: string
           media_retention_days?: number
+          media_retention_enforced?: boolean
           onboarded_at?: string | null
           onboarding_state?: Json
           privacy_policy_url?: string | null
@@ -8225,6 +8250,7 @@ export type Database = {
           legal_name?: string
           locale?: string
           media_retention_days?: number
+          media_retention_enforced?: boolean
           onboarded_at?: string | null
           onboarding_state?: Json
           privacy_policy_url?: string | null
@@ -9725,6 +9751,7 @@ export type Database = {
       }
       webhook_sources: {
         Row: {
+          authorize_ai_on_capture: boolean
           created_at: string
           created_by_user_id: string | null
           default_pipeline_id: string
@@ -9744,6 +9771,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          authorize_ai_on_capture?: boolean
           created_at?: string
           created_by_user_id?: string | null
           default_pipeline_id: string
@@ -9763,6 +9791,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          authorize_ai_on_capture?: boolean
           created_at?: string
           created_by_user_id?: string | null
           default_pipeline_id?: string
@@ -10098,6 +10127,12 @@ export type Database = {
       }
     }
     Functions: {
+      fn_authorize_ai_form_capture: {
+        Args: { p_organization_id: string; p_source_id: string; p_lead_id: string; p_contact_id: string; p_request_id: string; p_ttl_ms: number }
+        Returns: boolean
+      }
+
+
       fn_channel_routing_claim: {
         Args: {
           p_channel: string
