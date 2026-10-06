@@ -60,6 +60,13 @@ describe("scrub da telemetria com os padrões do perfil do país", () => {
     expect(scrubMessage("cep 01310-100 ok")).toBe("cep [CEP] ok");
   });
 
+  // O `(?!55)` do padrão internacional não tinha teste. Tirá-lo muda estas duas
+  // saídas — a segunda para PIOR: `[PHONE] 321`, três dígitos do número soltos.
+  it("+55 com dígitos a mais ou em blocos de 3 sai como antes — o (?!55) segura", () => {
+    expect(scrubMessage("+55 11 98765432100")).toBe("+55 11 [PHONE]");
+    expect(scrubMessage("+55 11 987 654 321")).toBe("+55 11 [PHONE]");
+  });
+
   // Sem esta linha o scrub poderia voltar a ter três regex copiadas de cabeça
   // e este teste continuaria verde — a mesma armadilha do #100 que o próprio
   // arquivo documenta.
