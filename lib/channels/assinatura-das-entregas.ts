@@ -23,13 +23,20 @@
  * ─── A regra do "sim" ───────────────────────────────────────────────────────
  *
  * Não basta "a mais recente veio assinada": numa instalação com DOIS números,
- * um assinando (movimentado) e outro sem assinar (quieto), a mais recente seria
- * quase sempre assinada, a tela sugeriria ligar — e o número quieto pararia de
- * receber. Então: **sim = houve entrega assinada na janela, e nenhuma sem
+ * um assinando (movimentado) e outro sem assinar (pouco movimentado), a mais
+ * recente seria quase sempre assinada, a tela sugeriria ligar — e o segundo
+ * pararia de receber. Então: **sim = houve entrega assinada na janela, e nenhuma sem
  * assinatura chegou desde a PRIMEIRA assinada**. Entrega sem assinatura de antes
  * da atualização não conta contra (é o passado que o #2268 consertou); entrega
  * sem assinatura de depois conta, porque prova que algum servidor ainda não
  * assina.
+ *
+ * O LIMITE desta regra: ela só enxerga quem ENTREGOU. Um número que não assina
+ * e não entregou nada desde a primeira entrega assinada (ou nada na janela) não
+ * aparece na conta — e é indistinguível do "passado de antes do #2268". Com o
+ * WAHA do compose isso não acontece (um segredo só, todas as sessões assinam
+ * juntas); com dois WAHAs ou um proxy no meio, confira cada número antes de
+ * ligar.
  *
  * Mora em `lib/channels/` porque pergunta pelo transporte pelo nome
  * (`provider = 'waha'`) — o interruptor só vale para esse transporte.

@@ -6,8 +6,9 @@
  * chegaram assinadas e a sugerir ligar quando a resposta é sim.
  *
  * As duas direções que importam:
- *   - SIM só quando nada chegou sem assinatura desde a primeira assinada — com
- *     dois números, um assinando e outro não, sugerir ligar cortaria o segundo;
+ *   - SIM só quando nada chegou sem assinatura desde a primeira assinada — se o
+ *     número que não assina entregou algo depois disso, sugerir ligar o cortaria
+ *     (um número que não assina e ficou quieto NÃO aparece: limite da regra);
  *   - a sugestão só aparece com o interruptor DESLIGADO e a resposta SIM.
  *
  * Sabotagem que confirma a guarda: trocar `primeiraAssinadaEm` por

@@ -27,15 +27,15 @@ import type { ModuloOpcional, MODULOS_OPCIONAIS_POR_FLAG } from "@/lib/instalaca
  * aqui existe pra isso dar erro em build, não silenciosamente em runtime. */
 type ModuloPorFlag = (typeof MODULOS_OPCIONAIS_POR_FLAG)[number];
 
+/** O marcador das frases da assinatura; fora do JSX porque não é prosa. */
+const MOMENTO = "{momento}";
+
 /**
  * O que as últimas entregas do WhatsApp disseram sobre a assinatura (doc 99,
  * opção A), com os instantes já formatados pelo servidor. `null` = a leitura
  * falhou, e a tela não diz nada. A regra do "sim" mora em
  * `lib/channels/assinatura-das-entregas.ts`.
  */
-/** O marcador das frases da assinatura; fora do JSX porque não é prosa. */
-const MOMENTO = "{momento}";
-
 export interface AssinaturaNaTela {
   readonly assinadas: boolean | null;
   readonly ultimaAssinada: string | null;
