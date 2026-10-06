@@ -110,7 +110,7 @@ export function NoteCard({ note, onDelete }: Props) {
           <p className="mt-1 whitespace-pre-wrap wrap-anywhere leading-snug">
             {partesDoCorpo(note.body).map((parte, i) =>
               parte.mencao ? (
-                <span key={i} className="rounded bg-warning/25 px-0.5 font-semibold">
+                <span key={i} className="rounded-sm bg-warning/25 px-0.5 font-semibold">
                   {`@${parte.mencao.nome}`}
                 </span>
               ) : (
