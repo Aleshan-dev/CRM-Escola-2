@@ -64,11 +64,14 @@ function parseScopes(raw: unknown): string[] {
 
 /**
  * O MAIOR papel entre os `role:*` do token. A tela de tokens oferece "gerente"
- * e "administrador" como caixas independentes, e a ordem dos escopos é a da
- * lista da tela: o primeiro `role:` encontrado era sempre `manager`, e um token
- * com as duas caixas marcadas fechava em 403 `forbidden_role` nas portas que
- * cobram admin (configurar o agente, #2052). O padrão `agent` vale só para
- * token SEM papel: com `role:viewer` sozinho, o token continua `viewer`.
+ * e "administrador" como caixas independentes, e grava os escopos na ordem dos
+ * CLIQUES (`[...prev, s]` em `ApiTokensClient.tsx`); nem a rota nem o schema
+ * reordenam. Com "o primeiro `role:` vence", quem clicava em gerente antes de
+ * administrador recebia um token que valia `manager` e fechava em 403
+ * `forbidden_role` nas portas que cobram admin (configurar o agente, #2052);
+ * na ordem inversa, o mesmo par valia `admin`. Só uma regra que não depende da
+ * ordem resolve. O padrão `agent` vale só para token SEM papel: com
+ * `role:viewer` sozinho, o token continua `viewer`.
  */
 function scopesRole(scopes: string[]): Role {
   let papel: Role | null = null;

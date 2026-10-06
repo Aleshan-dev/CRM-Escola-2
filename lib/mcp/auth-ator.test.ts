@@ -70,10 +70,15 @@ describe("o papel do token", () => {
     return "role" in ator ? ator.role : undefined;
   };
 
-  it("gerente E administrador marcados: vale o administrador, em qualquer ordem", () => {
-    // A ordem da tela de tokens grava `role:manager` antes de `role:admin`; o
-    // primeiro encontrado vencia, e configurar o agente (#2052) fechava em 403.
+  // A tela grava os escopos na ordem dos cliques: gerente clicado antes de
+  // administrador deixava `role:manager` primeiro, o primeiro encontrado
+  // vencia, e configurar o agente (#2052) fechava em 403. As duas ordens
+  // existem em banco, então as duas têm de valer admin.
+  it("gerente clicado ANTES de administrador: vale o administrador", () => {
     expect(papel(["mcp:read", "role:manager", "role:admin", "config:write"])).toBe("admin");
+  });
+
+  it("administrador clicado ANTES de gerente: vale o administrador", () => {
     expect(papel(["role:admin", "role:manager"])).toBe("admin");
   });
 
