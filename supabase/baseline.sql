@@ -47833,14 +47833,14 @@ comment on column public.organizations.mcp_externo_chave_last4 is
 
 notify pgrst, 'reload schema';
 
--- ---- índice único da comanda do ganho por negócio (migration 0535) ----
+-- ---- índice único da comanda do ganho por negócio (migration 0582) ----
 -- Fecha a corrida entre o worker e o `drain-loop` (#2475, item 2): duas linhas
 -- `lead.won` do mesmo negócio em instâncias diferentes não abrem mais duas
 -- comandas. O índice que existia traz `target_id` na chave e por isso não segura
 -- duas comandas — este tira `target_id`, põe `organization_id` e cobre só o
 -- vocabulário `comanda_no_ganho`; as outras ligações do lead seguem livres.
 -- A limpeza de duplicatas mantém a mais antiga e só toca `crm_lead_links`
--- (nenhum dinheiro é apagado). Idempotente. Cabeçalho: migration 0535.
+-- (nenhum dinheiro é apagado). Idempotente. Cabeçalho: migration 0582.
 delete from public.crm_lead_links l
 using (
   select id,

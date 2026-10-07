@@ -1,11 +1,12 @@
 ---
-impacto: capacidade_nova
+impacto: nada_mudou
 secao: corrigido
 titulo: Comanda do ganho: moeda certa, audit da abertura e corrida fechada
 ---
 
-A comanda aberta ao arrastar um negócio para **Ganho** passa por três
-consertos, um por pendência da issue #2475.
+A comanda aberta ao arrastar um negócio para **Ganho** recebe quatro
+consertos, sobre as pendências anotadas na issue #2475 (a numeração abaixo
+é deste texto, não a da issue).
 
 **1. A moeda do negócio decide se a comanda nasce.** Antes, o valor era copiado
 do lead para a comanda sem ninguém perguntar em que moeda ele estava — dois
@@ -31,26 +32,32 @@ pulada, o audit não registra nada (não abriu). O evento não carrega ator: o
 **3. A corrida entre o worker e o `drain-loop` fecha com índice.** Duas linhas
 `lead.won` do mesmo negócio — fechar, reabrir, fechar — em instâncias
 diferentes passavam as duas pela trava de leitura do vínculo (a primeira ainda
-não gravou) e abriam duas comandas para o mesmo negócio. A migration **0535**
+não gravou) e abriam duas comandas para o mesmo negócio. A migration **0582**
 cria o índice único parcial `uniq_comanda_do_ganho_por_negocio` em
 `crm_lead_links (organization_id, lead_id) WHERE link_kind = 'comanda_no_ganho'`
 — o índice anterior trazia `target_id` na chave, e por isso não segurava duas
 comandas. A limpeza de duplicatas pré-existente mantém a mais antiga e só toca
 `crm_lead_links`, nenhum dinheiro é apagado. No código, o vínculo agora é
-gravado **antes** do item: a perdedora da corrida (23505) entrega uma comanda
-vazia e devolve `ja_existia` com a comanda da vencedora, em vez de virar um
+gravado **antes** do item: a perdedora da corrida (23505) cancela a comanda
+vazia que acabou de abrir (`cancel_reason = 'corrida_do_ganho'`; `sales`
+cancela, nunca apaga) e devolve `ja_existia` com a comanda da vencedora, em vez de virar um
 `falhou` que o dreno reagendaria para sempre — a ordem é o que decide o tamanho
 do estrago.
 
 **4. O retry agora completa o que faltava.** O vínculo é gravado mesmo quando o
 insert do item falha (duplicar dinheiro é pior que um item faltando), mas o
 desfecho seguinte era `ja_existia` → `ok` → a comanda ficava com total 0 para
-sempre e ninguém avisado. A repetição agora lê a comanda: sem item, reinsere o
-valor (sem abrir segunda comanda e sem consultar a numeração); com item, não
-mexe em nada.
+sempre e ninguém avisado. A repetição agora lê a comanda: aberta e sem item, reinsere o
+valor (sem abrir segunda comanda e sem consultar a numeração); com item, ou já
+finalizada ou cancelada, não mexe em nada. Limitação conhecida: o gatilho é
+"comanda vinculada, aberta e sem item", e isso inclui o item que o operador
+removeu à mão de uma comanda ainda aberta — a repetição seguinte do mesmo
+evento o devolveria.
 
-Três arquivos de teste cobrem cada item, e os cinco testes novos foram
-sabotados para provar que falham sem a mudança.
+Dois arquivos de teste (`comanda-do-ganho.test.ts` e
+`comanda-do-ganho.handler.test.ts`) cobrem os quatro itens. Os testes que
+vigiam a mudança foram sabotados (código antigo no lugar) e ficaram vermelhos;
+os de controle de não-regressão seguem verdes nos dois sentidos.
 
 Refs #2475
 
