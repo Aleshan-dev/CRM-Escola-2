@@ -23,7 +23,7 @@ const pickToolsFromMcp = vi.fn((_input: Record<string, unknown>): Record<string,
  * servidor remoto nenhum, e repassar o contato é a única forma de isso valer
  * para os DOIS montadores (Conversador e Operador).
  */
-const carregarServidorMcpExterno = vi.fn(async (..._argumentos: unknown[]) => null);
+const carregarServidorMcpExternoDoTurno = vi.fn(async (..._argumentos: unknown[]) => null);
 
 vi.mock("@/lib/ai/runtime/tools", () => ({ pickToolsFromMcp }));
 vi.mock("@/lib/ai/runtime/mcp_token", () => ({
@@ -44,11 +44,11 @@ vi.mock("@/lib/ai/credentials", () => ({
 /**
  * O montador do motor carrega o servidor MCP externo LÁ DENTRO (o próprio dele
  * é quem lê `organizations.settings`), e este teste passa `{}` como supabase de
- * propósito: sem o mock, `carregarServidorMcpExterno` estoura
+ * propósito: sem o mock, `carregarServidorMcpExternoDoTurno` estoura
  * `supabase.from is not a function` antes de qualquer asserção sobre o contato.
  * Devolver `null` mantém o recado da função: sem registro, não há chave nova.
  */
-vi.mock("@/lib/mcp/servidor-externo/carregar", () => ({ carregarServidorMcpExterno }));
+vi.mock("@/lib/mcp/servidor-externo/carregar", () => ({ carregarServidorMcpExternoDoTurno }));
 const finalizeRun = vi.fn(async (_args: Record<string, unknown>) => {});
 vi.mock("@/lib/ai/runtime/finalize", () => ({ finalizeRun, sendFinalResponse: vi.fn() }));
 
@@ -79,14 +79,24 @@ function entregue(): Record<string, unknown> {
 
 beforeEach(() => {
   pickToolsFromMcp.mockClear();
-  carregarServidorMcpExterno.mockClear();
+  carregarServidorMcpExternoDoTurno.mockClear();
   finalizeRun.mockClear();
 });
 
-/** O 3º argumento de `carregarServidorMcpExterno` — é ele que carrega o contato. */
+/** O 4º argumento de `carregarServidorMcpExternoDoTurno` — é ele que carrega o contato. */
 function opcoesDaCarga() {
-  expect(carregarServidorMcpExterno, "o servidor externo nem foi consultado").toHaveBeenCalled();
-  return carregarServidorMcpExterno.mock.calls.at(-1)![2] as Record<string, unknown> | undefined;
+  expect(carregarServidorMcpExternoDoTurno, "o servidor externo nem foi consultado").toHaveBeenCalled();
+  return carregarServidorMcpExternoDoTurno.mock.calls.at(-1)![3] as Record<string, unknown> | undefined;
+}
+
+/**
+ * O 3º argumento: o `tool_ids` do agente. É por ele que a carga decide se abre
+ * rede (item 7) — um montador que deixasse de repassá-lo descobriria o servidor
+ * de todo agente, com ou sem escolha remota.
+ */
+function toolIdsDaCarga() {
+  expect(carregarServidorMcpExternoDoTurno, "o servidor externo nem foi consultado").toHaveBeenCalled();
+  return carregarServidorMcpExternoDoTurno.mock.calls.at(-1)![2];
 }
 
 describe("motor: buildMcpTurnTools repassa o contato do turno", () => {
@@ -114,6 +124,11 @@ describe("motor: buildMcpTurnTools repassa o contato do turno", () => {
   it("ensaio sem cliente: nada é inventado, nem o contato na carga externa", async () => {
     expect(await montar(null)).not.toHaveProperty("contatoDoTurno");
     expect(opcoesDaCarga()).toEqual({});
+  });
+
+  it("a carga recebe o tool_ids do agente — é ele que decide se abre rede (item 7)", async () => {
+    await montar(null);
+    expect(toolIdsDaCarga()).toEqual(["crm_query_external_data"]);
   });
 });
 
@@ -182,5 +197,10 @@ describe("runtime antigo: runAgent repassa o contato do turno", () => {
     await rodar({ contact_id: null, conversation_id: null });
     expect(entregue()).not.toHaveProperty("contatoDoTurno");
     expect(opcoesDaCarga()).toEqual({});
+  });
+
+  it("a carga recebe o tool_ids da versão — é ele que decide se abre rede (item 7)", async () => {
+    await rodar({ contact_id: null, conversation_id: null });
+    expect(toolIdsDaCarga()).toEqual(["crm_query_external_data"]);
   });
 });

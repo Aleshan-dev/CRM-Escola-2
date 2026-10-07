@@ -84,7 +84,7 @@ export interface PickToolsInput {
    *
    * Ausente = não existe servidor: o catálogo compilado continua sendo a
    * única fonte de tool do turno, sem nenhuma chamada de rede. Quem monta é
-   * `carregarServidorMcpExterno`, ANTES daqui — descobrir é rede e este montador
+   * `carregarServidorMcpExternoDoTurno`, ANTES daqui — descobrir é rede e este montador
    * é síncrono.
    */
   servidorMcpExterno?: ServidorMcpExternoMontado;

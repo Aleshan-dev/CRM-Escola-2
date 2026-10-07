@@ -32,6 +32,7 @@ import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { logger } from "@/lib/logger";
 import { listarFerramentasDoServidor, type FerramentaRemota } from "./chamada";
+import { escolhasRemotas } from "./ids";
 import { hostDoEndpoint, lerEndpointMcpExterno, type ServidorMcpExterno } from "./registro";
 import { abrirChaveMcpExterno } from "./segredo";
 
@@ -131,4 +132,29 @@ export async function carregarServidorMcpExterno(
     });
     return null;
   }
+}
+
+/**
+ * A porta dos MONTADORES DE TURNO (`runAgent` e `buildMcpTurnTools`). Item 7 da
+ * decisão: sem escolha `mcp_externo:*` no `tool_ids` do agente, NADA abre rede.
+ *
+ * A descoberta (`initialize` + `tools/list`, até 15 s cada) acontecia antes de
+ * qualquer olhar para o `tool_ids` — a escolha só era lida dentro de
+ * `pickToolsFromMcp`, que descartava o resultado. Com servidor registrado, todo
+ * turno sem contato falava com o ERP, e com o ERP fora do ar esperava até 30 s,
+ * mesmo para um agente que nunca marcou ferramenta remota. O gate mora aqui,
+ * antes do banco e da rede, para os dois montadores passarem pelo mesmo.
+ *
+ * `listarFerramentasMcpExternas` (o editor do agente) segue chamando
+ * `carregarServidorMcpExterno` direto: listar o que o servidor oferece é
+ * justamente o passo ANTES de existir escolha.
+ */
+export async function carregarServidorMcpExternoDoTurno(
+  supabase: SupabaseClient,
+  organizationId: string,
+  toolIds: readonly string[],
+  opcoes?: OpcoesDeCarga,
+): Promise<ServidorMcpExternoMontado | null> {
+  if (escolhasRemotas(toolIds).length === 0) return null;
+  return carregarServidorMcpExterno(supabase, organizationId, opcoes);
 }

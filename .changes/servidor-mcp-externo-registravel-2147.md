@@ -33,7 +33,8 @@ O desenho da revisão do mantenedor, ponto a ponto:
   prefixo estável `mcp_externo:<leitura|escrita>:<nome>`; o editor do agente tem
   uma action de listagem pronta que devolve os ids, um por marca aceita (a tela do editor ainda não a usa).
 - **Desligado por padrão**: sem registro, ou com registro mas sem escolha no
-  agente, o catálogo é o de sempre e nenhuma rede é aberta; a escolha nasce
+  agente, o catálogo é o de sempre e nenhuma rede é aberta (a descoberta só
+  acontece quando o agente escolheu ao menos uma remota); a escolha nasce
   vazia.
 - **Durante conversa só entra leitura de verdade**: a remota só conta como `read`
   quando o servidor anuncia `annotations.readOnlyHint === true` E quem administra

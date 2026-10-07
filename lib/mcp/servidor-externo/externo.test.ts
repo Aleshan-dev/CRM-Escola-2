@@ -43,7 +43,7 @@ import { pickToolsFromMcp } from "@/lib/ai/runtime/tools";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
 import { chamarFerramentaRemota, fetchDeSaida, listarFerramentasDoServidor } from "./chamada";
-import { carregarServidorMcpExterno } from "./carregar";
+import { carregarServidorMcpExterno, carregarServidorMcpExternoDoTurno } from "./carregar";
 import { lerEndpointMcpExterno, mesclarServidorMcpExterno } from "./registro";
 import { cifrarChaveMcpExterno } from "./segredo";
 import { toolIdRemoto } from "./ids";
@@ -291,6 +291,53 @@ describe("descoberta das ferramentas anunciadas (#2147)", () => {
     expect(montado?.servidor).toEqual({ endpoint: base, chave: CHAVE });
     expect(montado?.ferramentas.map((f) => f.name)).toEqual(["erp_achar"]);
     expect(ids).toEqual([ORG]);
+  });
+});
+
+describe("sem escolha no agente, NADA abre rede (#2147, item 7)", () => {
+  // Registro EXISTENTE e servidor de pé: o único motivo para não haver rede é
+  // o `tool_ids` do agente não ter escolha remota.
+  function bancoRegistrado() {
+    const consultas: string[] = [];
+    const cadeia: Record<string, unknown> = {
+      select: () => cadeia,
+      eq: () => cadeia,
+      maybeSingle: async () => ({
+        data: { settings: { mcp_externo: { endpoint: base } }, ...cifrarChaveMcpExterno(CHAVE) },
+        error: null,
+      }),
+    };
+    return { consultas, cliente: { from: (t: string) => (consultas.push(t), cadeia) } as never };
+  }
+  function fetchEspiao() {
+    const real = fetchDoStub();
+    return vi.fn((...args: Parameters<typeof real>) => real(...args));
+  }
+
+  it("agente só com ferramentas compiladas: nem banco, nem fetch, nem byte no servidor", async () => {
+    const { consultas, cliente } = bancoRegistrado();
+    const espiao = fetchEspiao();
+    const montado = await carregarServidorMcpExternoDoTurno(cliente, ORG, ["crm_search_products"], {
+      fetch: espiao,
+    });
+    expect(montado).toBeNull();
+    expect(espiao, "abriu rede sem escolha remota no agente").not.toHaveBeenCalled();
+    expect(autorizacoesRecebidas, "o servidor remoto recebeu pedido").toEqual([]);
+    expect(consultas).toEqual([]);
+  });
+
+  it("com escolha remota a descoberta acontece (o gate não é geral demais)", async () => {
+    const { cliente } = bancoRegistrado();
+    const espiao = fetchEspiao();
+    const montado = await carregarServidorMcpExternoDoTurno(
+      cliente,
+      ORG,
+      ["crm_search_products", toolIdRemoto("erp_achar", "leitura")],
+      { fetch: espiao },
+    );
+    expect(montado?.ferramentas.map((f) => f.name)).toEqual(["erp_achar"]);
+    expect(espiao).toHaveBeenCalled();
+    expect(autorizacoesRecebidas.length).toBeGreaterThan(0);
   });
 });
 
