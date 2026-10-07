@@ -1052,6 +1052,10 @@ export const AUDIT_ACTIONS = [
   // empresa (e religá-lo) ficaria sem rastro — e é ele que decide se alguma
   // regra consulta o modelo.
   "settings.automation_ai_decide_updated",
+
+  // Planos de tarefa (#1752): a lista `settings.task_plans` mudou pela rota
+  // `settings/task-plans` — mesma família de `campaign.settings_updated`.
+  "task_plans.settings_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

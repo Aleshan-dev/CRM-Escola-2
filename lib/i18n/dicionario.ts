@@ -14324,6 +14324,10 @@ export const DICIONARIO: Traducoes = {
   "A tarefa não foi criada: o banco recusou a gravação. Tente de novo em alguns minutos; se persistir, abra a tarefa na agenda para ver o detalhe.": {
     es: "La tarea no se creó: la base de datos rechazó el registro. Inténtelo de nuevo en unos minutos; si persiste, abra la tarea en la agenda para ver el detalle.",
   },
+  // #1752 — a recusa do plano de tarefas (mesma frase de MOTIVO_DA_PARADA).
+  "O plano não foi aplicado: o plano escolhido nesta regra não existe mais na lista da organização. Abra a automação e escolha outro plano.": {
+    es: "El plan no se aplicó: el plan elegido en esta regla ya no existe en la lista de la organización. Abra la automatización y elija otro plan.",
+  },
 
   // ─── ação ai_decide (issue #1970) ───
   "A ação não rodou: a regra foi gravada sem declarar o gasto de IA (custo_de_token). Corrija a regra pela API; este passo ainda não tem tela.": {
@@ -14689,6 +14693,40 @@ export const DICIONARIO: Traducoes = {
     es: "No pude enviar el enlace. Cópialo y pégalo en la conversación.",
   },
   "Enviar link na conversa": { es: "Enviar enlace a la conversación" },
+  // Tarefas › Planos (#1752) — a porta nova de cadastro de planos.
+  "Planos de tarefa": { es: "Planes de tareas" },
+  // A descrição da porta no hub e no ⌘K (catálogo do menu).
+  "Sequências reutilizáveis de tarefas — montar uma vez e aplicar a cada negócio.": {
+    es: "Secuencias reutilizables de tareas: se arman una vez y se aplican a cada negocio.",
+  },
+  "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.": {
+    es: "Arma la secuencia una vez; la acción Aplicar un plan de tareas aplica el plan al negocio.",
+  },
+  "Novo plano": { es: "Nuevo plan" },
+  "Nenhum plano cadastrado ainda.": { es: "Aún no hay planes registrados." },
+  "Nome do plano": { es: "Nombre del plan" },
+  "Proposta enviada": { es: "Propuesta enviada" },
+  "Descrição (opcional)": { es: "Descripción (opcional)" },
+  "Passos do plano": { es: "Pasos del plan" },
+  "Adicionar passo": { es: "Agregar paso" },
+  "Remover passo": { es: "Quitar paso" },
+  "Salvar plano": { es: "Guardar plan" },
+  "Dê um nome ao plano.": { es: "Dale un nombre al plan." },
+  "O plano precisa de pelo menos um passo.": { es: "El plan necesita al menos un paso." },
+  "Escreva o título de todos os passos.": { es: "Escribe el título de todos los pasos." },
+  "O que é salvo aqui é o que o editor de regras oferece na ação Aplicar um plano de tarefas.": {
+    es: "Lo que se guarda aquí es lo que el editor de reglas ofrece en la acción Aplicar un plan de tareas.",
+  },
+  // O editor de regras (#1752) — a ação `apply_task_plan` e o seletor de planos.
+  "Aplicar um plano de tarefas ao negócio": { es: "Aplicar un plan de tareas al negocio" },
+  "Plano de tarefa": { es: "Plan de tareas" },
+  "Escolha um plano cadastrado": { es: "Elige un plan registrado" },
+  "Nenhum plano cadastrado ainda. Cadastre em Tarefas › Planos.": {
+    es: "Aún no hay planes registrados. Regístralos en Tareas › Planes.",
+  },
+  "Cada aplicação cria as tarefas do plano na ordem e não duplica — a marca da aplicação é a prova.": {
+    es: "Cada aplicación crea las tareas del plan en orden y no duplica — la marca de la aplicación es la prueba.",
+  },
 };
 
 /**
