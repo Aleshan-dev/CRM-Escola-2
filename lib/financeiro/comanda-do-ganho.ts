@@ -40,9 +40,9 @@
  *
  * ─── O que a função NUNCA faz ────────────────────────────────────────────────
  *
- * Derrubar a movimentação do card. Toda falha vira `{ estado: "falhou" }` para a
- * rota registrar, nunca exceção: o negócio já ganhou, e o financeiro atrasado é
- * melhor do que um 500 no arrasto. E não inventa dinheiro: sem `value_cents`
+ * Derrubar o ganho. Toda falha vira `{ estado: "falhou" }` para quem chamou
+ * registrar, nunca exceção: o negócio já ganhou, e o financeiro atrasado é
+ * melhor do que derrubar o fecho. E não inventa dinheiro: sem `value_cents`
  * válido não há o que lançar, e a função devolve `ignorado`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -76,11 +76,10 @@ export interface EntradaDaComandaDoGanho {
    */
   descricao: string;
   /**
-   * Quem moveu o card, e portanto o atendente e o autor da comanda. Na rota é
-   * o usuário que arrastou; no consumidor de `lead.won` é o `owner_user_id`
-   * do negócio, que pode ser nulo — `sales.attendant_user_id` e
-   * `created_by_user_id` aceitam nulo, então a comanda nasce sem atendente em
-   * vez de não nascer.
+   * O atendente e o autor da comanda. No consumidor de `lead.won` é o
+   * `owner_user_id` do negócio (o `event_log` não guarda ator), que pode ser
+   * nulo — `sales.attendant_user_id` e `created_by_user_id` aceitam nulo, então
+   * a comanda nasce sem atendente em vez de não nascer.
    */
   userId: string | null;
 }

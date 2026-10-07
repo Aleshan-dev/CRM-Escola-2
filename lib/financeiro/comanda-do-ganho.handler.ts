@@ -1,16 +1,14 @@
 /**
  * A CONTA A RECEBER DO GANHO PELO BARRAMENTO — #1477, item 1 da CR do PR #2220.
  *
- * ─── O defeito que este arquivo fecha ───────────────────────────────────────
+ * ─── Por que um consumidor de evento ────────────────────────────────────────
  *
- * A chamada nasceu DENTRO da rota de move (`app/api/v1/leads/[id]/move`), e a
- * rota só é um dos caminhos: o botão Ganhar (`/win` → `encerraDemanda`),
- * o mover em lote, a automação e a capacidade da IA fecham negócio pelo MESMO
- * gatilho do banco e ficavam de fora. Quem grava `lead.won` é
- * `fn_emit_event_on_lead_change` (`supabase/baseline.sql`), em QUALQUER
- * transição de status para `won`, independentemente de quem causou — então o
- * consumidor do evento cobre todos os caminhos com uma decisão só, e a rota
- * deixa de conhecer o financeiro.
+ * Negócio se ganha por vários caminhos: o arrasto no Kanban (rota de move), o
+ * botão Ganhar (`/win` → `encerraDemanda`), o mover em lote, a automação e a
+ * capacidade da IA. Todos passam pelo MESMO gatilho do banco:
+ * `fn_emit_event_on_lead_change` (`supabase/baseline.sql`) grava `lead.won` em
+ * QUALQUER transição de status para `won`. O consumidor do evento cobre todos
+ * com uma decisão só, e nenhuma rota precisa conhecer o financeiro.
  *
  * ─── Por que admin client, e de onde vêm os dados ───────────────────────────
  *
@@ -27,8 +25,8 @@
  * ─── Idempotência: o dreno reexecuta a linha inteira ────────────────────────
  *
  * Quando um handler devolve `error`, o dreno reagenda a LINHA e todos os
- * handlers rodam de novo — inclusive os que já tinham rodado. A trava é a
- * mesma da rota: `comandaDoGanho` procura o vínculo em `crm_lead_links` antes
+ * handlers rodam de novo — inclusive os que já tinham rodado. A trava é o
+ * vínculo: `comandaDoGanho` procura o vínculo em `crm_lead_links` antes
  * de escrever e devolve a comanda que já existe. Ou seja, a repetição vira
  * `ok` com `detail: ja_existia`, não uma segunda comanda.
  *
