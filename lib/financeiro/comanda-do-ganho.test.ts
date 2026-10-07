@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import {
   ALVO_DE_VINCULO_DA_COMANDA,
   comandaDoGanho,
+  MOTIVO_DO_CANCELAMENTO_NA_CORRIDA,
   VINCULO_DE_COMANDA_NO_GANHO,
 } from "./comanda-do-ganho";
 
@@ -60,19 +61,24 @@ function bancoFalso(opcoes: {
    * gravou) — só a leitura DEPOIS do 23505 acha a vencedora.
    */
   vinculoSoAposConflito?: Registro[];
+  /** Erro do `update` que cancela a comanda vazia de quem perdeu a corrida. */
+  falhaCancelamento?: { message: string } | null;
   falhaRpc?: boolean;
   numero?: number;
 } = {}) {
   const escritas: { tabela: string; dados: Registro }[] = [];
   const rpcs: { fn: string; args: Registro }[] = [];
   const selecoes: { tabela: string; filtros: Registro }[] = [];
+  const atualizacoes: { tabela: string; dados: Registro; filtros: Registro }[] = [];
 
   const cadeia = (tabela: string) => {
-    const estado: { filtros: Registro; inserido: Registro | null } = {
+    const estado: { filtros: Registro; inserido: Registro | null; atualizado: boolean } = {
       filtros: {},
       inserido: null,
+      atualizado: false,
     };
     const resolver = () => {
+      if (estado.atualizado) return resposta(null, opcoes.falhaCancelamento ?? null);
       if (estado.inserido) {
         if (tabela === "crm_lead_links" && opcoes.falhaVinculo) {
           return resposta(null, opcoes.falhaVinculo);
@@ -110,6 +116,11 @@ function bancoFalso(opcoes: {
         return c;
       },
       limit: () => c,
+      update: (dados: Registro) => {
+        estado.atualizado = true;
+        atualizacoes.push({ tabela, dados, filtros: estado.filtros });
+        return c;
+      },
       insert: (dados: Registro) => {
         estado.inserido = dados;
         escritas.push({ tabela, dados });
@@ -132,7 +143,7 @@ function bancoFalso(opcoes: {
     },
   };
 
-  return { supabase: supabase as never, escritas, rpcs, selecoes };
+  return { supabase: supabase as never, escritas, rpcs, selecoes, atualizacoes };
 }
 
 const entrada = (sobrescrita: Partial<Parameters<typeof comandaDoGanho>[1]> = {}) => ({
@@ -249,7 +260,7 @@ describe("comandaDoGanho", () => {
     const falso = bancoFalso({
       vinculos: [{ id: "link", target_id: COMANDA }],
       itens: [], // comanda sem item = a falha de antes
-      comandaExistente: { id: COMANDA, number: 12 },
+      comandaExistente: { id: COMANDA, number: 12, status: "open" },
     });
 
     const desfecho = await comandaDoGanho(falso.supabase, entrada());
@@ -273,6 +284,23 @@ describe("comandaDoGanho", () => {
     expect(falso.rpcs).toHaveLength(0);
   });
 
+  it("comanda vazia que o operador já FINALIZOU: a repetição não põe item nela", async () => {
+    // O gatilho do retry é "vinculada e sem item" — e isso inclui a comanda que
+    // alguém já fechou. Dinheiro numa comanda finalizada mudaria um registro que
+    // já saiu da mão de quem cobra.
+    const falso = bancoFalso({
+      vinculos: [{ id: "link", target_id: COMANDA }],
+      itens: [],
+      comandaExistente: { id: COMANDA, number: 12, status: "finalized" },
+    });
+
+    const desfecho = await comandaDoGanho(falso.supabase, entrada());
+
+    expect(desfecho).toEqual({ estado: "ja_existia", comandaId: COMANDA });
+    expect(falso.escritas).toHaveLength(0);
+    expect(falso.rpcs).toHaveLength(0);
+  });
+
   it("comanda que JÁ tem item: a repetição não mexe em nada (o caso normal do 'já existia')", async () => {
     const falso = bancoFalso({
       vinculos: [{ id: "link", target_id: COMANDA }],
@@ -292,7 +320,7 @@ describe("comandaDoGanho", () => {
   it("corrida perdida (23505 do índice novo) devolve a comanda da vencedora, sem girar no retry", async () => {
     // Worker e cron processando duas linhas `lead.won` do mesmo negócio: a
     // segunda não passa mais pela trava de leitura (a primeira ainda não gravou)
-    // e só o índice único da migration 0535 segura. O desfecho tem que ser
+    // e só o índice único da migration 0582 segura. O desfecho tem que ser
     // `ja_existia` — devolver `falhou` mandaria o dreno reagendar para sempre.
     const falso = bancoFalso({
       falhaVinculo: { message: "duplicate key value violates unique constraint", code: "23505" },
@@ -311,9 +339,44 @@ describe("comandaDoGanho", () => {
     expect(falso.escritas.find((e) => e.tabela === "sale_items")).toBeUndefined();
   });
 
+  it("corrida perdida: a comanda vazia que a perdedora abriu é CANCELADA, não fica aberta e órfã", async () => {
+    const falso = bancoFalso({
+      falhaVinculo: { message: "duplicate key value violates unique constraint", code: "23505" },
+      vinculoSoAposConflito: [{ id: "link-da-outra", target_id: "77777777-7777-4777-8777-777777777777" }],
+    });
+
+    await comandaDoGanho(falso.supabase, entrada());
+
+    // `sales` cancela, nunca apaga — e só a comanda desta instância, ainda aberta.
+    expect(falso.atualizacoes).toEqual([
+      {
+        tabela: "sales",
+        dados: {
+          status: "cancelled",
+          cancelled_at: expect.any(String),
+          cancel_reason: MOTIVO_DO_CANCELAMENTO_NA_CORRIDA,
+        },
+        filtros: { organization_id: ORG, id: COMANDA, status: "open" },
+      },
+    ]);
+  });
+
+  it("corrida perdida e o cancelamento falha: devolve `falhou` com o motivo, não esconde a comanda órfã", async () => {
+    const falso = bancoFalso({
+      falhaVinculo: { message: "duplicate key value violates unique constraint", code: "23505" },
+      vinculoSoAposConflito: [{ id: "link-da-outra", target_id: "77777777-7777-4777-8777-777777777777" }],
+      falhaCancelamento: { message: "conexão caiu" },
+    });
+
+    const desfecho = await comandaDoGanho(falso.supabase, entrada());
+
+    expect(desfecho).toEqual({ estado: "falhou", erro: expect.stringContaining("conexão caiu") });
+    expect(falso.escritas.find((e) => e.tabela === "sale_items")).toBeUndefined();
+  });
+
   it("a trava vem ANTES do dinheiro: o vínculo é gravado antes do item", async () => {
     // A ordem é o que decide o tamanho do estrago da corrida — a perdedora
-    // entrega uma comanda vazia (cancelável) em vez de uma segunda comanda
+    // entrega uma comanda vazia (que ela mesma cancela) em vez de uma segunda comanda
     // com o mesmo valor (lançamento duplicado).
     const falso = bancoFalso();
 

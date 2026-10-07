@@ -58,6 +58,9 @@ export const VINCULO_DE_COMANDA_NO_GANHO = "comanda_no_ganho" as const;
 /** Como essa comanda nasceu, gravado no `metadata` do vínculo. */
 export const ORIGEM_DA_COMANDA_DO_GANHO = "ganho_no_kanban" as const;
 
+/** `sales.cancel_reason` da comanda vazia que perdeu a corrida do ganho. */
+export const MOTIVO_DO_CANCELAMENTO_NA_CORRIDA = "corrida_do_ganho" as const;
+
 export interface EntradaDaComandaDoGanho {
   organizationId: string;
   leadId: string;
@@ -155,7 +158,7 @@ export async function comandaDoGanho(
     // valor, e a numeração sai da própria comanda — nada aqui é chute.
     const { data: linhaDaComanda, error: erroComandaLeitura } = await supabase
       .from("sales")
-      .select("number")
+      .select("number, status")
       .eq("organization_id", entrada.organizationId)
       .eq("id", comandaVinculada)
       .maybeSingle();
@@ -165,7 +168,12 @@ export async function comandaDoGanho(
         erro: `comanda (revisão): ${erroComandaLeitura?.message ?? "linha não devolvida"}`,
       };
     }
-    const numeroRecuperado = Number((linhaDaComanda as { number: number }).number);
+    // Só uma comanda ABERTA recebe o item. Se o operador já finalizou ou
+    // cancelou aquela comanda vazia, foi decisão dele: pôr dinheiro numa comanda
+    // fechada mudaria um registro que já saiu da mão de quem cobra.
+    const { number: numeroDaLinha, status } = linhaDaComanda as { number: number; status: string };
+    if (status !== "open") return { estado: "ja_existia", comandaId: comandaVinculada };
+    const numeroRecuperado = Number(numeroDaLinha);
 
     const { error: erroItemRetentado } = await supabase
       .from("sale_items")
@@ -222,7 +230,7 @@ export async function comandaDoGanho(
   const numeroDaComanda = Number((comanda as { number: number }).number);
 
   // ─── Item 2 da #2475: a trava vem ANTES do dinheiro ────────────────────────
-  // O índice único parcial da migration 0535 fecha a corrida entre o worker e o
+  // O índice único parcial da migration 0582 fecha a corrida entre o worker e o
   // `drain-loop` (#2475, item 2): duas linhas `lead.won` do mesmo negócio em
   // instâncias diferentes passavam as duas pela trava de leitura, porque
   // `uniq_crm_lead_links_lead_target_link` inclui `target_id` e não segura duas
@@ -231,8 +239,8 @@ export async function comandaDoGanho(
   // E o vínculo vem ANTES do item de propósito: se a corrida acontecer, a
   // perdedora entrega uma comanda VAZIA (total derivado zero) em vez de uma
   // segunda comanda com o mesmo dinheiro — a ordem dos dois inserts é o que
-  // decide o tamanho do estrago. Uma comanda vazia o operador cancela; duas
-  // comandas de mil viram um lançamento duplicado.
+  // decide o tamanho do estrago. A comanda vazia a própria perdedora cancela
+  // (abaixo); duas comandas de mil viram um lançamento duplicado.
   const { error: erroVinculo } = await supabase
     .from("crm_lead_links")
     .insert({
@@ -258,6 +266,27 @@ export async function comandaDoGanho(
     // falha — é a prova de que o "não duplica" valeu, então devolve a comanda
     // que existe em vez de girar no retry.
     if (erroVinculo.code === "23505") {
+      // A comanda que ESTA instância acabou de abrir ficou sem vínculo e sem
+      // item: deixá-la aberta seria uma conta a receber de R$ 0 sem origem na
+      // tela de Comandas. `sales` cancela, nunca apaga — e o motivo fica na linha.
+      const { error: erroCancelamento } = await supabase
+        .from("sales")
+        .update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancel_reason: MOTIVO_DO_CANCELAMENTO_NA_CORRIDA,
+        })
+        .eq("organization_id", entrada.organizationId)
+        .eq("id", comandaId)
+        .eq("status", "open");
+      if (erroCancelamento) {
+        // Devolver `falhou` registra o erro no desfecho; a repetição do dreno
+        // acha o vínculo da vencedora e converge para `ja_existia`.
+        return {
+          estado: "falhou",
+          erro: `corrida perdida; comanda vazia ${comandaId} não cancelada: ${erroCancelamento.message}`,
+        };
+      }
       const { data: vencedora } = await supabase
         .from("crm_lead_links")
         .select("target_id")
