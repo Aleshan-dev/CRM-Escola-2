@@ -68,6 +68,41 @@ const PLANO_3_PASSOS = {
   ],
 };
 
+const CONTATO = "cccccccc-0000-4000-8000-00000000000c";
+
+/**
+ * O caso pedido na revisão (#2213): `[usuario_id, dono_do_lead]`. O primeiro
+ * passo passa, o segundo é recusado — é o meio do laço que importa.
+ */
+const PLANO_COM_DONO_DEPOIS = {
+  id: "plano-dono-depois",
+  nome: "Do designado ao dono",
+  passos: [
+    {
+      ordem: 1,
+      titulo: "Passo de quem já está designado",
+      vence_em_dias: 0,
+      atribuir_a: { usuario_id: OUTRO },
+    },
+    {
+      ordem: 2,
+      titulo: "Passo do dono do negócio",
+      vence_em_dias: 1,
+      atribuir_a: "dono_do_lead",
+    },
+  ],
+};
+
+/** O outro tipo de recusa no meio: o segundo passo é SÓ o placeholder. */
+const PLANO_TITULO_VAZIO = {
+  id: "plano-titulo-vazio",
+  nome: "Título que depende do contato",
+  passos: [
+    { ordem: 1, titulo: "Confirmar o contato", vence_em_dias: 0, atribuir_a: "dono_do_lead" },
+    { ordem: 2, titulo: "{{contact.name}}", vence_em_dias: 1, atribuir_a: "dono_do_lead" },
+  ],
+};
+
 /** A cadeia do supabase que o módulo percorre, sem PostgREST. */
 class Cadeia {
   private inserido: Linha | null = null;
@@ -137,7 +172,19 @@ class DbFalso {
   }
 }
 
-function dbCom(opcoes: { settings?: unknown; aplicacoes?: Linha[] } = {}): DbFalso {
+/**
+ * `dono: null` é o negócio SEM responsável — o cenário em que `dono_do_lead` é
+ * recusado. `contato` sem nome é o outro: `{{contact.name}}` no título inteiro
+ * vira `titulo_vazio` (título que sobra texto depois de interpolar não é vazio).
+ */
+function dbCom(
+  opcoes: {
+    settings?: unknown;
+    aplicacoes?: Linha[];
+    dono?: string | null;
+    contato?: Linha | null;
+  } = {},
+): DbFalso {
   return new DbFalso({
     organizations: [
       {
@@ -150,11 +197,11 @@ function dbCom(opcoes: { settings?: unknown; aplicacoes?: Linha[] } = {}): DbFal
         id: LEAD,
         organization_id: ORG,
         title: "Renovação do contrato",
-        contact_id: null,
-        owner_user_id: DONO,
+        contact_id: opcoes.contato?.id ?? null,
+        owner_user_id: opcoes.dono === undefined ? DONO : opcoes.dono,
       },
     ],
-    contacts: [],
+    contacts: opcoes.contato ? [opcoes.contato] : [],
     crm_tasks: [],
     crm_lead_activities: opcoes.aplicacoes ?? [],
   });
@@ -258,6 +305,50 @@ describe("aplicarPlanoDeTarefas", () => {
 
     expect(resultado).toEqual({ ok: false, codigo: "sem_alvo" });
     expect(db.tarefasInseridas()).toHaveLength(0);
+  });
+
+  it("⭐ passo recusado por `sem_dono` no meio é recusado ANTES do primeiro INSERT — 2 aplicações, 0 tarefa", async () => {
+    const db = dbCom({
+      settings: { task_plans: [PLANO_COM_DONO_DEPOIS] },
+      dono: null,
+    });
+    const pedido = {
+      organizationId: ORG,
+      leadId: LEAD,
+      planoId: PLANO_COM_DONO_DEPOIS.id,
+      origem: "automation:regra-1",
+      agora: AGORA,
+    };
+
+    const primeira = await aplicarPlanoDeTarefas(db as unknown as SupabaseClient, pedido);
+    const segunda = await aplicarPlanoDeTarefas(db as unknown as SupabaseClient, pedido);
+
+    expect(primeira).toEqual({ ok: false, codigo: "sem_dono" });
+    expect(segunda).toEqual({ ok: false, codigo: "sem_dono" });
+    // ZERO escrita: nem o passo 1 (que passaria) nem a marca da aplicação —
+    // é a sobra do laço que a revisão mediu, e ela não pode nascer mais.
+    expect(db.tarefasInseridas()).toHaveLength(0);
+    expect(db.escritas).toHaveLength(0);
+  });
+
+  it("título que vira vazio no meio do plano também é recusado antes do primeiro INSERT", async () => {
+    const db = dbCom({
+      settings: { task_plans: [PLANO_TITULO_VAZIO] },
+      contato: { id: CONTATO, organization_id: ORG, name: null, display_name: null },
+    });
+    const pedido = {
+      organizationId: ORG,
+      leadId: LEAD,
+      planoId: PLANO_TITULO_VAZIO.id,
+      origem: "automation:regra-1",
+      agora: AGORA,
+    };
+
+    const resultado = await aplicarPlanoDeTarefas(db as unknown as SupabaseClient, pedido);
+
+    expect(resultado).toEqual({ ok: false, codigo: "titulo_vazio" });
+    expect(db.tarefasInseridas(), "o passo 1 passaria — mas o plano inteiro foi recusado").toHaveLength(0);
+    expect(db.escritas).toHaveLength(0);
   });
 });
 

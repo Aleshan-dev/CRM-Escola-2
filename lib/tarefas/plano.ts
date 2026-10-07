@@ -42,7 +42,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { emitLeadActivity } from "@/lib/leads/activity-emitter";
-import { criarTarefaInterna, type AtribuicaoDaTarefa } from "@/lib/tarefas/criar-tarefa";
+import {
+  criarTarefaInterna,
+  recusaDeConfiguracao,
+  type AtribuicaoDaTarefa,
+  type ContatoDoPedido,
+  type LeadDoPedido,
+} from "@/lib/tarefas/criar-tarefa";
 import { PRIORIDADES_DA_TAREFA, type PrioridadeDaTarefa } from "@/lib/tarefas/tipos";
 
 /** Um passo, já normalizado: `ordem` SEMPRE preenchida com a posição final. */
@@ -207,6 +213,46 @@ export async function aplicarPlanoDeTarefas(
   const marca = await jaFoiAplicado(db, organizationId, leadId, planoId);
   if (marca.erro) return { ok: false, codigo: "falha", erro: marca.erro };
   if (marca.ja) return { ok: true, ja_aplicado: true, tarefa_ids: [] };
+
+  // ═══ O plano INTEIRO contra o negócio ANTES do primeiro INSERT ═══
+  //
+  // A recusa por configuração (`sem_dono`, `titulo_vazio`) acontecia DENTRO do
+  // laço: um plano com um passo recusável no meio criava os passos anteriores
+  // e saía sem a marca, então cada disparo novo recriava a mesma sobra — dois
+  // disparos, duas tarefas órfãs para a pessoa apagar. Medido na revisão do
+  // #2213; o teste `plano [usuario_id, dono_do_lead]` num negócio sem dono,
+  // aplicado 2×, tem de dar 0 tarefa nas DUAS vezes.
+  //
+  // A ordem das perguntas é a do laço (passo a passo, `sem_dono` antes de
+  // `titulo_vazio`): o código que volta é o MESMO que voltaria antes, só que
+  // sem nada gravado. `recusaDeConfiguracao` é a própria regra de
+  // `criarTarefaInterna` — as duas portas não podem divergir.
+  const negocio = await db
+    .from("crm_leads")
+    .select("id, title, contact_id, owner_user_id")
+    .eq("id", leadId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (negocio.error) return { ok: false, codigo: "falha", erro: negocio.error.message };
+  const lead = negocio.data as LeadDoPedido | null;
+  if (!lead) return { ok: false, codigo: "sem_alvo" };
+
+  const contactId = lead.contact_id ?? null;
+  const contato: ContatoDoPedido | null = contactId
+    ? (((
+        await db
+          .from("contacts")
+          .select("id, name, display_name")
+          .eq("id", contactId)
+          .eq("organization_id", organizationId)
+          .maybeSingle()
+      ).data as ContatoDoPedido | null) ?? null)
+    : null;
+
+  for (const passo of plano.passos) {
+    const recusa = recusaDeConfiguracao(passo.atribuir_a, passo.titulo, { lead, contact: contato });
+    if (recusa) return { ok: false, codigo: recusa };
+  }
 
   const tarefa_ids: string[] = [];
   for (const passo of plano.passos) {
