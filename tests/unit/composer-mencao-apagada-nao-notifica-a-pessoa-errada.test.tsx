@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -148,6 +148,29 @@ describe("menção apagada não notifica a pessoa errada", () => {
     // de `embutirMencoes`.
     expect(enviado.body).toBe(
       "fala com @[Ana Lima](mencao:ana-lima-0001) e @[Ana Lima](mencao:ana-lima-0002) sobre o orçamento",
+    );
+  });
+
+  it("digitar DURANTE o envio e o envio falhar: o retry ainda leva o id da escolha", async () => {
+    // O campo segue editável enquanto a nota é salva (`isDisabled` não inclui
+    // o envio). A 1ª tecla dali poda as escolhas contra um campo que já não
+    // tem `@Ana Lima` — e o `restoreOnError` devolvia o texto SEM o id: o retry
+    // saía como texto puro e, com homônimos, avisava as duas Anas.
+    abrirModoNota();
+    await digitar("fala com @an");
+    await escolherNaLista(0);
+    await digitar("fala com @Ana Lima oi");
+    await enviarNota();
+    const [, opcoes] = createNoteMock.mock.calls[0]! as [unknown, { onError: () => void }];
+
+    await digitar("x"); // a próxima nota começa enquanto a 1ª ainda está no ar
+    act(() => opcoes.onError());
+    expect(screen.getByLabelText(/mensagem/i)).toHaveValue("fala com @Ana Lima oi\nx");
+
+    createNoteMock.mockClear();
+    const retry = await enviarNota();
+    expect(retry.body, "o retry perdeu a escolha: a nota sairia como texto puro").toBe(
+      "fala com @[Ana Lima](mencao:ana-lima-0001) oi\nx",
     );
   });
 });
