@@ -65,8 +65,16 @@ export interface EntradaDaComandaDoGanho {
   contactId: string | null;
   /** `crm_leads.value_cents` — bigint, que o PostgREST pode devolver como texto. */
   valorCents?: number | string | null;
-  /** `crm_leads.title`: vira a descrição do item, congelada na inclusão. */
-  titulo: string;
+  /**
+   * A descrição do item, congelada na inclusão. NUNCA dado de pessoa: o
+   * `crm_leads.title` costuma ser o nome ou o telefone do contato (a automação
+   * cria o negócio com `nomeDoContato(contact) ?? phone_number`), e a cascata
+   * de redact da LGPD (`fn_lgpd_cascade_redact_contact`) anonimiza o título do
+   * negócio mas não alcança `sale_items` — o que fosse copiado para cá
+   * sobreviveria ao pedido do titular. Quem chama passa o vocabulário do funil;
+   * o negócio em si continua alcançável pelo vínculo.
+   */
+  descricao: string;
   /**
    * Quem moveu o card, e portanto o atendente e o autor da comanda. Na rota é
    * o usuário que arrastou; no consumidor de `lead.won` é o `owner_user_id`
@@ -165,7 +173,7 @@ export async function comandaDoGanho(
     .insert({
       organization_id: entrada.organizationId,
       sale_id: comandaId,
-      description: entrada.titulo,
+      description: entrada.descricao,
       quantity: 1,
       unit_price_cents: valor,
       total_cents: valor,
@@ -191,7 +199,8 @@ export async function comandaDoGanho(
         value_cents: valor,
         currency: moeda,
         number: numeroDaComanda,
-        titulo: entrada.titulo,
+        // Sem o título do negócio: o vínculo já aponta para o lead, e uma cópia
+        // aqui ficaria fora da cascata de redact (ver `descricao`).
       },
     })
     .select("id")

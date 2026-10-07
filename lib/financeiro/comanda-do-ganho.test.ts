@@ -28,7 +28,8 @@ const CONTATO = "44444444-4444-4444-8444-444444444444";
 const USER = "55555555-5555-4555-8555-555555555555";
 const COMANDA = "66666666-6666-4666-8666-666666666666";
 
-const TITULO = "Pedido de customização";
+/** O que o handler passa: vocabulário e nome do funil, nunca o título do negócio. */
+const DESCRICAO = "Pedido · Vendas";
 
 type Registro = Record<string, unknown>;
 
@@ -113,7 +114,7 @@ const entrada = (sobrescrita: Partial<Parameters<typeof comandaDoGanho>[1]> = {}
   leadId: LEAD,
   contactId: CONTATO,
   valorCents: 150_000,
-  titulo: TITULO,
+  descricao: DESCRICAO,
   userId: USER,
   ...sobrescrita,
 });
@@ -147,7 +148,7 @@ describe("comandaDoGanho", () => {
     expect(item?.dados).toMatchObject({
       organization_id: ORG,
       sale_id: COMANDA,
-      description: TITULO,
+      description: DESCRICAO,
       quantity: 1,
       unit_price_cents: 150_000,
       total_cents: 150_000,
@@ -167,8 +168,9 @@ describe("comandaDoGanho", () => {
       created_by_user_id: USER,
       metadata: { origem: "ganho_no_kanban", value_cents: 150_000, number: 7 },
     });
-    expect(vinculo?.dados).toBeDefined();
-    expect((vinculo?.dados as { metadata: { titulo: string } }).metadata.titulo).toBe(TITULO);
+    // O vínculo já aponta para o lead; uma cópia do título ficaria fora da
+    // cascata de redact da LGPD.
+    expect((vinculo?.dados as { metadata: Registro }).metadata).not.toHaveProperty("titulo");
   });
 
   it("fechar de novo não duplica: com o vínculo já gravado devolve a comanda que existe e não escreve nada", async () => {

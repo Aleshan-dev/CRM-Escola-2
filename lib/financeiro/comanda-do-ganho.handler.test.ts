@@ -143,7 +143,15 @@ function montarBanco(cenario: { funil: Row; lead?: Row }) {
         position: 2,
       },
     ],
-    crm_pipelines: [{ id: PIPELINE, organization_id: ORG, settings: cenario.funil }],
+    crm_pipelines: [
+      {
+        id: PIPELINE,
+        organization_id: ORG,
+        name: "Vendas",
+        vocabulary: { deal: "Pedido", won: "Pago" },
+        settings: cenario.funil,
+      },
+    ],
     crm_lead_links: [],
     sales: [],
     sale_items: [],
@@ -347,7 +355,7 @@ describe("(a) qualquer caminho para `won` abre a comanda, com a opção ligada",
     );
     expect(banco.escritasDe("sales")).toHaveLength(1);
     expect(banco.escritasDe("sale_items")[0]?.dados).toMatchObject({
-      description: TITULO,
+      description: "Pedido · Vendas",
       unit_price_cents: 150_000,
     });
     expect(banco.escritasDe("crm_lead_links")[0]?.dados).toMatchObject({
@@ -548,5 +556,28 @@ describe("(d) o evento forjado não abre comanda nem dita o valor", () => {
       }),
     );
     expect(banco.escritasFinanceiras()).toHaveLength(0);
+  });
+});
+
+/**
+ * (e) LGPD: o título do negócio NÃO sai do alcance do redact. Ele costuma ser o
+ * nome ou o telefone do contato (a automação cria o negócio com
+ * `nomeDoContato(contact) ?? phone_number`), e `fn_lgpd_cascade_redact_contact`
+ * anonimiza `crm_leads.title` mas não toca `sale_items` nem `crm_lead_links`.
+ */
+describe("(e) o título do negócio não é copiado para o financeiro", () => {
+  it("nenhuma escrita em comanda, item ou vínculo carrega o título — o item leva o vocabulário do funil", async () => {
+    const PESSOAL = "Maria Aparecida 11 98888-7777";
+    const banco = montarBanco({ funil: { comanda_no_ganho: true }, lead: { title: PESSOAL } });
+
+    await fecharPeloBotaoGanhar(banco);
+    await dispatchEvent(eventoDoGanho(banco), { orgParada: false });
+
+    expect(banco.escritasDe("sales")).toHaveLength(1);
+    expect(JSON.stringify(banco.escritasFinanceiras())).not.toContain("Maria");
+    expect(JSON.stringify(banco.escritasFinanceiras())).not.toContain("98888");
+    expect(banco.escritasDe("sale_items")[0]?.dados).toMatchObject({
+      description: "Pedido · Vendas",
+    });
   });
 });

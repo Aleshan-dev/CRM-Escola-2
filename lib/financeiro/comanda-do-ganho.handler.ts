@@ -83,7 +83,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   const admin = createAdminClient();
   const { data: lead, error: erroLeitura } = await admin
     .from("crm_leads")
-    .select("status, pipeline_id, contact_id, title, owner_user_id, value_cents")
+    .select("status, pipeline_id, contact_id, owner_user_id, value_cents")
     .eq("id", leadId)
     .eq("organization_id", row.organization_id)
     .maybeSingle();
@@ -94,7 +94,6 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     status: string | null;
     pipeline_id: string | null;
     contact_id: string | null;
-    title: string | null;
     owner_user_id: string | null;
     value_cents: number | string | null;
   };
@@ -109,18 +108,27 @@ async function handle(row: EventRow): Promise<HandlerResult> {
 
   const { data: funil, error: erroFunil } = await admin
     .from("crm_pipelines")
-    .select("settings")
+    .select("name, vocabulary, settings")
     .eq("id", pipelineId)
     .eq("organization_id", row.organization_id)
     .maybeSingle();
   if (erroFunil) return resultado("error", `funil: ${erroFunil.message}`);
 
-  const settings = (funil as { settings?: unknown } | null)?.settings;
+  const linhaDoFunil = funil as { name?: unknown; vocabulary?: unknown; settings?: unknown } | null;
+  const settings = linhaDoFunil?.settings;
   const ligado =
     settings !== null &&
     typeof settings === "object" &&
     (settings as Record<string, unknown>)[CHAVE_DA_COMANDA_NO_GANHO] === true;
   if (!ligado) return resultado("skipped", "comanda_no_ganho_desligada");
+
+  // A descrição do item vem do FUNIL, nunca do título do negócio (que costuma
+  // ser nome/telefone do contato e fica fora da cascata de redact se copiado):
+  // "Pedido · Vendas" — o vocabulário do negócio e o nome do funil.
+  const vocabulario = linhaDoFunil?.vocabulary as Record<string, unknown> | null | undefined;
+  const descricao = [texto(vocabulario?.deal) ?? "Negócio", texto(linhaDoFunil?.name)]
+    .filter(Boolean)
+    .join(" · ");
 
   const desfecho = await comandaDoGanho(admin, {
     organizationId: row.organization_id,
@@ -128,7 +136,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     contactId: texto(negocio.contact_id),
     // O valor SEMPRE do banco, nunca do payload: o payload é forjável (acima).
     valorCents: negocio.value_cents,
-    titulo: texto(negocio.title) ?? "",
+    descricao,
     // O `event_log` não tem ator (CR do mantenedor): o atendente é o dono do
     // negócio, que pode ser nulo — decisão do próprio CR, não aqui.
     userId: texto(negocio.owner_user_id),
