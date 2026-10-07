@@ -20,35 +20,17 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
   Nota escrita à mão, sem passar pela lista, continua avisando do jeito de antes. Na nota, no sino e na prévia do aviso aparece só o nome (@Ana Lima); a exportação de dados do titular (LGPD) e o histórico que o agente de IA lê também recebem o texto legível, sem o identificador interno do atendente. Não há nada a configurar na atualização.
 
-  Crédito: @webtecnica, a partir do pedido de @Fabio-Ribeir0 (#2372).
+  Contribuição de @webtecnica (#2461), a partir da issue #2372 de @Fabio-Ribeir0.
 
 - **Autorizar atendimento por IA a partir de um formulário** A fonte de formulário pode autorizar novos contatos para IA quando o envio estiver completo e houver consentimento explícito para atendimento automatizado. A opção nasce desligada e exige assinatura do integrador para conferir a origem do envio. O CRM confere fonte, organização, card e contato e preserva recusas e atendimento humano. Conceder ou renovar uma autorização vencida exige `external_id`, que impede que o reenvio do mesmo envio libere de novo; a recusa revoga mesmo sem ele. O integrador precisa enviar o aceite separado da política de privacidade; agente, canal e fluxo continuam precisando de configuração.
 
-- **O CRM no celular ganha barra de abas, movimento nos sobrepostos e alvos de toque de 44px** Quem abria o CRM no celular navegava como num site: a única porta para trocar de seção era o hamburguer, e todo sobreposto do produto — gaveta, janela, menu, seletor, dica — aparecia de um quadro para o outro, sem transição. Agora há uma **barra de abas fixa no rodapé** com as quatro telas de uso diário (Inbox, Funis, Agenda, Desempenho) mais "Mais", que abre a gaveta com o inventário completo. A barra respeita exatamente o que o menu lateral mostraria: ela projeta a mesma lista de destinos, com o mesmo filtro de papel, módulos ligados, capacidades da organização e áreas do plano — porta que o menu esconde não aparece ali. Ela some acima de 768px, onde a barra lateral já está na tela.
+  Contribuição de @vagnerrm122 (#2452).
 
-  **Os sobrepostos passaram a se mover, e a causa de não se moverem era uma classe que não existia.** O produto escrevia `animate-in`, `fade-in-0`, `zoom-in-95` e `slide-in-from-*` em oito componentes — eram ~24 ocorrências —, e essas classes vêm de um plugin que nunca foi instalado neste repositório. Classe que o Tailwind não conhece não gera CSS e não gera erro: tudo abria seco, com o build verde. A gaveta agora desliza do lado em que foi aberta, a janela entra com escala e opacidade, e a cortina escurece antes do conteúdo — nos tempos e curvas que a linguagem de movimento do produto já declarava.
+- **O CRM no celular ganha barra de abas, movimento nos sobrepostos e alvos de toque de 44px** No celular, uma barra de abas fixa no rodapé leva a Inbox, Funis, Agenda, Desempenho e "Mais" (a gaveta com tudo), e mostra só o que o menu lateral mostraria para aquele papel, módulos e plano; acima de 768px ela some. Gavetas, janelas e menus passaram a se mover (as classes de animação vinham de um plugin nunca instalado e não geravam CSS), respeitando o movimento reduzido, e o esqueleto de carregamento ficou visível. Campos, abas, seletores e botões têm 44px onde quem aciona é o dedo, e os campos usam 16px, o que acaba com o zoom do iPhone ao tocar a busca. O funil desliza uma etapa por gesto e a caixa de seleção do card aparece sem mouse; a agenda deixou de cortar texto; o painel de Desempenho ganhou tela de espera e de erro com "Tentar de novo"; a barra e os avisos respeitam o notch e o indicador de home.
 
-  **Quem usa movimento reduzido** continua chegando ao mesmo destino, sem o percurso: as animações encurtam, e as duas que significam "ainda estou trabalhando" — o esqueleto de carregamento e o indicador de progresso — continuam se movendo de propósito, porque um indicador parado diz "travei".
+  **Isto muda o desktop também:** o aviso (toast) passou do canto superior direito para o inferior direito. Fora isso, o layout no laptop não muda. Não há nada a configurar na atualização.
 
-  **O esqueleto de carregamento ficou visível.** Ele era desenhado numa cor que dá contraste 1,146:1 sobre branco — na prática, invisível: a tela parecia vazia em vez de carregando. Agora usa a cor que a equipe mediu como legível nos dois temas, e uma faixa atravessa o elemento em vez de piscar a opacidade (piscar fazia metade de cada ciclo desfazer o conserto).
-
-  **Alvos de toque, e o conserto foi nos primitivos.** Medido na tela em 360px, com conta real e sessão completa: campo de texto, aba, gatilho de seletor e botão passaram a ter 44px onde quem aciona é o dedo, e voltam ao compacto no laptop. Como a régua mudou no componente base, o conserto alcançou o produto inteiro de uma vez — Equipe, Atividades, Auditoria, Contatos, Respostas rápidas e Comandas foram a **zero** controles curtos; Conexões caiu de 7 para 1; o painel de Desempenho ficou em zero. Os dois botões da barra de cima (organização e busca) mediam 40×44 e 42×44 e apareciam em TODA tela.
-
-  O que sobra é deliberado: links de texto dentro de lista (texto não é controle) e as células de meia hora da grade da agenda, cuja densidade é decisão registrada no código.
-
-  **O aviso saiu de cima da navegação.** O toast usava o canto superior, e o mecanismo que o desenha usa largura cheia no celular — então ele virava uma faixa colada no topo, cobrindo hambúrguer, organização, busca e sino. Agora nasce embaixo, acima da barra de abas, pelo mesmo número que o conteúdo já desconta. **Isto muda o desktop também:** o aviso passou do canto superior direito para o inferior direito, que é o que a estratégia responsiva do produto sempre pediu.
-
-  **Campo de texto não dá mais zoom no iPhone.** O Safari amplia a página inteira quando um campo recebe foco com fonte menor que 16px, e os campos usavam 14px: tocar a busca, ou o campo de resposta da conversa, saltava a escala da tela — e sair do campo não desfazia o salto. No celular os campos passam a 16px; no laptop seguem como eram.
-
-  **Telas de espera e de erro deixaram de ser uma frase solta.** O painel de Desempenho dizia "Carregando…" numa linha cinza e, quando falhava, "Erro ao carregar métricas." em vermelho, sem ícone, sem explicação e sem nada para clicar. Agora a espera desenha a silhueta da tela e o erro tem ícone, explicação e um "Tentar de novo" que refaz a consulta.
-
-  **Três consertos de leitura na agenda**, todos medidos em 360px: o cartão de conectar o Google espremia a frase em ~100px e a quebrava em seis linhas — agora empilha; o cabeçalho cortava a data em "5 de outu…" — agora quebra em duas linhas e diz o dia inteiro; e os avatares de quem atende se sobrepunham com 32px, o que tornava impossível acertar o certo — agora ficam separados no celular e voltam a se sobrepor no laptop.
-
-  **O funil desliza coluna por coluna.** Cada etapa ocupa 85% da largura no celular (em vez de 320px fixos, que deixavam a etapa seguinte como uma fatia de poucos pixels) e a rolagem encaixa numa etapa inteira por gesto. E a caixa de seleção do card, que só aparecia no passar do mouse, agora é visível onde não existe mouse — sem ela, a ação em lote "Mover para…" era inalcançável e arrastar era a única forma de mover um card no celular.
-
-  **Áreas seguras (notch e indicador de home).** O documento declara `viewport-fit=cover` pela primeira vez, que é o pré-requisito técnico para `env(safe-area-inset-*)` devolver qualquer valor diferente de zero. Com ele, a barra de abas, o aviso de chamada recebida e o indicador de navegação deixam de nascer por baixo da barra de status e do indicador de home no iOS em tela cheia.
-
-  Nada disso exige ação de quem opera uma VPS: não há variável nova, nem passo de atualização, nem mudança de banco. Quem usa o produto no laptop não vê diferença de layout — as mudanças de tamanho e densidade voltam ao que eram acima dos pontos de corte.
+  Contribuição de @LeonardoMarcelo (#2411).
 
 - **O Jev passa a conferir se o que o agente afirma sobre o negócio está no material consultado** Antes de cada resposta do agente sair, o Jev pode conferir as afirmações de fato que ela faz sobre o negócio (horário, preço, endereço, o que o lugar tem ou não tem) contra o material que o agente consultou naquele turno. Uma frase como "o check-in é a partir das 12h", quando o material diz 14h, é marcada como contradição; "temos piscina aquecida", quando o material não fala de piscina, é marcada como fora da base. Perguntas, saudações e links ficam de fora da conferência, e quando o agente não consultou material nenhum no turno, a conferência não roda.
 
@@ -56,7 +38,7 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
   **Custo:** com o Jev ligado, no máximo uma chamada a ele por turno do agente que tenha consultado material, e ela entra no Uso de IA e soma no consumo do mês. Uma reescrita da mesma resposta reaproveita a conferência e não paga de novo. A chamada acontece antes de o envio reservar a vez do número, junto da conferência de promessa, e não prende a fila do WhatsApp.
 
-  Contribuição de @webtecnica (#2231).
+  Contribuição de @webtecnica (#2438), a partir da issue #2231 de @TOSTES-LAB.
 
 - **Interruptor por empresa que desliga de uma vez todo passo a IA decide das automações** O passo `a IA decide` (#2228) passa a ter um freio único por organização: em
   Configurações → Automações, um interruptor desliga, de uma vez, todos os
@@ -76,9 +58,7 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
   conseguiu ler em vez de mostrar ligado. A troca entra no audit log com
   `settings.automation_ai_decide_updated`.
 
-  Refs #2367
-
-  Contribuição de @webtecnica (#2459).
+  Contribuição de @webtecnica (#2459, refs #2367).
 
 - **O Jev percebe, numa mensagem represada pelo teto de envio, um risco que a regra de urgência não viu** Quando o número do WhatsApp está em warm-up ou bateu o teto de envio do dia, a resposta automática é adiada — às vezes por 20 horas. O produto já tinha uma regra que abre um alerta crítico na Central quando o cliente escreve uma urgência no vocabulário dela ("socorro", "sem freio", "cheiro de queimado"), e essa regra continua sendo a que decide. Mas ela fala só português e é conservadora de propósito: "minha mãe caiu e não consegue levantar", "o pedal afundou, tô na estrada", "the battery is swelling" ou "la estufa huele a gas" passam batidos, e a pessoa espera a janela inteira sem ninguém saber.
 
@@ -88,45 +68,11 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
   Contribuição de @webtecnica (#2437), a partir da issue #2232 de @TOSTES-LAB.
 
-- **Videochamada por Jitsi Meet direto da conversa** O cabeçalho da conversa ganha o botão **Vídeo**. Ele abre uma sala de
-  videochamada — `<servidor>/sala-<uuid aleatório>`, uma por chamada — e as
-  três saídas saem de lá: **Abrir sala em nova aba**, **Copiar link** e
-  **Enviar link na conversa**.
+- **Videochamada por Jitsi Meet direto da conversa** O cabeçalho da conversa ganha o botão **Vídeo**: ele cria uma sala nova a cada chamada, que abre em nova aba, e permite copiar o link ou enviá-lo na conversa. O envio segue a trava do campo de resposta: com a janela de 24h fechada, contato bloqueado ou anonimizado ou conversa encerrada, o botão desabilita e diz o motivo. Nada é gravado e não há migration; quem tem o link entra na sala.
 
-  A sala abre em **nova aba**, não em iframe: o `Permissions-Policy` de produção
-  (`camera=(), microphone=(self)`) nega câmera e microfone dentro de um iframe de
-  outra origem, e o `meet.jit.si` derruba chamada embutida em 5 minutos. Na aba
-  nova roda a página do Jitsi, com as permissões dela. A sala é aleatória por
-  abertura — nada é gravado, e o id da conversa não sai para o cliente.
+  A feature nasce desligada: sem `JITSI_SERVER_URL` no `.env`, o botão não aparece e nada muda. Para ligar, veja `docs/features/videochamada.md` e o bloco do `.env.example`; a URL é lida em runtime, sem rebuild, e aparece em Recursos opcionais.
 
-  **O envio do link é trava, não atalho.** Ele usa a mesma régua do composer: com
-  a janela de 24h fechada o botão desabilita e mostra o motivo na tela. A rota
-  `POST /api/v1/messages` não barra a janela para quem envia da tela (só para
-  `api_token`/`ai_agent`), então sem essa trava o link sairia como `201` e a
-  plataforma recusaria a entrega depois com `131047` — a falha silenciosa da
-  issue 1614. Contato bloqueado/anonimizado e conversa encerrada entram pelo
-  mesmo caminho. `supportReadonly` não entra: ele mora no `user`, que o
-  cabeçalho não recebe.
-
-  O alvo é o contato que já está no WhatsApp: o link chega na conversa e ele
-  entra pelo celular, sem instalar nada e sem criar conta. Telemedicina e
-  teleatendimento é o caso em que isso mais muda — o encontro acontece onde o
-  paciente já está; demonstração e reunião rápida da equipe usam a mesma sala.
-
-  A feature nasce desligada: sem `JITSI_SERVER_URL` no `.env`, o botão não
-  renderiza e a tela não muda. A URL é validada como `http(s)` no Zod e lida em
-  runtime (mesmo caminho da marca e do DSN do Sentry), então apontar para o
-  servidor próprio não exige rebuild. Ela também aparece em **Recursos opcionais**,
-  em `lib/recursos-opcionais/` (nível servidor, ao lado da chamada de voz).
-  Para ligar, `docs/features/videochamada.md` e o bloco do `.env.example`.
-
-  Sem gravação, sem linha em `voice_calls`, sem migration. Quem tem o link entra
-  — é a mesma natureza do link de reset de senha, e a doc declara essa e as
-  outras limitações (inclusive a saída de servidor próprio com JWT).
-
-  Refs #2440
-
-  Contribuição de @webtecnica.
+  Contribuição de @webtecnica (#2441, refs #2440).
 
 ### Alterado
 
@@ -164,11 +110,13 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
   Atenção: antes desta correção, salvar as intenções de um roteador regravava sem destino toda intenção cujo funil não tivesse sido escolhido de novo naquele salvamento, porque a tela não enxergava o que estava salvo. O defeito veio com o destino por intenção, nas versões 1.73.0 e 1.74.0. Se algum roteador teve as intenções salvas nesse estado, o funil e a etapa de destino podem ter sido apagados. Vale abrir o editor de cada roteador e conferir. Não há nada a configurar na atualização.
 
-  Crédito: @webtecnica, a partir do relato de @Fabricio-Point-Machine.
+  Contribuição de @webtecnica (#2431), a partir da issue #2415 de @Fabricio-Point-Machine.
 
 - **Erro antigo de sincronização Google some sozinho quando não há mais nada para enviar** Um compromisso cuja sincronização com o Google falhou um dia (por exemplo, com a conta desconectada) continuava mostrando o erro para sempre, mesmo depois de a conexão voltar e não haver mais nada para enviar — e o botão "Tentar sincronizar novamente" não resolvia, porque a rodada seguinte concluía que estava tudo igual e mantinha o texto do erro.
 
   Agora, quando a rodada confirma que está tudo igual, ela apaga o erro guardado. Nada muda para quem nunca viu esse erro.
+
+  Contribuição de @paulolimajr77 (#2470).
 
 - **A assinatura do ChatGPT só aparece quando o recurso está ligado na instalação** O login do ChatGPT por assinatura é um recurso opcional da instalação, desligado por padrão. A tela de Credenciais já respeitava isso, mas outras telas não: Provedores, o editor do agente e o passo da chave no onboarding ofereciam "OpenAI pela assinatura (ChatGPT)" para toda empresa. Também dava para gravar essa opção num ponto de IA, no modelo padrão da empresa ou na versão de um agente, mesmo com o recurso desligado.
 
@@ -180,7 +128,7 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 - **Canal pausado não reage mais: push, follow-up, retorno e automação ficam quietos** A pausa de um canal já tirava a conversa da caixa de entrada, acordava a IA e barrava o envio (1.74.0), mas os efeitos internos de uma mensagem recebida continuavam rodando: o push no celular disparava, de conversa individual e de grupo, com uma conversa que nem aparece na lista, o fluxo de follow-up avançava o nó e gravava o texto, o contato era inscrito no gatilho de retorno, e — o que de fato saía para fora — uma regra de automação podia disparar um webhook HTTP de saída com mensagem de canal que o operador acabou de desligar. O follow-up agendado antes da pausa ainda queimava as 5 tentativas do job e virava um Job descartado com aviso crítico na Central, um por follow-up, com o canal desligado e nada a fazer. Agora os cinco leem o canal da própria mensagem antes de agir e respondem "pulado — canal desativado": nada muda para quem está com o canal ligado, e, depois de religar o canal, as mensagens que chegarem voltam a correr como antes, sem reimportar nada. O que chegou ou venceu durante a pausa não é reprocessado: um follow-up que parou num nó do fluxo enquanto o canal estava desligado não volta sozinho. O job de follow-up de canal pausado passa a ser consumido sem erro — fim das retentativas e do alerta crítico.
 
-  Contribuição de @webtecnica (#2329).
+  Contribuição de @webtecnica (#2433, refs #2329).
 
 - **A confirmação de ligar a limpeza de mídia cita o anexo da nota interna** Com o #2309, ligar a "Limpeza automática de mídia antiga" passou a apagar também o anexo de nota interna que venceu o prazo. A frase de confirmação mostrada antes de ligar o interruptor, porém, continuava dizendo só "a mídia de mensagem com mais de {n} dias começará a ser apagada" — um consentimento para uma ação irreversível que subdeclara o que ele cobre. A frase de estado "Desligado: a mídia das conversas não é apagada por idade." tinha o mesmo problema, e a frase "Ligado: apaga a mídia com mais de {n} dias." também não citava a nota. As três agora citam o anexo de nota interna junto, em português, espanhol e inglês (pt, es e en). O comportamento da limpeza não muda: continua apagando o que apagava antes, e nenhuma ação é necessária.
 
@@ -192,27 +140,25 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
   Não há nada a configurar na atualização.
 
-- **Os eventos de etapa da Meta saem pelo canal da conversa quando não há conexão direta** Com as regras de etapa da Meta (Configurações › Conversões), quem não tem token e conjunto de dados próprios — e reporta pela ponte do canal intermediado, como já fazia com a compra — via toda entrada de etapa ficar "Não enviado", com o motivo `sem_conexao`. Agora o evento de etapa vai pelo mesmo caminho da compra: o nome padrão da Meta (o gravado no primeiro envio e, na falta dele, o da regra), o instante da entrada na etapa e nenhum valor, igual ao envio direto. Com a conexão direta configurada nada muda, e os eventos que ficaram parados podem ser reprocessados pelo Histórico de envios. Crédito: @jmpo.
+  Contribuição de @automatikpg-ux (#2468).
 
-  Em Configurações › Conversões, a seção "O que cada etapa do funil informa à Meta" passa a aparecer também para quem envia pelo canal da conversa (a chave "Enviar vendas pelo canal da conversa"); antes ela só aparecia com a conexão direta, e as regras não podiam ser vistas nem editadas pela tela. Crédito: @jmpo.
+- **Os eventos de etapa da Meta saem pelo canal da conversa quando não há conexão direta** Com as regras de etapa da Meta (Configurações › Conversões), quem não tem token e conjunto de dados próprios — e reporta pela ponte do canal intermediado, como já fazia com a compra — via toda entrada de etapa ficar "Não enviado", com o motivo `sem_conexao`. Agora o evento de etapa vai pelo mesmo caminho da compra: o nome padrão da Meta (o gravado no primeiro envio e, na falta dele, o da regra), o instante da entrada na etapa e nenhum valor, igual ao envio direto. Com a conexão direta configurada nada muda, e os eventos que ficaram parados podem ser reprocessados pelo Histórico de envios.
 
-- **Ajustar o invariante que a própria branch criou deixa de pedir a válvula** A catraca de `tests/invariants/` barrava qualquer modificação contra o último commit, e isso incluía o invariante que a própria branch tinha acabado de criar e que a `main` nunca viu. A única saída era a válvula `DESKCOMM_GOV_INVARIANTS_EDIT=1`, reservada ao flip de `test.fails`, e ela já tinha sido usada duas vezes só por isso, na triagem de PRs de contribuidor. Uma válvula que vira rotina deixa de proteger.
+  Em Configurações › Conversões, a seção "O que cada etapa do funil informa à Meta" passa a aparecer também para quem envia pelo canal da conversa (a chave "Enviar vendas pelo canal da conversa"); antes ela só aparecia com a conexão direta, e as regras não podiam ser vistas nem editadas pela tela.
 
-  Agora uma modificação passa sem válvula quando o caminho não existe em `origin/main` nem no ponto de onde a branch saiu dela, e quando foi um commit próprio da branch (não um merge) que o adicionou. Para a `main` isso é um arquivo novo. Invariante da `main` editado, apagado, renomeado ou revertido continua barrado, inclusive o que chegou à branch por merge de uma `main` mais nova que a ref local, e sem a ref `origin/main` a guarda falha fechada como antes. O cabeçalho do hook registra os dois limites que sobram com a ref local desatualizada (rebase sobre uma `main` cujo invariante entrou por commit direto, e o invariante da própria branch que já entrou na `main`). Rodar `git fetch` antes de trabalhar fecha os dois.
+  Contribuição de @jmpo (#2455).
 
-  Não exige ação de ninguém.
+- **Ajustar o invariante que a própria branch criou deixa de pedir a válvula** Para quem desenvolve no repositório: a catraca de `tests/invariants/` passa a aceitar, sem `DESKCOMM_GOV_INVARIANTS_EDIT=1`, a modificação de um invariante que a própria branch criou e que a `main` ainda não tem. Invariante da `main` editado, apagado, renomeado ou revertido continua barrado, e sem a ref `origin/main` a guarda falha fechada. Rodar `git fetch` antes de trabalhar mantém a guarda exata. Não exige ação de ninguém.
 
 - **Etiqueta posta pelo agente de IA ou por integração (MCP) agora dispara a automação "ganhou uma etiqueta"** A ferramenta `crm_manage_tags` gravava a etiqueta no contato ou no negócio, mas não emitia o evento que a tela emite. Resultado: a regra "Quando um contato ganhar uma tag" (ou "Quando um lead ganhar uma tag") disparava quando a pessoa punha a etiqueta pela tela e ficava muda quando a mesma etiqueta chegava pela MCP — seja de um sistema de fora, como o n8n, seja do próprio agente de IA do CRM, que usa essa ferramenta para etiquetar durante a conversa. Regras de "ganhou etiqueta" que antes ficavam caladas quando a IA etiquetava passam a disparar.
 
   Agora a ferramenta emite `contact.tag_added` / `lead.tag_added` com o mesmo envelope da tela: só as etiquetas que o alvo não tinha, a lista completa e a origem do atendimento. Reenviar uma etiqueta que já estava, ou só remover, não emite nada. Conversa continua sem esse gatilho. Se a emissão do evento falhar, a etiqueta continua gravada e a falha vai para o log. Sem migration e sem ação do operador.
 
-  Crédito: @rgisjr.
+  Contribuição de @rgisjr (#2444, mesclada pelo #2445).
 
-- **A paleta de comandos (⌘K) volta a caber na tela** A busca rápida aberta por **⌘K** encostava no alto da janela e saía cortada: o conteúdo de cima ficava fora da tela, e não havia como rolar até ele.
+- **A paleta de comandos (⌘K) volta a caber na tela** A busca rápida aberta por **⌘K** encostava no alto da janela e saía cortada, sem como rolar até o conteúdo de cima. A causa era a animação de entrada dos sobrepostos, que passava por cima do ancoramento da paleta. Agora ela abre centralizada, com rolagem interna quando a lista é longa.
 
-  A causa foi a animação de entrada dos sobrepostos. Ela termina numa posição fixa — o deslocamento que centraliza qualquer caixa de diálogo — e, como animação com `fill-mode` continua valendo depois de terminar, esse valor passava por cima do ancoramento próprio da paleta, que abria presa ao topo. O resultado era a paleta puxada meia altura para cima do ponto onde deveria estar.
-
-  Agora a paleta abre **centralizada**, com a sobra de altura repartida nas duas pontas e rolagem interna quando a lista é longa. E a animação passou a respeitar quem ancora diferente, em vez de impor a própria posição — assim um sobreposto que escolha outro ponto de abertura não quebra em silêncio.
+  Contribuição de @LeonardoMarcelo (#2411).
 
 - **O restore.sh para antes num banco que já existe e restaura num banco vazio** Quem restaurava um backup com o `restore.sh` por cima de um banco que ainda tinha o schema recebia "✓ banco restaurado" sem nada ter voltado: o psql seguia por cima dos milhares de erros "already exists" e saía com zero, e as linhas apagadas de tabela cheia não voltavam. O script agora conta as tabelas de `public` antes de pedir a confirmação e, se o banco já tem o schema, para com a própria mensagem — sem alterar nada e sem nem chamar o `psql`.
 
@@ -222,15 +168,15 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
   Mudou o que o sistema diz quando uma atualização dá errado: a tela de atualização, as mensagens do `update.sh`, os READMEs e os guias deixaram de prometer que o `restore.sh` volta o backup por cima do banco em uso — essa promessa já era falsa antes, porque o restore dizia "✓" sem restaurar. Hoje o backup só volta num banco vazio, como um projeto Supabase novo em que o instalador ainda não rodou; fora disso, peça ajuda. Voltar o backup por cima do banco existente segue em aberto na #2120.
 
-  Refs #2120.
-
-  Contribuição de @webtecnica (#2142).
+  Contribuição de @webtecnica (#2142), a partir da issue #2120 de @spoliagency.
 
 - **O scrub da telemetria passa a apagar NIF, IBAN e código postal de Portugal, e o +55 com hífen ou ponto** O scrub da telemetria (`lib/sentry/scrub.ts`), que o Sentry e o Jev usam, não conhecia o perfil do país da organização — a máscara da ingestão para a IA conhecia, desde o #2416. Com isso, uma organização de Portugal ainda deixava passar no Jev formas que a ingestão já mascara: o NIF `PT123456789` saía inteiro, o IBAN saía `PT50 [PHONE] [PHONE] 9015 4` (a cadeia de telefone comia os blocos de 4 dígitos por dentro) e o código postal `1000-001` não caía. No Brasil, `+55-11-98765-4321` saía inteiro e `+55.11.98765.4321` saía `+55.[PHONE]`: o separador depois do `55` só aceitava espaço.
 
   O scrub agora aplica os padrões declarados em `lib/legal/perfil-do-pais.ts`, de todos os perfis — porque quem chama este scrub não tem organização na mão. O IBAN vem antes da cadeia de telefone, pela mesma razão do `apikey` e do UUID, e os demais vêm depois, para o que já saía apagado continuar saindo no mesmo formato de antes (o NIF sem prefixo segue saindo `[PHONE]`, como no #2345). Os resultados são travados por teste de resultado exato, forma a forma.
 
-  No Brasil a máscara também cresce, e para TODA organização, porque o scrub não sabe o país e aplica todos os perfis: no Sentry e nos textos que o Jev lê, o CEP com hífen (`01310-100`) passa a sair `[CEP]`, e grupos de dígitos com a forma do código postal português (`1234 567`, `1234-567`) ou do NIF em dois blocos (`123456 789`) passam a sair `[CODIGO_POSTAL]` e `[NIF]` — também quando são um número de lote, protocolo ou pedido, e não dado pessoal. A conferência de campo personalizado fica de fora: ela pergunta ao Jev se o valor que a IA quer gravar foi dito pelo cliente, e com `[CEP]` na mensagem recusaria o CEP que o cliente acabou de digitar. Por isso ela continua recebendo as mensagens exatamente como antes. Crédito: @webtecnica (#2435).
+  No Brasil a máscara também cresce, e para TODA organização, porque o scrub não sabe o país e aplica todos os perfis: no Sentry e nos textos que o Jev lê, o CEP com hífen (`01310-100`) passa a sair `[CEP]`, e grupos de dígitos com a forma do código postal português (`1234 567`, `1234-567`) ou do NIF em dois blocos (`123456 789`) passam a sair `[CODIGO_POSTAL]` e `[NIF]` — também quando são um número de lote, protocolo ou pedido, e não dado pessoal. A conferência de campo personalizado fica de fora: ela pergunta ao Jev se o valor que a IA quer gravar foi dito pelo cliente, e com `[CEP]` na mensagem recusaria o CEP que o cliente acabou de digitar. Por isso ela continua recebendo as mensagens exatamente como antes.
+
+  Contribuição de @webtecnica (#2435).
 
 ## [1.75.0] — 2026-10-06
 
