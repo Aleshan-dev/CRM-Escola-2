@@ -196,6 +196,8 @@
   "Exigir motivo de ganho ao fechar como ganho": "Require a win reason when closing as won",
   "Negócio encerrado que volta abre um negócio novo": "A closed deal that comes back opens a new deal",
   "Desligado, arrastar um negócio perdido ou ganho para uma etapa aberta reabre o mesmo negócio. Ligado, o encerrado fica como está e o quadro oferece criar uma nova tentativa com o mesmo contato.": "Off, dragging a lost or won deal to an open stage reopens the same deal. On, the closed deal stays as it is, and the board offers to create a new attempt with the same contact.",
+  "Abrir comanda ao ganhar um negócio neste funil": "Open a service order when a deal is won in this pipeline",
+  "Desligado, ganhar não mexe no financeiro: loja com checkout, infoproduto e imobiliária não vivem de conta a receber. Ligado, o arrasto para a etapa de ganho e o botão Ganhar abrem uma comanda com o valor e o contato do negócio.": "Off, winning doesn't touch the finance side: a checkout store, an infoproduct and a real-estate shop don't live on accounts receivable. On, dragging to the winning stage and the Win button open a service order with the deal's value and contact.",
   "Motivo do ganho": "Win reason",
   "Preencha os campos obrigatórios antes de continuar: {campos}.": "Fill in the required fields before continuing: {campos}.",
   "Este motivo de ganho não está na lista do funil. Escolha um dos motivos cadastrados.": "This win reason isn't on the pipeline's list. Choose one of the registered reasons.",
