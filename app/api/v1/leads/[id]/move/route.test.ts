@@ -16,9 +16,10 @@ vi.mock("@/lib/leads/activity-emitter", () => ({
 vi.mock("@/lib/leads/activity-write-failure", () => ({
   registraFalhaDeAtividade: vi.fn(async () => undefined),
 }));
-// A conta a receber do ganho (#1477) tem teste próprio em
-// `lib/financeiro/comanda-do-ganho.test.ts`; aqui se mede só o GATILHO: a rota
-// chama (ou não) a função, com que entrada.
+// A conta a receber do ganho (#1477) vive no consumidor de `lead.won`
+// (`lib/financeiro/comanda-do-ganho.handler.ts`); aqui se mede que a rota de
+// move deixou de escrever no financeiro — quem chama, e com que entrada, é
+// assunto do teste do consumidor.
 vi.mock("@/lib/financeiro/comanda-do-ganho", () => ({
   comandaDoGanho: vi.fn(async () => ({ estado: "ignorado", motivo: "sem_valor_valido" })),
 }));
@@ -328,12 +329,14 @@ describe("POST /api/v1/leads/[id]/move", () => {
 
   // ── A CONTA A RECEBER DO GANHO (issue #1477) ──────────────────────────────
   //
-  // O que a issue pede: mover o card para a etapa de ganho dispara UMA vez o
-  // lançamento, com o valor e o contato que já estão no negócio; uma etapa que
-  // não é ganho não dispara nada. O que a função faz com essa entrada (comanda,
-  // item com o valor, vínculo e a trava de idempotência) é medido em
-  // `lib/financeiro/comanda-do-ganho.test.ts` — aqui se mede o GATILHO.
-  it("fechar como ganho dispara UMA vez a conta a receber, com valor e contato do negócio", async () => {
+  // A chamada SAIU da rota (CR do mantenedor no PR #2220): a rota é só UM dos
+  // caminhos que fecham negócio, e o botão Ganhar ficava de fora. Quem abre a
+  // comanda agora é o consumidor de `lead.won`, que escuta o evento gravado
+  // pelo gatilho em QUALQUER transição para `won` — a prova dos dois caminhos,
+  // da porta por funil e da idempotência está em
+  // `lib/financeiro/comanda-do-ganho.handler.test.ts`. Aqui se mede o que
+  // RESTOU nesta rota: ela não toca mais no financeiro.
+  it("fechar como ganho não escreve no financeiro: a rota emite o evento e o consumidor abre a comanda", async () => {
     const falso = bancoFalso(null, { is_won: true });
     vi.mocked(createClient).mockResolvedValue(falso as never);
     const { POST } = await import("./route");
@@ -344,19 +347,7 @@ describe("POST /api/v1/leads/[id]/move", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(comandaDoGanho).toHaveBeenCalledTimes(1);
-    const chamada = vi.mocked(comandaDoGanho).mock.calls[0];
-    expect(chamada).toBeDefined();
-    if (!chamada) throw new Error("comandaDoGanho não foi chamada");
-    expect(chamada[0]).toBe(falso);
-    expect(chamada[1]).toMatchObject({
-      organizationId: ORG_ID,
-      leadId: LEAD_ID,
-      contactId: CONTACT_ID,
-      valorCents: 150_000,
-      titulo: "Pedido de customização",
-      userId: USER_ID,
-    });
+    expect(comandaDoGanho).not.toHaveBeenCalled();
   });
 
   it("etapa que NÃO é ganho não lança nada", async () => {

@@ -17,7 +17,6 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { moveLeadSchema, validateRequest } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
-import { comandaDoGanho } from "@/lib/financeiro/comanda-do-ganho";
 import { emitLeadActivity, stageChangeReason } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import {
@@ -316,33 +315,18 @@ export async function POST(
 
   const finalLead = fresh ?? lead;
 
-  // ── A CONTA A RECEBER DO GANHO (issue #1477) ────────────────────────────
+  // ── A CONTA A RECEBER DO GANHO (issue #1477) SAIU DAQUI, de propósito ──────
   //
-  // Só quando o card ENTROU numa etapa de ganho e o gatilho fechou o negócio
-  // (`finalLead.status === 'won'`): reordenar dentro da coluna Ganho não é um
-  // fecho novo, etapa que não é ganho não toca no financeiro, e uma segunda
-  // entrada no ganho é travada pela própria função (ela devolve a comanda que já
-  // existe — fechar, reabrir e fechar de novo não duplica). A falha vira log,
-  // nunca resposta de erro: o negócio já ganhou, e o financeiro atrasado é o mal
-  // menor diante de um 500 no arrasto do card.
-  if (stage.is_won && !mesmaEtapa && finalLead.status === "won") {
-    const desfecho = await comandaDoGanho(supabase, {
-      organizationId: lead.organization_id,
-      leadId,
-      contactId: (lead as { contact_id?: string | null }).contact_id ?? null,
-      valorCents: (lead as { value_cents?: number | string | null }).value_cents ?? null,
-      titulo: String((lead as { title?: string | null }).title ?? ""),
-      userId: user.id,
-    });
-    if (desfecho.estado === "falhou") {
-      console.error("[lead.move] conta a receber do ganho não abriu", {
-        lead_id: leadId,
-        organization_id: lead.organization_id,
-        erro: desfecho.erro,
-        requestId,
-      });
-    }
-  }
+  // Ela nasceu nesta rota e deixava o botão Ganhar (`/win` →
+  // `encerraDemanda`) e os outros quatro fechamentos de fora: a rota é UM dos
+  // caminhos. Quem agora abre a comanda é o consumidor de `lead.won`
+  // (`lib/financeiro/comanda-do-ganho.handler.ts`), que escuta o evento que o
+  // gatilho `fn_emit_event_on_lead_change` grava em QUALQUER transição para
+  // `won` — mesma cobertura, uma só porta (`settings.comanda_no_ganho`, por
+  // funil, desligada por padrão) e uma só trava de idempotência (o vínculo em
+  // `crm_lead_links`). TRADEOFF aceito na CR: a comanda passa a nascer no
+  // dreno do barramento, não no mesmo tick do arrasto, e o atendente sai do
+  // `owner_user_id` do negócio porque o `event_log` não guarda ator.
 
   // Emit domain event (fire-and-forget; trigger NEVER does HTTP — workers do).
   await supabase

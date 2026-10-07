@@ -67,8 +67,14 @@ export interface EntradaDaComandaDoGanho {
   valorCents?: number | string | null;
   /** `crm_leads.title`: vira a descrição do item, congelada na inclusão. */
   titulo: string;
-  /** Quem moveu o card: atendente e autor da comanda. */
-  userId: string;
+  /**
+   * Quem moveu o card, e portanto o atendente e o autor da comanda. Na rota é
+   * o usuário que arrastou; no consumidor de `lead.won` é o `owner_user_id`
+   * do negócio, que pode ser nulo — `sales.attendant_user_id` e
+   * `created_by_user_id` aceitam nulo, então a comanda nasce sem atendente em
+   * vez de não nascer.
+   */
+  userId: string | null;
 }
 
 export type DesfechoDaComandaDoGanho =

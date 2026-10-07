@@ -1,0 +1,158 @@
+/**
+ * A CONTA A RECEBER DO GANHO PELO BARRAMENTO — #1477, item 1 da CR do PR #2220.
+ *
+ * ─── O defeito que este arquivo fecha ───────────────────────────────────────
+ *
+ * A chamada nasceu DENTRO da rota de move (`app/api/v1/leads/[id]/move`), e a
+ * rota só é um dos caminhos: o botão Ganhar (`/win` → `encerraDemanda`),
+ * o mover em lote, a automação e a capacidade da IA fecham negócio pelo MESMO
+ * gatilho do banco e ficavam de fora. Quem grava `lead.won` é
+ * `fn_emit_event_on_lead_change` (`supabase/baseline.sql`), em QUALQUER
+ * transição de status para `won`, independentemente de quem causou — então o
+ * consumidor do evento cobre todos os caminhos com uma decisão só, e a rota
+ * deixa de conhecer o financeiro.
+ *
+ * ─── Por que admin client, e de onde vêm os dados ───────────────────────────
+ *
+ * O dreno roda sem sessão de usuário (`lib/event-log/drain.ts`), então aqui
+ * vale o padrão de `lib/notifications/push.handler.ts`: `createAdminClient()`
+ * e `organization_id` vindo DA LINHA DO EVENTO — nunca de parâmetro de quem
+ * chama, que neste caso não existe. O payload de `lead.won` é só
+ * `{lead_id, value_cents}`; contato, título e responsável saem do próprio
+ * negócio, e o atendente sai de `owner_user_id`, que pode ser nulo (a coluna
+ * `sales.attendant_user_id` aceita nulo — a comanda nasce sem atendente em
+ * vez de não nascer).
+ *
+ * ─── Idempotência: o dreno reexecuta a linha inteira ────────────────────────
+ *
+ * Quando um handler devolve `error`, o dreno reagenda a LINHA e todos os
+ * handlers rodam de novo — inclusive os que já tinham rodado. A trava é a
+ * mesma da rota: `comandaDoGanho` procura o vínculo em `crm_lead_links` antes
+ * de escrever e devolve a comanda que já existe. Ou seja, a repetição vira
+ * `ok` com `detail: ja_existia`, não uma segunda comanda.
+ *
+ * ─── A porta (item 2 da CR): opt-in por funil, DESLIGADO por padrão ─────────
+ *
+ * `crm_pipelines.settings.comanda_no_ganho`. A régua é
+ * `docs/doctrine/extensoes.md`: o barramento é o ponto genérico do núcleo, o
+ * consumidor é a extensão, e a pergunta-raiz ("se nenhuma organização ativar
+ * isto, a operação comum continua inteira?") decide o PADRÃO — desligado. Em
+ * loja com checkout, infoproduto ou imobiliária o valor do negócio não é conta
+ * a receber: a comanda viraria uma comanda aberta sem nada a cobrar, que vira
+ * lançamento real se alguém a finalizar. TRADEOFF: é uma leitura a mais por
+ * ganho (o funil), aceita porque o fecho já é caro e a decisão muda por
+ * funil, não por instalação.
+ *
+ * ─── O que este handler NUNCA faz ───────────────────────────────────────────
+ *
+ * Derrubar o ganho ou lançar exceção: toda recusa vira `skipped`/`error` e o
+ * evento segue. `error` (e não `retry`) para falha de banco: `retry` é o
+ * reagendamento benigno que não conta tentativa, e uma gravação que não passa
+ * ficaria girando para sempre em vez de ir ao teto de tentativas e ao aviso.
+ */
+import type { EventHandler, EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+import { comandaDoGanho } from "./comanda-do-ganho";
+
+/** A chave do consumidor em `event_log.consumed_by`. */
+export const COMANDA_DO_GANHO_KEY = "financeiro.comanda-do-ganho.v1";
+
+/**
+ * O interruptor, em `crm_pipelines.settings`. Só o booleano `true` liga:
+ * ausente, `false`, string ou objeto torto é desligado — falha fechada, como
+ * `capacidadesLigadas` (`lib/organizacao/capacidades.ts`).
+ */
+export const CHAVE_DA_COMANDA_NO_GANHO = "comanda_no_ganho";
+
+const resultado = (status: HandlerResult["status"], detail?: string): HandlerResult => ({
+  consumer_key: COMANDA_DO_GANHO_KEY,
+  status,
+  detail,
+});
+
+function texto(valor: unknown): string | null {
+  return typeof valor === "string" && valor.trim() ? valor : null;
+}
+
+async function handle(row: EventRow): Promise<HandlerResult> {
+  const leadId = texto(row.payload.lead_id) ?? texto(row.entity_id);
+  if (!leadId) return resultado("skipped", "sem_negocio");
+
+  const admin = createAdminClient();
+  const { data: lead, error: erroLeitura } = await admin
+    .from("crm_leads")
+    .select("pipeline_id, contact_id, title, owner_user_id, value_cents")
+    .eq("id", leadId)
+    .eq("organization_id", row.organization_id)
+    .maybeSingle();
+  if (erroLeitura) return resultado("error", `negocio: ${erroLeitura.message}`);
+  if (!lead) return resultado("skipped", "negocio_nao_encontrado");
+
+  const negocio = lead as {
+    pipeline_id: string | null;
+    contact_id: string | null;
+    title: string | null;
+    owner_user_id: string | null;
+    value_cents: number | string | null;
+  };
+  const pipelineId = texto(negocio.pipeline_id);
+  if (!pipelineId) return resultado("skipped", "sem_funil");
+
+  const { data: funil, error: erroFunil } = await admin
+    .from("crm_pipelines")
+    .select("settings")
+    .eq("id", pipelineId)
+    .eq("organization_id", row.organization_id)
+    .maybeSingle();
+  if (erroFunil) return resultado("error", `funil: ${erroFunil.message}`);
+
+  const settings = (funil as { settings?: unknown } | null)?.settings;
+  const ligado =
+    settings !== null &&
+    typeof settings === "object" &&
+    (settings as Record<string, unknown>)[CHAVE_DA_COMANDA_NO_GANHO] === true;
+  if (!ligado) return resultado("skipped", "comanda_no_ganho_desligada");
+
+  // O gatilho CONGELA o valor no momento do ganho; a coluna é o fallback para
+  // linha antiga cujo payload não traz a chave. Um dos dois é sempre o mesmo
+  // número que a rota usava — e sem nenhum a função devolve `ignorado`.
+  const valorCents =
+    "value_cents" in row.payload ? row.payload.value_cents : negocio.value_cents;
+
+  const desfecho = await comandaDoGanho(admin, {
+    organizationId: row.organization_id,
+    leadId,
+    contactId: texto(negocio.contact_id),
+    valorCents: valorCents as number | string | null,
+    titulo: texto(negocio.title) ?? "",
+    // O `event_log` não tem ator (CR do mantenedor): o atendente é o dono do
+    // negócio, que pode ser nulo — decisão do próprio CR, não aqui.
+    userId: texto(negocio.owner_user_id),
+  });
+
+  switch (desfecho.estado) {
+    case "criado":
+      return resultado("ok", `criado:${desfecho.numero}`);
+    case "ja_existia":
+      return resultado("ok", "ja_existia");
+    case "ignorado":
+      return resultado("skipped", desfecho.motivo);
+    default:
+      return resultado("error", desfecho.erro);
+  }
+}
+
+/**
+ * O consumidor de `lead.won`.
+ *
+ * `naOrgParada: "roda"`: escrita interna, sem custo e sem sair da instalação
+ * (mesma classe de `avisoDeEtapaHandler`) — a organização parada não gasta
+ * rede nem terceiro, e o evento já foi emitido enquanto ela operava.
+ */
+export const comandaDoGanhoHandler: EventHandler = {
+  key: COMANDA_DO_GANHO_KEY,
+  naOrgParada: "roda",
+  events: ["lead.won"],
+  handle,
+};
