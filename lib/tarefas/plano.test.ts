@@ -350,6 +350,29 @@ describe("aplicarPlanoDeTarefas", () => {
     expect(db.tarefasInseridas(), "o passo 1 passaria — mas o plano inteiro foi recusado").toHaveLength(0);
     expect(db.escritas).toHaveLength(0);
   });
+  it("negócio de OUTRA organização é `sem_alvo` e não escreve nada, mesmo com o plano igual lá", async () => {
+    const OUTRA_ORG = "dddddddd-0000-4000-8000-00000000000d";
+    const db = new DbFalso({
+      organizations: [{ id: OUTRA_ORG, settings: { task_plans: [PLANO_3_PASSOS] } }],
+      crm_leads: [
+        { id: LEAD, organization_id: ORG, title: "Renovação", contact_id: null, owner_user_id: DONO },
+      ],
+      contacts: [],
+      crm_tasks: [],
+      crm_lead_activities: [],
+    });
+
+    const resultado = await aplicarPlanoDeTarefas(db as unknown as SupabaseClient, {
+      organizationId: OUTRA_ORG,
+      leadId: LEAD,
+      planoId: PLANO,
+      origem: "automation:regra-1",
+      agora: AGORA,
+    });
+
+    expect(resultado).toEqual({ ok: false, codigo: "sem_alvo" });
+    expect(db.escritas).toEqual([]);
+  });
 });
 
 describe("lePlanosDoSettings", () => {

@@ -41,7 +41,11 @@ const PLANO = {
   ],
 };
 
-const escritas: Array<{ tabela: string; payload: Record<string, unknown> }> = [];
+const escritas: Array<{
+  tabela: string;
+  payload: Record<string, unknown>;
+  filtro: [string, unknown];
+}> = [];
 
 function adminCom(settings: unknown) {
   return {
@@ -51,8 +55,8 @@ function adminCom(settings: unknown) {
           eq: () => ({ maybeSingle: async () => ({ data: { settings }, error: null }) }),
         }),
         update: (payload: Record<string, unknown>) => ({
-          eq: async () => {
-            escritas.push({ tabela, payload });
+          eq: async (coluna: string, valor: unknown) => {
+            escritas.push({ tabela, payload, filtro: [coluna, valor] });
             return { error: null };
           },
         }),
@@ -140,6 +144,29 @@ describe("PATCH /api/v1/settings/task-plans", () => {
     expect(res.status).toBe(422);
     expect(corpo.error.code).toBe("validation_failed");
     expect(escritas, "a recusa tem de vir ANTES da escrita").toHaveLength(0);
+  });
+
+  it("só grava com manager+ e só na organização da sessão", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(adminCom({ task_plans: [] }) as never);
+
+    const res = await PATCH(requisicao({ planos: [PLANO] }));
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(requireRole).mock.calls[0]?.[0]).toBe("manager");
+    expect(escritas.map((e) => [e.tabela, e.filtro])).toEqual([["organizations", ["id", ORG]]]);
+  });
+
+  it("papel abaixo de manager é recusado ANTES de qualquer escrita", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(adminCom({ task_plans: [] }) as never);
+    vi.mocked(requireRole).mockResolvedValue({
+      ok: false,
+      response: new Response(null, { status: 403 }),
+    } as never);
+
+    const res = await PATCH(requisicao({ planos: [PLANO] }));
+
+    expect(res.status).toBe(403);
+    expect(escritas).toHaveLength(0);
   });
 
   it("recusa corpo que não é lista de planos", async () => {
