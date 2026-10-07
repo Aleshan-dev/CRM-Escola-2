@@ -472,3 +472,81 @@ describe("(c) idempotência sob retry do dreno", () => {
     expect(banco.escritasDe("crm_lead_links")).toHaveLength(1);
   });
 });
+
+/**
+ * (d) O evento é PISTA, não fato. `emit_event` aceita chamador `authenticated`
+ * com papel `viewer` (última definição em `supabase/baseline.sql`), e `lead.won`
+ * não está na lista de tipos que ele reserva — então a linha pode chegar ao
+ * barramento sem que negócio nenhum tenha sido ganho, com o valor que quem a
+ * forjou quis. Estes casos montam a linha À MÃO, sem passar pelo gatilho.
+ */
+describe("(d) o evento forjado não abre comanda nem dita o valor", () => {
+  const OUTRA_ORG = "88888888-8888-4888-8888-888888888888";
+
+  function eventoForjado(sobre: Partial<EventRow> & { payload?: Row } = {}): EventRow {
+    return {
+      id: "ev-forjado",
+      organization_id: ORG,
+      event_type: "lead.won",
+      entity_kind: "crm_lead",
+      entity_id: LEAD,
+      payload: { lead_id: LEAD, value_cents: 999_999_999 },
+      metadata: {},
+      consumed_by: [],
+      attempts: 0,
+      created_at: new Date().toISOString(),
+      ...sobre,
+    };
+  }
+
+  it("negócio ganho com valor inventado no payload: a comanda leva o valor DO BANCO", async () => {
+    const banco = montarBanco({ funil: { comanda_no_ganho: true }, lead: { status: "won" } });
+    estado.banco = banco.banco;
+
+    const r = await dispatchEvent(eventoForjado(), { orgParada: false });
+
+    expect(r).toContainEqual(
+      expect.objectContaining({ consumer_key: COMANDA_DO_GANHO_KEY, status: "ok" }),
+    );
+    expect(banco.escritasDe("sale_items")[0]?.dados).toMatchObject({
+      unit_price_cents: 150_000,
+      total_cents: 150_000,
+    });
+  });
+
+  it("negócio ABERTO: `lead.won` forjado é ignorado e nada vai ao financeiro", async () => {
+    const banco = montarBanco({ funil: { comanda_no_ganho: true } });
+    estado.banco = banco.banco;
+
+    const r = await dispatchEvent(eventoForjado(), { orgParada: false });
+
+    expect(r).toContainEqual(
+      expect.objectContaining({
+        consumer_key: COMANDA_DO_GANHO_KEY,
+        status: "skipped",
+        detail: "negocio_nao_ganho",
+      }),
+    );
+    expect(banco.escritasFinanceiras()).toHaveLength(0);
+  });
+
+  it("evento de OUTRA organização apontando para este negócio: não acha o negócio e não escreve", async () => {
+    // O falso filtra por toda coluna de `.eq` — o negócio existe, ganho, mas
+    // na organização ORG. Sem o filtro de tenant na leitura ele seria achado.
+    const banco = montarBanco({ funil: { comanda_no_ganho: true }, lead: { status: "won" } });
+    estado.banco = banco.banco;
+
+    const r = await dispatchEvent(eventoForjado({ organization_id: OUTRA_ORG }), {
+      orgParada: false,
+    });
+
+    expect(r).toContainEqual(
+      expect.objectContaining({
+        consumer_key: COMANDA_DO_GANHO_KEY,
+        status: "skipped",
+        detail: "negocio_nao_encontrado",
+      }),
+    );
+    expect(banco.escritasFinanceiras()).toHaveLength(0);
+  });
+});

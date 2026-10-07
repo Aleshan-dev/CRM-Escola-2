@@ -18,8 +18,9 @@
  * vale o padrão de `lib/notifications/push.handler.ts`: `createAdminClient()`
  * e `organization_id` vindo DA LINHA DO EVENTO — nunca de parâmetro de quem
  * chama, que neste caso não existe. O payload de `lead.won` é só
- * `{lead_id, value_cents}`; contato, título e responsável saem do próprio
- * negócio, e o atendente sai de `owner_user_id`, que pode ser nulo (a coluna
+ * `{lead_id, value_cents}`, e dele só se usa o `lead_id`: status, valor,
+ * contato e responsável saem do próprio negócio, relido com o
+ * `organization_id` da linha, e o atendente sai de `owner_user_id`, que pode ser nulo (a coluna
  * `sales.attendant_user_id` aceita nulo — a comanda nasce sem atendente em
  * vez de não nascer).
  *
@@ -82,7 +83,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   const admin = createAdminClient();
   const { data: lead, error: erroLeitura } = await admin
     .from("crm_leads")
-    .select("pipeline_id, contact_id, title, owner_user_id, value_cents")
+    .select("status, pipeline_id, contact_id, title, owner_user_id, value_cents")
     .eq("id", leadId)
     .eq("organization_id", row.organization_id)
     .maybeSingle();
@@ -90,12 +91,19 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   if (!lead) return resultado("skipped", "negocio_nao_encontrado");
 
   const negocio = lead as {
+    status: string | null;
     pipeline_id: string | null;
     contact_id: string | null;
     title: string | null;
     owner_user_id: string | null;
     value_cents: number | string | null;
   };
+  // O evento é PISTA, não fato: `emit_event` aceita chamador `authenticated`
+  // com papel `viewer` e `lead.won` não está na lista reservada dele, então um
+  // viewer consegue gravar esta linha para um negócio ABERTO. Quem decide é o
+  // banco — mesmo padrão de `lib/conversoes/envio.handler.ts`.
+  if (negocio.status !== "won") return resultado("skipped", "negocio_nao_ganho");
+
   const pipelineId = texto(negocio.pipeline_id);
   if (!pipelineId) return resultado("skipped", "sem_funil");
 
@@ -114,17 +122,12 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     (settings as Record<string, unknown>)[CHAVE_DA_COMANDA_NO_GANHO] === true;
   if (!ligado) return resultado("skipped", "comanda_no_ganho_desligada");
 
-  // O gatilho CONGELA o valor no momento do ganho; a coluna é o fallback para
-  // linha antiga cujo payload não traz a chave. Um dos dois é sempre o mesmo
-  // número que a rota usava — e sem nenhum a função devolve `ignorado`.
-  const valorCents =
-    "value_cents" in row.payload ? row.payload.value_cents : negocio.value_cents;
-
   const desfecho = await comandaDoGanho(admin, {
     organizationId: row.organization_id,
     leadId,
     contactId: texto(negocio.contact_id),
-    valorCents: valorCents as number | string | null,
+    // O valor SEMPRE do banco, nunca do payload: o payload é forjável (acima).
+    valorCents: negocio.value_cents,
     titulo: texto(negocio.title) ?? "",
     // O `event_log` não tem ator (CR do mantenedor): o atendente é o dono do
     // negócio, que pode ser nulo — decisão do próprio CR, não aqui.
