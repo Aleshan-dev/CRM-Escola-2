@@ -14689,6 +14689,10 @@ export const DICIONARIO: Traducoes = {
   "Enviar link na conversa": { es: "Enviar enlace a la conversación" },
   // Tarefas › Planos (#1752) — a porta nova de cadastro de planos.
   "Planos de tarefa": { es: "Planes de tareas" },
+  // A descrição da porta no hub e no ⌘K (catálogo do menu).
+  "Sequências reutilizáveis de tarefas — montar uma vez e aplicar a cada negócio.": {
+    es: "Secuencias reutilizables de tareas: se arman una vez y se aplican a cada negocio.",
+  },
   "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.": {
     es: "Arma la secuencia una vez; la acción Aplicar un plan de tareas aplica el plan al negocio.",
   },

@@ -8900,6 +8900,7 @@
   "Atendimento por IA autorizado pelo consentimento explícito deste formulário.": "AI support authorized by the explicit consent in this form.",
   "Este envio não concedeu nova autorização de IA. Confira o consentimento e o estado do contato antes de configurar o atendimento.": "This submission did not grant a new AI authorization. Check the consent and the contact's status before configuring support.",
   "Planos de tarefa": "Task plans",
+  "Sequências reutilizáveis de tarefas — montar uma vez e aplicar a cada negócio.": "Reusable task sequences — build once and apply to every deal.",
   "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.": "Build the sequence once; the Apply a task plan action applies the plan to the deal.",
   "Novo plano": "New plan",
   "Nenhum plano cadastrado ainda.": "No plans registered yet.",
