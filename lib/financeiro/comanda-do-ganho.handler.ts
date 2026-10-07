@@ -50,9 +50,11 @@
  * ficaria girando para sempre em vez de ir ao teto de tentativas e ao aviso.
  */
 import type { EventHandler, EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
+import { moedaDaOrganizacao } from "@/lib/catalogo/moeda-da-org";
+import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { comandaDoGanho } from "./comanda-do-ganho";
+import { comandaDoGanho, ORIGEM_DA_COMANDA_DO_GANHO } from "./comanda-do-ganho";
 
 /** A chave do consumidor em `event_log.consumed_by`. */
 export const COMANDA_DO_GANHO_KEY = "financeiro.comanda-do-ganho.v1";
@@ -63,6 +65,15 @@ export const COMANDA_DO_GANHO_KEY = "financeiro.comanda-do-ganho.v1";
  * `capacidadesLigadas` (`lib/organizacao/capacidades.ts`).
  */
 export const CHAVE_DA_COMANDA_NO_GANHO = "comanda_no_ganho";
+
+/**
+ * O `DEFAULT` da coluna `crm_leads.currency` (`supabase/baseline.sql`).
+ *
+ * Não é uma moeda escolhida: é o que o banco grava quando ninguém mandou nada,
+ * e por isso aqui significa "não declarado". Ver o bloco de guarda de moeda no
+ * handler, onde esta constante é a metade da regra.
+ */
+export const MOEDA_PADRAO_DO_LEAD = "BRL";
 
 const resultado = (status: HandlerResult["status"], detail?: string): HandlerResult => ({
   consumer_key: COMANDA_DO_GANHO_KEY,
@@ -81,7 +92,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   const admin = createAdminClient();
   const { data: lead, error: erroLeitura } = await admin
     .from("crm_leads")
-    .select("status, pipeline_id, contact_id, owner_user_id, value_cents")
+    .select("status, pipeline_id, contact_id, owner_user_id, value_cents, currency")
     .eq("id", leadId)
     .eq("organization_id", row.organization_id)
     .maybeSingle();
@@ -94,6 +105,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     contact_id: string | null;
     owner_user_id: string | null;
     value_cents: number | string | null;
+    currency: string | null;
   };
   // O evento é PISTA, não fato: `emit_event` aceita chamador `authenticated`
   // com papel `viewer` e `lead.won` não está na lista reservada dele, então um
@@ -128,6 +140,33 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     .filter(Boolean)
     .join(" · ");
 
+  // ─── Item 1 da #2475: a moeda decide se a comanda nasce ────────────────────
+  // `value_cents` não tem unidade escrita — a coluna é um inteiro e o rótulo é
+  // de fora. Abrir comanda em EUR sobre um número em BRL entrega um total que o
+  // operador acredita e que está errado por fator de conversão, então quando as
+  // duas moedas estão DECLARADAS e diferentes, não se abre (skipped, não error:
+  // o ganho não é falha, é só o financeiro ficando de fora).
+  //
+  // ⚠️ INFERIDO — o brasinho que a issue #2475 põe na guarda: `crm_leads.currency`
+  // tem `DEFAULT 'BRL'` (supabase/baseline.sql, tabela `crm_leads`). Uma comparação
+  // direta `lead.currency !== org.currency` pularia TODO negócio de uma organização
+  // em EUR cujo lead nasceu pelo default, que é justamente o caso comum lá fora.
+  // Por isso `'BRL'` aqui é tratado como "não declarado" — é o default da coluna,
+  // não uma escolha. O que a guarda NÃO alcança: uma organização em EUR com um
+  // negócio genuinamente em BRL (lead declarado como o default) passa direto e a
+  // comanda nasce em EUR — os dois casos são indistinguíveis nesta coluna, e esta
+  // é a direção que não erra para o lado que a issue aponta.
+  const moedaDoNegocio = texto(negocio.currency);
+  const moedaDeclarada = moedaDoNegocio && moedaDoNegocio !== MOEDA_PADRAO_DO_LEAD
+    ? moedaDoNegocio
+    : null;
+  if (moedaDeclarada) {
+    const moedaDaOrg = await moedaDaOrganizacao(admin, row.organization_id);
+    if (moedaDeclarada !== moedaDaOrg) {
+      return resultado("skipped", `moeda_divergente:${moedaDeclarada}!=${moedaDaOrg}`);
+    }
+  }
+
   const desfecho = await comandaDoGanho(admin, {
     organizationId: row.organization_id,
     leadId,
@@ -142,6 +181,24 @@ async function handle(row: EventRow): Promise<HandlerResult> {
 
   switch (desfecho.estado) {
     case "criado":
+      // O audit do item 1 da #2475: a comanda aberta SEM o rastro de quem
+      // abriu é invisível no painel de auditoria, e é o único jeito do
+      // operador descobrir por que a comanda apareceu. `origem` distingue
+      // este caminho do arrasto/manual (`resourceType: "sale"`, como a rota
+      // `POST /api/v1/financeiro/comandas`). Sem `actorUserId` de propósito:
+      // o `event_log` não guarda ator (CR do #2220).
+      await audit({
+        action: "comanda.aberta",
+        organizationId: row.organization_id,
+        resourceType: "sale",
+        resourceId: desfecho.comandaId,
+        metadata: {
+          origem: ORIGEM_DA_COMANDA_DO_GANHO,
+          number: desfecho.numero,
+          lead_id: leadId,
+          value_cents: desfecho.valorCents,
+        },
+      });
       return resultado("ok", `criado:${desfecho.numero}`);
     case "ja_existia":
       return resultado("ok", "ja_existia");
