@@ -47642,3 +47642,33 @@ alter table public.campaign_recipients
   ));
 
 notify pgrst, 'reload schema';
+
+-- ---- APÊNDICE 0580: a chave do servidor MCP externo vira coluna cifrada ----
+-- Espelho idempotente da migration 0580. É este apêndice que chega a todo
+-- self-host: o install.sh aplica o baseline num banco novo e o update.sh o
+-- re-aplica num banco existente; nenhum dos dois roda as migrations.
+--
+-- A chave sai de `organizations.settings.mcp_externo` (jsonb entregue pela RLS
+-- a todo membro, inclusive `viewer`) para coluna cifrada com AES-256-GCM, pelo
+-- mesmo caminho das chaves de IA (`encryptKey`, `lib/crypto/aes_gcm.ts`).
+-- Idempotente: `add column if not exists`; os comentários toleram re-aplicação.
+-- Nenhuma função nova em `public`, então nenhum `revoke execute` a fazer.
+alter table public.organizations
+  add column if not exists mcp_externo_chave_encrypted bytea,
+  add column if not exists mcp_externo_chave_iv bytea,
+  add column if not exists mcp_externo_chave_tag bytea,
+  add column if not exists mcp_externo_chave_last4 text;
+
+comment on column public.organizations.mcp_externo_chave_encrypted is
+  'Chave do servidor MCP externo (#2147), cifrada com AES-256-GCM pela chave de instalação AI_CRED_AES_KEY. NULL = sem servidor registrado. Nunca em claro, nunca no jsonb settings.';
+
+comment on column public.organizations.mcp_externo_chave_iv is
+  'IV de 12 bytes da chave do servidor MCP externo (#2147) — anda sempre junto com o ciphertext e a tag.';
+
+comment on column public.organizations.mcp_externo_chave_tag is
+  'Tag de autenticação de 16 bytes da chave do servidor MCP externo (#2147); sem ela o decrypt é recusado.';
+
+comment on column public.organizations.mcp_externo_chave_last4 is
+  'Últimos 4 caracteres da chave do servidor MCP externo (#2147) — é o que se mostra para identificar, nunca a chave inteira.';
+
+notify pgrst, 'reload schema';
