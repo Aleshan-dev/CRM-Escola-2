@@ -59,6 +59,11 @@ import { fusoDaOrganizacao } from "@/lib/agent-engine/agent/fuso-da-org";
 import { loadOrgMemory, renderOrgMemory } from "@/lib/agent-engine/agent/org-memory";
 import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import {
+  LlmNotConfiguredError,
+  resolveOrgLlmConfig,
+  type LlmEdgeConfig,
+} from "@/lib/agent-engine/edge/llm/credentials";
+import {
   LIMIAR_PADRAO_BUSCA,
   buscarConhecimento,
   resolverAcervoDoAgente,
@@ -131,37 +136,44 @@ interface ContextoDaRota {
 }
 
 /**
- * O agente do caso tem credencial de IA UTILIZÁVEL na organização?
+ * A tela oferece o clique quando o POST CONSEGUIRIA falar com o modelo — e quem
+ * responde isso é o MESMO resolvedor que `runModelCall` chama antes de sair
+ * (`resolveOrgLlmConfig`), com o MESMO override que `responderSobreOCaso` passa
+ * (o do agente do caso quando a persona é dele; nenhum quando é a padrão).
+ * Régua paralela divergia: agente pausado com credencial (a tela dizia sim, o
+ * POST caía no padrão da organização) e caso sem agente com credencial da
+ * organização (a tela dizia não, o POST respondia).
  *
- * Sinal honesto para `ia_configurada` quando a instalação não põe chave no
- * ambiente e configura IA só por `IA › Credenciais`. O caminho real do chat
- * (`responderSobreOCaso` → `runModelCall`) usa o `provider` + `credential_id`
- * da versão publicada do agente do caso, não o `.env` — então olhar só o
- * ambiente escondia um recurso que FUNCIONA. Régua = a mesma do resolvedor de
- * turno: credencial ativa e validada. Admin via Pool com filtro de organização
- * programático (service role ignora RLS; CLAUDE.md anti-pattern 10).
+ * Só `LlmNotConfiguredError` vira `false`. Qualquer outra falha (banco, chave
+ * que não decifra) vira `null` AQUI, com log: só `ia_configurada` fica
+ * desconhecida, e o resto do estado (contato bloqueado, caso obsoleto) segue.
  */
-async function agenteTemCredencialUtilizavel(
+async function iaConfiguradaParaACasa(
   pool: ReturnType<typeof getRequestPool>,
+  llmCfg: LlmEdgeConfig,
   organizationId: string,
-  agentId: string | null,
-): Promise<boolean> {
-  if (!agentId) return false;
-  const { rows } = await pool.query<{ ok: boolean }>(
-    `select exists (
-       select 1
-       from public.ai_agents a
-       join public.ai_agent_versions v on v.id = a.published_version_id
-       join public.ai_provider_credentials cred
-         on cred.id = v.credential_id
-        and cred.organization_id = a.organization_id
-        and cred.is_active
-        and cred.validated_at is not null
-       where a.id = $2 and a.organization_id = $1
-     ) as ok`,
-    [organizationId, agentId],
-  );
-  return rows[0]?.ok === true;
+  persona: PersonaDaConversa,
+  requestId: string,
+): Promise<boolean | null> {
+  try {
+    await resolveOrgLlmConfig(
+      pool,
+      llmCfg,
+      organizationId,
+      persona.fonte === "agente_do_caso"
+        ? { provider: persona.agente.provider, credentialId: persona.agente.credentialId }
+        : undefined,
+    );
+    return true;
+  } catch (erro) {
+    if (erro instanceof LlmNotConfiguredError) return false;
+    logger.warn("[conversa-do-caso] não deu para conferir a IA da organização — ia_configurada fica null", {
+      requestId,
+      organizationId,
+      erro: erro instanceof Error ? erro.message : String(erro),
+    });
+    return null;
+  }
 }
 
 /**
@@ -274,28 +286,28 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
     const pool = getRequestPool();
     const caso = await lerCaso(pool, c.orgId, c.caseId);
     if (caso !== null) {
-      persona = personaParaTela(await personaDeAgora(pool, c.orgId, caso.agent_id));
+      const personaAgora = await personaDeAgora(pool, c.orgId, caso.agent_id);
+      persona = personaParaTela(personaAgora);
       const { rows: contato } = await pool.query<{ is_blocked: boolean; is_anonymized: boolean }>(
         `select is_blocked, is_anonymized from contacts where organization_id = $1 and id = $2`,
         [c.orgId, caso.contact_id],
       );
-      const cfg = requestTurnDeps().llmCfg;
-      // Sem chave de IA a tela não oferece o clique: numa instalação fresca,
+      // Sem IA utilizável a tela não oferece o clique: numa instalação fresca,
       // um botão que sempre falha é pior que um botão ausente com a frase que
-      // diz onde configurar. Mas "sem chave" não é só o ambiente: o chat usa a
-      // credencial do AGENTE do caso (banco da organização), então quando ela
-      // existe e está validada o recurso funciona mesmo sem `.env`.
-      const chaveNoAmbiente = Boolean(
-        cfg.anthropicApiKey || cfg.openaiApiKey || cfg.openrouterApiKey,
+      // diz onde configurar. "Utilizável" é o que o POST usaria — ver o helper.
+      const iaConfigurada = await iaConfiguradaParaACasa(
+        pool,
+        requestTurnDeps().llmCfg,
+        c.orgId,
+        personaAgora,
+        requestId,
       );
-      const credencialDoAgente =
-        chaveNoAmbiente || (await agenteTemCredencialUtilizavel(pool, c.orgId, caso.agent_id));
       estado = {
         caso_obsoleto: await casoEstaObsoleto(pool, c.orgId, caso.context_snapshot),
         contato_bloqueado: contato[0]?.is_blocked ?? null,
         contato_anonimizado: contato[0]?.is_anonymized ?? null,
         status: caso.status,
-        ia_configurada: credencialDoAgente,
+        ia_configurada: iaConfigurada,
       };
     }
   } catch (erro) {

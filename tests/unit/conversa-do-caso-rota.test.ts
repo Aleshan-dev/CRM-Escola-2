@@ -26,6 +26,8 @@ import { responderSobreOCaso } from "@/lib/agent-engine/agent/conversa-do-caso";
 import { fail } from "@/lib/api/wrappers";
 import { ROLE_RANK, type AuthUser, type Role } from "@/lib/auth/types";
 import { LlmNotConfiguredError } from "@/lib/agent-engine/edge/llm/run-model-call";
+import { resolveOrgLlmConfig } from "@/lib/agent-engine/edge/llm/credentials";
+import { resolverPersona } from "@/lib/agent-engine/agent/conversa-do-caso/persona";
 import type { ResultadoDaBusca } from "@/lib/ai/knowledge/busca";
 import type { Citation } from "@/lib/ai/citations/types";
 
@@ -45,6 +47,10 @@ vi.mock("@/lib/agent-engine/agent/conversa-do-caso", () => ({
 const ambiente = vi.hoisted(() => ({ llmCfg: { anthropicApiKey: "k" } as Record<string, unknown> }));
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({
   requestTurnDeps: () => ({ llmCfg: ambiente.llmCfg, log: undefined, registry: undefined }),
+}));
+vi.mock("@/lib/agent-engine/edge/llm/credentials", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  resolveOrgLlmConfig: vi.fn(async () => ({})),
 }));
 vi.mock("@/lib/agent-engine/agent/conversa-do-caso/persona", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -117,7 +123,7 @@ function sessaoComVisibilidade(visiveis: string[], mensagens: unknown[] = []) {
  * O pool, respondendo por FORMA de consulta. Registra tudo que foi executado —
  * é como os casos de "zero linhas novas em X" medem EFEITO e não chamada.
  */
-function poolFalso(over: { caso?: Record<string, unknown> | null; contato?: Record<string, unknown>; jaPerguntou?: number; inserirLanca?: { code: string }; credencialOk?: boolean } = {}) {
+function poolFalso(over: { caso?: Record<string, unknown> | null; contato?: Record<string, unknown>; jaPerguntou?: number; inserirLanca?: { code: string } } = {}) {
   const queries: Array<{ sql: string; params: unknown[] }> = [];
   const caso =
     over.caso === undefined
@@ -142,7 +148,6 @@ function poolFalso(over: { caso?: Record<string, unknown> | null; contato?: Reco
       return { rows: [over.contato ?? { is_blocked: false, is_anonymized: false }] };
     }
     if (/from contacts/.test(sql)) return { rows: [{ display_name: "Marina Silva", name: null }] };
-    if (/ai_provider_credentials/.test(sql)) return { rows: [{ ok: over.credencialOk ?? false }] };
     if (/count\(\*\)::text as n/.test(sql)) return { rows: [{ n: String(over.jaPerguntou ?? 0) }] };
     if (/insert into agent_case_chat_messages/.test(sql) && /'human'/.test(sql)) {
       if (over.inserirLanca) throw over.inserirLanca;
@@ -422,61 +427,75 @@ describe("GET", () => {
   });
 });
 
-describe("GET — ia_configurada reflete a credencial da organização, não só o .env", () => {
-  // O bug: `ia_configurada` olhava SÓ o ambiente. Numa instalação que configura
-  // IA por `IA › Credenciais` (sem chave no `.env` — o caso da Vercel deste
-  // staging), o flag ficava false e escondia um recurso que FUNCIONA, porque o
-  // chat usa a credencial do AGENTE do caso.
-  const casoComAgente = {
-    id: CASE_ID,
-    title: "Desconto",
-    kind: "outro",
-    summary: "20%",
-    blocker: "10%",
-    status: "awaiting_human",
-    opened_at: "2026-03-10T12:00:00Z",
-    agent_id: AGENT_ID,
-    conversation_id: CONV_ID,
-    contact_id: CONTACT_ID,
-    context_snapshot: null,
-  };
+describe("GET — ia_configurada pergunta ao MESMO resolvedor que o POST usa", () => {
+  // O bug: `ia_configurada` olhava SÓ o ambiente, e a org que configura IA por
+  // `IA › Credenciais` via "nenhum provedor". A resposta certa é a do resolvedor
+  // que `runModelCall` chama antes de sair, com o override que
+  // `responderSobreOCaso` passa — régua paralela diverge do POST.
   const get = () => GET(new NextRequest(`http://localhost/api/v1/ai/cases/${CASE_ID}/chat`), { params: Promise.resolve({ id: CASE_ID }) });
-  const estadoDaResposta = async (r: Response) =>
-    ((await r.json()) as { data: { estado: Record<string, unknown> } }).data.estado;
+  const estado = async () => ((await (await get()).json()) as { data: { estado: Record<string, unknown> } }).data.estado;
+  const CASO_GET = {
+    id: CASE_ID, title: "Desconto", kind: "outro", summary: "20%", blocker: "10%",
+    status: "awaiting_human", opened_at: "2026-03-10T12:00:00Z", agent_id: null,
+    conversation_id: CONV_ID, contact_id: CONTACT_ID, context_snapshot: null,
+  };
+  const agente = { agentId: AGENT_ID, agentName: "Ana", provider: "openai", credentialId: "cred-1" };
 
-  it("SEM chave no ambiente, mas o agente do caso TEM credencial válida → true", async () => {
+  it("persona do agente do caso: o resolvedor recebe o provider E a credencial do agente → true", async () => {
     ambiente.llmCfg = {};
     sessaoComVisibilidade([CONV_ID]);
-    poolFalso({ caso: casoComAgente, credencialOk: true });
+    poolFalso({ caso: { ...CASO_GET, agent_id: AGENT_ID } });
+    vi.mocked(resolverPersona).mockResolvedValueOnce({ fonte: "agente_do_caso", agente, nome: "Ana" } as never);
+    expect((await estado()).ia_configurada).toBe(true);
+    expect(vi.mocked(resolveOrgLlmConfig)).toHaveBeenCalledWith(expect.anything(), {}, ORG_ID, { provider: "openai", credentialId: "cred-1" });
+  });
+
+  it("caso SEM agente e org com IA configurada: o padrão da organização responde → true (a régua paralela dizia false)", async () => {
+    ambiente.llmCfg = {};
+    sessaoComVisibilidade([CONV_ID]);
+    poolFalso();
+    expect((await estado()).ia_configurada).toBe(true);
+    expect(vi.mocked(resolveOrgLlmConfig)).toHaveBeenCalledWith(expect.anything(), {}, ORG_ID, undefined);
+  });
+
+  it("agente PAUSADO: a credencial dele não conta — o resolvedor vê o padrão da organização, sem override", async () => {
+    ambiente.llmCfg = {};
+    sessaoComVisibilidade([CONV_ID]);
+    poolFalso({ caso: { ...CASO_GET, agent_id: AGENT_ID } });
+    vi.mocked(resolverPersona).mockResolvedValueOnce({ fonte: "padrao_da_organizacao", motivo: "pausado" });
+    vi.mocked(resolveOrgLlmConfig).mockRejectedValueOnce(new LlmNotConfiguredError());
+    expect((await estado()).ia_configurada).toBe(false);
+    expect(vi.mocked(resolveOrgLlmConfig)).toHaveBeenCalledWith(expect.anything(), {}, ORG_ID, undefined);
+  });
+
+  it("resolvedor diz LlmNotConfiguredError → false (a tela mostra onde configurar)", async () => {
+    sessaoComVisibilidade([CONV_ID]);
+    poolFalso();
+    vi.mocked(resolveOrgLlmConfig).mockRejectedValueOnce(new LlmNotConfiguredError());
+    expect((await estado()).ia_configurada).toBe(false);
+  });
+
+  it("falha no resolvedor (banco, chave que não decifra) NÃO vira 'sem IA' e NÃO apaga o resto do estado", async () => {
+    sessaoComVisibilidade([CONV_ID]);
+    // Fronteira válida e atendimento atual ausente → `caso_obsoleto: true`: um
+    // valor que só existe se o estado foi montado, ao contrário do `null` inicial.
+    const service_boundary = {
+      organization_id: ORG_ID, contact_id: CONTACT_ID, conversation_id: CONV_ID,
+      service_revision: 1, demanda_id: null, demanda_revision: null,
+    };
+    poolFalso({
+      caso: { ...CASO_GET, context_snapshot: { service_boundary } },
+      contato: { is_blocked: true, is_anonymized: false },
+    });
+    vi.mocked(resolveOrgLlmConfig).mockRejectedValueOnce(new Error("Unsupported state or unable to authenticate data"));
     const r = await get();
     expect(r.status).toBe(200);
-    expect((await estadoDaResposta(r)).ia_configurada).toBe(true);
-  });
-
-  it("SEM chave no ambiente e SEM credencial utilizável do agente → false", async () => {
-    ambiente.llmCfg = {};
-    sessaoComVisibilidade([CONV_ID]);
-    poolFalso({ caso: casoComAgente, credencialOk: false });
-    const r = await get();
-    expect((await estadoDaResposta(r)).ia_configurada).toBe(false);
-  });
-
-  it("COM chave no ambiente → true, sem nem consultar a credencial (short-circuit)", async () => {
-    ambiente.llmCfg = { anthropicApiKey: "k" };
-    sessaoComVisibilidade([CONV_ID]);
-    const pool = poolFalso({ caso: casoComAgente, credencialOk: false });
-    const r = await get();
-    expect((await estadoDaResposta(r)).ia_configurada).toBe(true);
-    expect(pool.queries.some((q) => /ai_provider_credentials/.test(q.sql))).toBe(false);
-  });
-
-  it("caso sem agente (agent_id null) e sem chave no ambiente → false, sem consultar credencial", async () => {
-    ambiente.llmCfg = {};
-    sessaoComVisibilidade([CONV_ID]);
-    const pool = poolFalso(); // caso default tem agent_id: null
-    const r = await get();
-    expect((await estadoDaResposta(r)).ia_configurada).toBe(false);
-    expect(pool.queries.some((q) => /ai_provider_credentials/.test(q.sql))).toBe(false);
+    const e = ((await r.json()) as { data: { estado: Record<string, unknown> } }).data.estado;
+    expect(e.ia_configurada).toBeNull();
+    expect(e.contato_bloqueado).toBe(true);
+    expect(e.contato_anonimizado).toBe(false);
+    expect(e.caso_obsoleto).toBe(true);
+    expect(e.status).toBe("awaiting_human");
   });
 });
 
