@@ -1,5 +1,5 @@
 /**
- * A migration 0573 e o apêndice dela no `baseline.sql` — o item 3 do desenho
+ * A migration 0580 e o apêndice dela no `baseline.sql` — o item 3 do desenho
  * (#2147) na forma que o repo cobra: três artefatos que se espelham.
  *
  * O que se guarda aqui não é o comportamento da cifragem (isso é de
@@ -22,18 +22,18 @@ const RAIZ = resolve(process.cwd());
 const MIGRACOES = join(RAIZ, "supabase", "migrations");
 const PREFIXO_NUMERO = /_(\d{4,5})_[a-z0-9_]+\.sql$/;
 
-function arquivoDa0573(): { nome: string; conteudo: string } | null {
+function arquivoDa0580(): { nome: string; conteudo: string } | null {
   const nome = readdirSync(MIGRACOES).find(
-    (arquivo) => arquivo.endsWith("_0573_chave_cifrada_do_mcp_externo.sql"),
+    (arquivo) => arquivo.endsWith("_0580_chave_cifrada_do_mcp_externo.sql"),
   );
   if (!nome) return null;
   return { nome, conteudo: readFileSync(join(MIGRACOES, nome), "utf8") };
 }
 
 describe("a chave do servidor MCP externo sai do jsonb (#2147, item 3)", () => {
-  it("existe a migration 0573 com o cabeçalho `-- manifest:`", () => {
-    const arquivo = arquivoDa0573();
-    expect(arquivo, "migration 0573 ausente em supabase/migrations/").not.toBeNull();
+  it("existe a migration 0580 com o cabeçalho `-- manifest:`", () => {
+    const arquivo = arquivoDa0580();
+    expect(arquivo, "migration 0580 ausente em supabase/migrations/").not.toBeNull();
     expect(arquivo!.conteudo).toMatch(/^-- manifest: .+/m);
   });
 
@@ -43,11 +43,11 @@ describe("a chave do servidor MCP externo sai do jsonb (#2147, item 3)", () => {
       .filter((numero): numero is string => Boolean(numero));
     const repetidos = numeros.filter((numero, i) => numeros.indexOf(numero) !== i);
     expect(repetidos, "número de migration repetido").toEqual([]);
-    expect(numeros).toContain("0573");
+    expect(numeros).toContain("0580");
   });
 
   it("cria as quatro colunas cifradas, de forma idempotente", () => {
-    const conteudo = arquivoDa0573()!.conteudo;
+    const conteudo = arquivoDa0580()!.conteudo;
     for (const coluna of [
       "mcp_externo_chave_encrypted",
       "mcp_externo_chave_iv",
@@ -62,7 +62,7 @@ describe("a chave do servidor MCP externo sai do jsonb (#2147, item 3)", () => {
     expect(conteudo).not.toMatch(/create (or replace )?function/i);
   });
 
-  it("a 0573 se descreve NUM LUGAR SÓ: o cabeçalho, não o MANIFEST.md", () => {
+  it("a 0580 se descreve NUM LUGAR SÓ: o cabeçalho, não o MANIFEST.md", () => {
     // A cerca `manifest-x-migrations` do repo proíbe a mesma migration nos DOIS
     // lugares: o `-- manifest:` do .sql é a fonte desde a reunião dos dois
     // arquivos, e uma linha a mais no MANIFEST.md faria os dois divergirem um
@@ -71,14 +71,14 @@ describe("a chave do servidor MCP externo sai do jsonb (#2147, item 3)", () => {
     const man = readFileSync(join(MIGRACOES, "MANIFEST.md"), "utf8");
     expect(
       man,
-      "a 0573 está no MANIFEST.md E no cabeçalho do .sql — uma fonte só",
-    ).not.toContain("0573_chave_cifrada_do_mcp_externo");
+      "a 0580 está no MANIFEST.md E no cabeçalho do .sql — uma fonte só",
+    ).not.toContain("0580_chave_cifrada_do_mcp_externo");
   });
 
   it("o baseline.sql espelha o apêndice — é ele que o self-host aplica", () => {
     const baseline = readFileSync(join(RAIZ, "supabase", "baseline.sql"), "utf8");
-    expect(baseline, "apêndice 0573 ausente do baseline.sql").toContain(
-      "APÊNDICE 0573",
+    expect(baseline, "apêndice 0580 ausente do baseline.sql").toContain(
+      "APÊNDICE 0580",
     );
     expect(baseline).toContain("add column if not exists mcp_externo_chave_encrypted bytea");
     expect(baseline).toContain("add column if not exists mcp_externo_chave_last4 text");

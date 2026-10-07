@@ -8,7 +8,7 @@
  *  1. REGISTRO: a gravação em `organizations.settings.mcp_externo` — SÓ o
  *     endpoint, com merge em dois níveis (o mesmo bolso de `conversions` no PR
  *     #2197). A CHAVE não mora mais aqui: vai cifrada para as colunas
- *     `mcp_externo_chave_*` (migration 0573), porque a RLS do `settings`
+ *     `mcp_externo_chave_*` (migration 0580), porque a RLS do `settings`
  *     entregava o jsonb a todo membro, inclusive viewer.
  *  2. INVOCAÇÃO: um servidor Streamable HTTP de mentira, no processo, falando
  *     o contrato MCP (`initialize` / `tools/list` / `tools/call`) — é a prova
@@ -252,7 +252,7 @@ describe("registro em organizations.settings.mcp_externo (#2147)", () => {
 describe("descoberta das ferramentas anunciadas (#2147)", () => {
   function bancoCom(settings: unknown) {
     // A linha devolvida traz as QUATRO colunas cifradas: é por elas que a chave
-    // abre (migration 0573) — o jsonb não tem chave nenhuma para entregar.
+    // abre (migration 0580) — o jsonb não tem chave nenhuma para entregar.
     const cifrado = cifrarChaveMcpExterno(CHAVE);
     const ids: Array<string | undefined> = [];
     const cadeia: Record<string, unknown> = {
@@ -285,7 +285,7 @@ describe("descoberta das ferramentas anunciadas (#2147)", () => {
 
   it("com registro devolve endpoint + chave ABERTA das colunas e o que o servidor anunciou", async () => {
     // A chave foi CIFRADA no banco e aberta aqui — o jsonb não a contém, e é
-    // por isso que a descoberta é a prova de ponta a ponta da migration 0573.
+    // por isso que a descoberta é a prova de ponta a ponta da migration 0580.
     const { cliente, ids } = bancoCom({ mcp_externo: { endpoint: base } });
     const montado = await carregarServidorMcpExterno(cliente, ORG, { fetch: fetchDoStub() });
     expect(montado?.servidor).toEqual({ endpoint: base, chave: CHAVE });
@@ -346,6 +346,24 @@ describe("a saída do processo passa pelo guard anti-SSRF (#2147, item 4)", () =
     // continua caindo na allowlist.
     const guard = fetchDeSaida(base, { conferirUrl: () => {} });
     await expect(guard("https://fora-da-allowlist.loja/mcp")).rejects.toThrow(/egress|fora/i);
+  });
+
+  it("host cadastrado que RESOLVE para faixa privada não sai — a peça de DNS é chamada", async () => {
+    // O pedaço textual aceita `erp.loja`; quem barra o rebinding é a
+    // resolução. Sem a chamada a `conferirIp`, o fetch sairia.
+    const saidas: string[] = [];
+    const guard = fetchDeSaida("https://erp.loja/mcp", {
+      conferirUrl: () => {},
+      conferirIp: async (host) => {
+        throw new Error(`unsafe_url:private_ip ${host}`);
+      },
+      fetchImpl: (async (url: string) => {
+        saidas.push(url);
+        return new Response("{}");
+      }) as unknown as typeof fetch,
+    });
+    await expect(guard("https://erp.loja/mcp")).rejects.toThrow(/private_ip erp\.loja/);
+    expect(saidas, "saiu byte sem conferir o IP resolvido").toEqual([]);
   });
 });
 

@@ -47448,8 +47448,8 @@ alter table public.campaign_recipients
 
 notify pgrst, 'reload schema';
 
--- ---- APÊNDICE 0573: a chave do servidor MCP externo vira coluna cifrada ----
--- Espelho idempotente da migration 0573. É este apêndice que chega a todo
+-- ---- APÊNDICE 0580: a chave do servidor MCP externo vira coluna cifrada ----
+-- Espelho idempotente da migration 0580. É este apêndice que chega a todo
 -- self-host: o install.sh aplica o baseline num banco novo e o update.sh o
 -- re-aplica num banco existente; nenhum dos dois roda as migrations.
 --
@@ -47474,6 +47474,6 @@ comment on column public.organizations.mcp_externo_chave_tag is
   'Tag de autenticação de 16 bytes da chave do servidor MCP externo (#2147); sem ela o decrypt é recusado.';
 
 comment on column public.organizations.mcp_externo_chave_last4 is
-  'Últimos 4 caracteres da chave do servidor MCP externo (#2147) — é o que a tela mostra para identificar, nunca a chave inteira.';
+  'Últimos 4 caracteres da chave do servidor MCP externo (#2147) — é o que se mostra para identificar, nunca a chave inteira.';
 
 notify pgrst, 'reload schema';
