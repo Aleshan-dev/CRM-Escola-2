@@ -33,6 +33,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 const auditSpy = vi.fn();
 vi.mock("@/lib/audit", () => ({ audit: (e: unknown) => auditSpy(e) }));
 
+// A resolução de DNS é a fronteira do `assertDestinoResolvidoSeguro` DEFAULT:
+// por padrão delega ao `lookup` real (os stubs daqui moram em IP literal, que
+// não passa por DNS), e o teste da peça de DNS troca a resposta numa chamada só.
+vi.mock("node:dns/promises", async (importOriginal) => {
+  const real = await importOriginal<typeof import("node:dns/promises")>();
+  return { ...real, lookup: vi.fn(real.lookup) };
+});
+
 // A chave de cifragem da instalação tem de existir ANTES de `lib/env.ts` ser
 // carregado — é ela que a descoberta usa para ABRIR a chave das colunas.
 vi.hoisted(() => {
@@ -43,6 +51,7 @@ import { pickToolsFromMcp } from "@/lib/ai/runtime/tools";
 import type { McpAuthResult } from "@/lib/mcp/auth";
 import type { McpContext } from "@/lib/mcp/types";
 import { chamarFerramentaRemota, fetchDeSaida, listarFerramentasDoServidor } from "./chamada";
+import { lookup } from "node:dns/promises";
 import { carregarServidorMcpExterno, carregarServidorMcpExternoDoTurno } from "./carregar";
 import { lerEndpointMcpExterno, mesclarServidorMcpExterno } from "./registro";
 import { cifrarChaveMcpExterno } from "./segredo";
@@ -411,6 +420,38 @@ describe("a saída do processo passa pelo guard anti-SSRF (#2147, item 4)", () =
     });
     await expect(guard("https://erp.loja/mcp")).rejects.toThrow(/private_ip erp\.loja/);
     expect(saidas, "saiu byte sem conferir o IP resolvido").toEqual([]);
+  });
+
+  it("SEM `conferirIp` injetado, o default resolve o host e barra a faixa privada", async () => {
+    // Nada de guarda injetada na peça de DNS: quem decide é o DEFAULT
+    // (`assertDestinoResolvidoSeguro`), com a resolução real trocada só nesta
+    // chamada. Se o default virar no-op, o fetch sai e este teste fica vermelho.
+    vi.mocked(lookup).mockResolvedValueOnce([{ address: "10.0.0.5", family: 4 }] as never);
+    const saidas: string[] = [];
+    const guard = fetchDeSaida("https://erp.loja/mcp", {
+      conferirUrl: () => {},
+      fetchImpl: (async (url: string) => {
+        saidas.push(url);
+        return new Response("{}");
+      }) as unknown as typeof fetch,
+    });
+    await expect(guard("https://erp.loja/mcp")).rejects.toThrow(/private_ip/);
+    expect(vi.mocked(lookup)).toHaveBeenCalledWith("erp.loja", { all: true });
+    expect(saidas, "saiu byte com o host resolvendo para 10.0.0.5").toEqual([]);
+  });
+
+  it("controle: o mesmo default deixa sair quando o host resolve para IP público", async () => {
+    vi.mocked(lookup).mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }] as never);
+    const saidas: string[] = [];
+    const guard = fetchDeSaida("https://erp.loja/mcp", {
+      conferirUrl: () => {},
+      fetchImpl: (async (url: string) => {
+        saidas.push(url);
+        return new Response("{}");
+      }) as unknown as typeof fetch,
+    });
+    await guard("https://erp.loja/mcp");
+    expect(saidas).toEqual(["https://erp.loja/mcp"]);
   });
 });
 
