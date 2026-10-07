@@ -58,6 +58,9 @@ export const VINCULO_DE_COMANDA_NO_GANHO = "comanda_no_ganho" as const;
 /** Como essa comanda nasceu, gravado no `metadata` do vínculo. */
 export const ORIGEM_DA_COMANDA_DO_GANHO = "ganho_no_kanban" as const;
 
+/** `sales.cancel_reason` da comanda vazia que perdeu a corrida do ganho. */
+export const MOTIVO_DO_CANCELAMENTO_NA_CORRIDA = "corrida_do_ganho" as const;
+
 export interface EntradaDaComandaDoGanho {
   organizationId: string;
   leadId: string;
@@ -130,7 +133,70 @@ export async function comandaDoGanho(
     .maybeSingle();
   if (erroLeitura) return { estado: "falhou", erro: `vínculo: ${erroLeitura.message}` };
   if (vinculo) {
-    return { estado: "ja_existia", comandaId: String((vinculo as { target_id: string }).target_id) };
+    const comandaVinculada = String((vinculo as { target_id: string }).target_id);
+
+    // ─── Item 3 da #2475: o vínculo existe mas a comanda pode estar VAZIA ──────
+    // O vínculo é gravado mesmo quando o insert do item falhou (de propósito:
+    // duplicar dinheiro é pior que um item faltando). O preço daquela escolha
+    // aparecia AQUI: a tentativa seguinte viaja o vínculo, o desfecho era
+    // `ja_existia`, o handler devolvia `ok` e a comanda ficava com total 0 para
+    // sempre — ninguém avisado. Agora a repetição COMPLETA o que faltou, que é
+    // a única escrita que não duplica dinheiro (o item é um só por comanda).
+    const { data: item, error: erroItemLeitura } = await supabase
+      .from("sale_items")
+      .select("id")
+      .eq("organization_id", entrada.organizationId)
+      .eq("sale_id", comandaVinculada)
+      .limit(1)
+      .maybeSingle();
+    if (erroItemLeitura) {
+      return { estado: "falhou", erro: `item (revisão): ${erroItemLeitura.message}` };
+    }
+    if (item) return { estado: "ja_existia", comandaId: comandaVinculada };
+
+    // A comanda nasceu sem item: o insert de antes falhou. Reinsere com o mesmo
+    // valor, e a numeração sai da própria comanda — nada aqui é chute.
+    const { data: linhaDaComanda, error: erroComandaLeitura } = await supabase
+      .from("sales")
+      .select("number, status")
+      .eq("organization_id", entrada.organizationId)
+      .eq("id", comandaVinculada)
+      .maybeSingle();
+    if (erroComandaLeitura || !linhaDaComanda) {
+      return {
+        estado: "falhou",
+        erro: `comanda (revisão): ${erroComandaLeitura?.message ?? "linha não devolvida"}`,
+      };
+    }
+    // Só uma comanda ABERTA recebe o item. Se o operador já finalizou ou
+    // cancelou aquela comanda vazia, foi decisão dele: pôr dinheiro numa comanda
+    // fechada mudaria um registro que já saiu da mão de quem cobra.
+    const { number: numeroDaLinha, status } = linhaDaComanda as { number: number; status: string };
+    if (status !== "open") return { estado: "ja_existia", comandaId: comandaVinculada };
+    const numeroRecuperado = Number(numeroDaLinha);
+
+    const { error: erroItemRetentado } = await supabase
+      .from("sale_items")
+      .insert({
+        organization_id: entrada.organizationId,
+        sale_id: comandaVinculada,
+        description: entrada.descricao,
+        quantity: 1,
+        unit_price_cents: valor,
+        total_cents: valor,
+        attendant_user_id: entrada.userId,
+      })
+      .select("id")
+      .single();
+    if (erroItemRetentado) {
+      return { estado: "falhou", erro: `item (retry): ${erroItemRetentado.message}` };
+    }
+    return {
+      estado: "criado",
+      comandaId: comandaVinculada,
+      numero: numeroRecuperado,
+      valorCents: valor,
+    };
   }
 
   const { data: numero, error: erroNumero } = await supabase.rpc("fn_proximo_numero_de_comanda", {
@@ -163,27 +229,18 @@ export async function comandaDoGanho(
   const comandaId = String((comanda as { id: string }).id);
   const numeroDaComanda = Number((comanda as { number: number }).number);
 
-  // O item leva o VALOR. Comanda aberta sem item tem total derivado zero e a
-  // tela de Comandas mostraria R$ 0,00 para um negócio de mil — o número errado
-  // que o operador acredita. `total_cents` é resolvido AQUI (doutrina da
-  // `sale_items`: a finalização não recalcula).
-  const { error: erroItem } = await supabase
-    .from("sale_items")
-    .insert({
-      organization_id: entrada.organizationId,
-      sale_id: comandaId,
-      description: entrada.descricao,
-      quantity: 1,
-      unit_price_cents: valor,
-      total_cents: valor,
-      attendant_user_id: entrada.userId,
-    })
-    .select("id")
-    .single();
-
-  // O vínculo é o rastro E a trava: gravado mesmo quando o item falhou, porque a
-  // alternativa é abrir a SEGUNDA comanda na próxima tentativa — duplicar
-  // dinheiro é o erro pior que um item faltando à vista do operador.
+  // ─── Item 2 da #2475: a trava vem ANTES do dinheiro ────────────────────────
+  // O índice único parcial da migration 0582 fecha a corrida entre o worker e o
+  // `drain-loop` (#2475, item 2): duas linhas `lead.won` do mesmo negócio em
+  // instâncias diferentes passavam as duas pela trava de leitura, porque
+  // `uniq_crm_lead_links_lead_target_link` inclui `target_id` e não segura duas
+  // comandas. Com o índice novo, a segunda recebe 23505 aqui.
+  //
+  // E o vínculo vem ANTES do item de propósito: se a corrida acontecer, a
+  // perdedora entrega uma comanda VAZIA (total derivado zero) em vez de uma
+  // segunda comanda com o mesmo dinheiro — a ordem dos dois inserts é o que
+  // decide o tamanho do estrago. A comanda vazia a própria perdedora cancela
+  // (abaixo); duas comandas de mil viram um lançamento duplicado.
   const { error: erroVinculo } = await supabase
     .from("crm_lead_links")
     .insert({
@@ -205,8 +262,68 @@ export async function comandaDoGanho(
     .select("id")
     .single();
   if (erroVinculo) {
+    // 23505 = o índice novo pegou a corrida: outra instância venceu. Não é
+    // falha — é a prova de que o "não duplica" valeu, então devolve a comanda
+    // que existe em vez de girar no retry.
+    if (erroVinculo.code === "23505") {
+      // A comanda que ESTA instância acabou de abrir ficou sem vínculo e sem
+      // item: deixá-la aberta seria uma conta a receber de R$ 0 sem origem na
+      // tela de Comandas. `sales` cancela, nunca apaga — e o motivo fica na linha.
+      const { error: erroCancelamento } = await supabase
+        .from("sales")
+        .update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancel_reason: MOTIVO_DO_CANCELAMENTO_NA_CORRIDA,
+        })
+        .eq("organization_id", entrada.organizationId)
+        .eq("id", comandaId)
+        .eq("status", "open");
+      if (erroCancelamento) {
+        // Devolver `falhou` registra o erro no desfecho; a repetição do dreno
+        // acha o vínculo da vencedora e converge para `ja_existia`.
+        return {
+          estado: "falhou",
+          erro: `corrida perdida; comanda vazia ${comandaId} não cancelada: ${erroCancelamento.message}`,
+        };
+      }
+      const { data: vencedora } = await supabase
+        .from("crm_lead_links")
+        .select("target_id")
+        .eq("organization_id", entrada.organizationId)
+        .eq("lead_id", entrada.leadId)
+        .eq("target_kind", ALVO_DE_VINCULO_DA_COMANDA)
+        .eq("link_kind", VINCULO_DE_COMANDA_NO_GANHO)
+        .limit(1)
+        .maybeSingle();
+      if (vencedora) {
+        return { estado: "ja_existia", comandaId: String(vencedora.target_id) };
+      }
+    }
     return { estado: "falhou", erro: `vínculo: ${erroVinculo.message}` };
   }
+
+  // O item leva o VALOR. Comanda aberta sem item tem total derivado zero e a
+  // tela de Comandas mostraria R$ 0,00 para um negócio de mil — o número errado
+  // que o operador acredita. `total_cents` é resolvido AQUI (doutrina da
+  // `sale_items`: a finalização não recalcula).
+  //
+  // Se este insert falhar, o vínculo JÁ existe: é a comanda vazia que o bloco
+  // acima descreve, e a próxima tentativa a completa (item 3, acima) — não abre
+  // uma segunda.
+  const { error: erroItem } = await supabase
+    .from("sale_items")
+    .insert({
+      organization_id: entrada.organizationId,
+      sale_id: comandaId,
+      description: entrada.descricao,
+      quantity: 1,
+      unit_price_cents: valor,
+      total_cents: valor,
+      attendant_user_id: entrada.userId,
+    })
+    .select("id")
+    .single();
   if (erroItem) {
     return { estado: "falhou", erro: `item: ${erroItem.message}` };
   }

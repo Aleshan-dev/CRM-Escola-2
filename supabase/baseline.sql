@@ -47832,3 +47832,28 @@ comment on column public.organizations.mcp_externo_chave_last4 is
   'Últimos 4 caracteres da chave do servidor MCP externo (#2147) — é o que se mostra para identificar, nunca a chave inteira.';
 
 notify pgrst, 'reload schema';
+
+-- ---- índice único da comanda do ganho por negócio (migration 0582) ----
+-- Fecha a corrida entre o worker e o `drain-loop` (#2475, item 2): duas linhas
+-- `lead.won` do mesmo negócio em instâncias diferentes não abrem mais duas
+-- comandas. O índice que existia traz `target_id` na chave e por isso não segura
+-- duas comandas — este tira `target_id`, põe `organization_id` e cobre só o
+-- vocabulário `comanda_no_ganho`; as outras ligações do lead seguem livres.
+-- A limpeza de duplicatas mantém a mais antiga e só toca `crm_lead_links`
+-- (nenhum dinheiro é apagado). Idempotente. Cabeçalho: migration 0582.
+delete from public.crm_lead_links l
+using (
+  select id,
+         row_number() over (
+           partition by organization_id, lead_id
+           order by created_at, id
+         ) as ordem
+    from public.crm_lead_links
+   where link_kind = 'comanda_no_ganho'
+) repetidas
+where l.id = repetidas.id
+  and repetidas.ordem > 1;
+
+create unique index if not exists uniq_comanda_do_ganho_por_negocio
+  on public.crm_lead_links (organization_id, lead_id)
+  where link_kind = 'comanda_no_ganho';

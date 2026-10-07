@@ -64,6 +64,7 @@ vi.mock("@/lib/impersonate/support", async (importOriginal) => ({
 }));
 
 import { requireRole } from "@/lib/auth/require-role";
+import { audit } from "@/lib/audit";
 
 import { COMANDA_DO_GANHO_KEY, comandaDoGanhoHandler } from "./comanda-do-ganho.handler";
 
@@ -100,7 +101,7 @@ function comparar(a: unknown, b: unknown): number {
  * o `event_log` não guarda quem fez. É a ponte que permite testar caminho,
  * port e retry com a função real dos dois botões.
  */
-function montarBanco(cenario: { funil: Row; lead?: Row }) {
+function montarBanco(cenario: { funil: Row; lead?: Row; moedaOrg?: string }) {
   const tabelas: Record<string, Row[]> = {
     crm_leads: [
       {
@@ -155,7 +156,7 @@ function montarBanco(cenario: { funil: Row; lead?: Row }) {
     crm_lead_links: [],
     sales: [],
     sale_items: [],
-    organizations: [{ id: ORG, currency: "BRL" }],
+    organizations: [{ id: ORG, currency: cenario.moedaOrg ?? "BRL" }],
   };
 
   const eventos: EventRow[] = [];
@@ -579,5 +580,86 @@ describe("(e) o título do negócio não é copiado para o financeiro", () => {
     expect(banco.escritasDe("sale_items")[0]?.dados).toMatchObject({
       description: "Pedido · Vendas",
     });
+  });
+});
+
+/**
+ * (f) Item 1 da #2475: a moeda do negócio contra a da organização, e o audit
+ * da comanda que antes nascia invisível no painel.
+ */
+describe("(f) moeda do negócio x moeda da organização + audit da comanda", () => {
+  it("moeda diferente da da organização: a comanda é PULADA e nada vai ao financeiro", async () => {
+    // Negócio em USD numa organização em BRL: abrir a comanda misturaria
+    // centavos de duas moedas no mesmo relatório, sem ninguém perceber.
+    const banco = montarBanco({
+      funil: { comanda_no_ganho: true },
+      lead: { currency: "USD" },
+      moedaOrg: "BRL",
+    });
+
+    await fecharPeloArrasto(banco);
+    const r = await dispatchEvent(eventoDoGanho(banco), { orgParada: false });
+
+    expect(r).toContainEqual(
+      expect.objectContaining({
+        consumer_key: COMANDA_DO_GANHO_KEY,
+        status: "skipped",
+        // O detail carrega as duas moedas (moeda_divergente:USD!=BRL): é o
+        // registro do porquê aquela comanda não nasceu.
+        detail: expect.stringContaining("moeda_divergente"),
+      }),
+    );
+    expect(banco.escritasFinanceiras()).toHaveLength(0);
+  });
+
+  it("a armadilha do DEFAULT 'BRL': organização em EUR com lead recém-nascido não é pulada", async () => {
+    // `crm_leads.currency` tem DEFAULT 'BRL'. Uma organização em EUR cujo lead
+    // nasceu sem moeda escolhida carrega 'BRL' por conta do banco — e uma
+    // guarda ingênua (`lead.currency !== org.currency`) pularia COMPLETO o
+    // financeiro dessa organização. O 'BRL' aqui é o default, não uma escolha.
+    const banco = montarBanco({
+      funil: { comanda_no_ganho: true },
+      lead: { currency: "BRL" },
+      moedaOrg: "EUR",
+    });
+
+    await fecharPeloArrasto(banco);
+    const r = await dispatchEvent(eventoDoGanho(banco), { orgParada: false });
+
+    expect(r).toContainEqual(
+      expect.objectContaining({ consumer_key: COMANDA_DO_GANHO_KEY, status: "ok" }),
+    );
+    expect(banco.escritasDe("sales"), "a comanda abre mesmo assim").toHaveLength(1);
+  });
+
+  it("a comanda aberta deixa rastro no audit com a origem `ganho_no_kanban`", async () => {
+    const banco = montarBanco({ funil: { comanda_no_ganho: true } });
+
+    await fecharPeloArrasto(banco);
+    await dispatchEvent(eventoDoGanho(banco), { orgParada: false });
+
+    const chamadas = vi.mocked(audit).mock.calls.map((c) => c[0]);
+    const abertura = chamadas.find((e) => e.action === "comanda.aberta");
+    expect(abertura, "o audit `comanda.aberta` é emitido").toBeDefined();
+    expect(abertura).toMatchObject({
+      organizationId: ORG,
+      resourceType: "sale",
+      metadata: { origem: "ganho_no_kanban", lead_id: LEAD },
+    });
+    expect(String(abertura?.resourceId)).toBe(banco.escritasDe("sales")[0]?.dados.id);
+  });
+
+  it("quando a comanda é pulada, o audit NÃO registra `comanda.aberta` (não abriu)", async () => {
+    const banco = montarBanco({
+      funil: { comanda_no_ganho: true },
+      lead: { currency: "USD" },
+      moedaOrg: "BRL",
+    });
+
+    await fecharPeloArrasto(banco);
+    await dispatchEvent(eventoDoGanho(banco), { orgParada: false });
+
+    const chamadas = vi.mocked(audit).mock.calls.map((c) => c[0]);
+    expect(chamadas.find((e) => e.action === "comanda.aberta")).toBeUndefined();
   });
 });
