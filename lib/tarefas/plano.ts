@@ -83,12 +83,24 @@ const passoSchema = z.object({
     .default("dono_do_lead"),
 });
 
-const planoSchema = z.object({
+export const planoSchema = z.object({
   id: z.string().trim().min(1).max(64),
   nome: z.string().trim().min(1).max(120),
   descricao: z.string().max(300).nullish(),
   passos: z.array(passoSchema).min(1).max(30),
 });
+
+/**
+ * A LISTA na forma em que a rota de settings (`settings/task-plans`) aceita
+ * gravar — um `planoSchema` por item, o MESMO que a leitura do motor aplica.
+ *
+ * Exportada porque a tela e o motor têm de recusar a mesma coisa: um plano que
+ * `lePlanosDoSettings` descartaria jamais pode entrar pelo formulário. Escrito
+ * duas vezes, os dois cadastros divergiriam no primeiro ajuste, e a divergência
+ * seria invisível — os dois "validam o plano", só que um deixa passar o que o
+ * outro ignora.
+ */
+export const planosSchema = z.array(planoSchema).max(50);
 
 /**
  * Lê `organizations.settings` e devolve SÓ os planos válidos, na ordem em que

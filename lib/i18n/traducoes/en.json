@@ -8872,5 +8872,20 @@
   "Contato marcado como pessoal.": "Contact marked as personal.",
   "Contato marcado como pessoal": "Contact marked as personal",
   "Não foi possível marcar o contato como pessoal.": "Could not mark the contact as personal.",
-  "Não foi possível desmarcar o contato como pessoal.": "Could not unmark the contact as personal."
+  "Não foi possível desmarcar o contato como pessoal.": "Could not unmark the contact as personal.",
+  "Planos de tarefa": "Task plans",
+  "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.": "Build the sequence once; the Apply a task plan action applies the plan to the deal.",
+  "Novo plano": "New plan",
+  "Nenhum plano cadastrado ainda.": "No plans registered yet.",
+  "Nome do plano": "Plan name",
+  "Proposta enviada": "Sent proposal",
+  "Descrição (opcional)": "Description (optional)",
+  "Passos do plano": "Plan steps",
+  "Adicionar passo": "Add step",
+  "Remover passo": "Remove step",
+  "Salvar plano": "Save plan",
+  "Dê um nome ao plano.": "Give the plan a name.",
+  "O plano precisa de pelo menos um passo.": "The plan needs at least one step.",
+  "Escreva o título de todos os passos.": "Write the title of every step.",
+  "O que é salvo aqui é o que o editor de regras oferece na ação Aplicar um plano de tarefas.": "What is saved here is what the rule editor offers in the Apply a task plan action."
 }
