@@ -1,7 +1,9 @@
 ---
 impacto: capacidade_nova
 secao: adicionado
-titulo: Tarefas ganham a tela Planos, a ação Aplicar um plano de tarefas e a validação do plano antes de qualquer gravação
+titulo: Planos de tarefa — a sequência de tarefas salva uma vez e aplicada a cada negócio por uma regra
 ---
 
-Quem monta uma sequência de tarefa repetida no dia a dia escrevia os mesmos passos de novo a cada negócio, um por um. Agora a sequência se salva uma vez em **Tarefas › Planos** (porta nova, entrada no hub do CRM e no ⌘K, com rota própria em `settings/task-plans`), o editor de regras oferece a ação **Aplicar um plano de tarefas ao negócio** — com o seletor dos planos cadastrados, buscados pela mesma rota que a tela grava — e o motor aplica o plano na ordem, com a marca da aplicação guardada para não duplicar. O plano inteiro agora é conferido contra o negócio **antes** do primeiro INSERT: um passo sem dono ou com título vazio recusa o plano como um todo, em vez de deixar pela metade os passos que passavam — antes, dois disparos recriavam a mesma sobra e a pessoa apagava tarefa órfã. Entregue no PR #2213, issue #1752.
+Em **Tarefas › Planos** (pelo hub do CRM e pelo ⌘K) quem é gerente ou administrador monta uma sequência de tarefas uma vez: título, prazo em dias contado a partir da aplicação, prioridade e responsável de cada passo (o dono do negócio ou uma pessoa da equipe). No editor de regras, a ação nova **Aplicar um plano de tarefas ao negócio** escolhe um dos planos cadastrados e cria as tarefas na ordem, todas de uma vez. Aplicar o mesmo plano ao mesmo negócio de novo não duplica: a aplicação fica registrada na linha do tempo do negócio. Se algum passo não pode virar tarefa (o negócio não tem dono, ou o título fica vazio sem o nome do contato), o plano não cria tarefa nenhuma e a regra mostra o motivo no histórico. Os planos ficam nas configurações da empresa; não há nada a configurar na atualização.
+
+  Contribuição de @webtecnica (#2213), a partir da issue #1752 de @franceschini-lucas.
