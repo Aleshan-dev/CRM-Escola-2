@@ -6554,8 +6554,8 @@ export const DICIONARIO: Traducoes = {
   "que é a que está no ar agora, e os seus dados estão intactos. O banco de dados já tinha sido atualizado e permanece assim — isso é seguro, a versão": {
     es: "que es la que está activa ahora, y tus datos están intactos. La base de datos ya se había actualizado y se mantiene así. Es seguro: la versión",
   },
-  "funciona com ele. Se quiser desfazer também o banco, use a cópia de segurança feita antes da tentativa (": {
-    es: "funciona con ella. Si quieres deshacer también la base de datos, usa la copia de seguridad hecha antes del intento (",
+  "funciona com ele. A cópia de segurança feita antes da tentativa continua guardada no servidor, mas ela não volta por cima do banco em uso: só restaura num banco vazio. Se precisar desfazer também o banco, peça ajuda a quem cuida do servidor.": {
+    es: "funciona con ella. La copia de seguridad hecha antes del intento sigue guardada en el servidor, pero no se restaura sobre la base de datos en uso: solo se restaura en una base de datos vacía. Si necesitas deshacer también la base de datos, pide ayuda a quien administra el servidor.",
   },
   "Para deixar o servidor inteiro de volta na versão": {
     es: "Para regresar todo el servidor a la versión",
