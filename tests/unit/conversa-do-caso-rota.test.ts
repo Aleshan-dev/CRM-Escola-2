@@ -39,8 +39,12 @@ vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/agent-engine/agent/conversa-do-caso", () => ({
   responderSobreOCaso: vi.fn(),
 }));
+// `llmCfg` controlável: o default imita uma instalação COM chave no ambiente
+// (o que os outros testes assumem); os testes de `ia_configurada` o zeram para
+// provar o caminho da credencial da organização, que é o caso real da Vercel.
+const ambiente = vi.hoisted(() => ({ llmCfg: { anthropicApiKey: "k" } as Record<string, unknown> }));
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({
-  requestTurnDeps: () => ({ llmCfg: { anthropicApiKey: "k" }, log: undefined, registry: undefined }),
+  requestTurnDeps: () => ({ llmCfg: ambiente.llmCfg, log: undefined, registry: undefined }),
 }));
 vi.mock("@/lib/agent-engine/agent/conversa-do-caso/persona", async (original) => ({
   ...(await original<Record<string, unknown>>()),
@@ -113,7 +117,7 @@ function sessaoComVisibilidade(visiveis: string[], mensagens: unknown[] = []) {
  * O pool, respondendo por FORMA de consulta. Registra tudo que foi executado —
  * é como os casos de "zero linhas novas em X" medem EFEITO e não chamada.
  */
-function poolFalso(over: { caso?: Record<string, unknown> | null; contato?: Record<string, unknown>; jaPerguntou?: number; inserirLanca?: { code: string } } = {}) {
+function poolFalso(over: { caso?: Record<string, unknown> | null; contato?: Record<string, unknown>; jaPerguntou?: number; inserirLanca?: { code: string }; credencialOk?: boolean } = {}) {
   const queries: Array<{ sql: string; params: unknown[] }> = [];
   const caso =
     over.caso === undefined
@@ -138,6 +142,7 @@ function poolFalso(over: { caso?: Record<string, unknown> | null; contato?: Reco
       return { rows: [over.contato ?? { is_blocked: false, is_anonymized: false }] };
     }
     if (/from contacts/.test(sql)) return { rows: [{ display_name: "Marina Silva", name: null }] };
+    if (/ai_provider_credentials/.test(sql)) return { rows: [{ ok: over.credencialOk ?? false }] };
     if (/count\(\*\)::text as n/.test(sql)) return { rows: [{ n: String(over.jaPerguntou ?? 0) }] };
     if (/insert into agent_case_chat_messages/.test(sql) && /'human'/.test(sql)) {
       if (over.inserirLanca) throw over.inserirLanca;
@@ -163,6 +168,7 @@ const CORPO_OK = { turn_id: TURN_ID, pergunta: "Por que a IA não resolveu sozin
 
 beforeEach(() => {
   vi.clearAllMocks();
+  ambiente.llmCfg = { anthropicApiKey: "k" };
   session("agent");
   vi.mocked(requireSupportWrite).mockResolvedValue(null);
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, count: 1, limit: 12, window_sec: 60 });
@@ -413,6 +419,64 @@ describe("GET", () => {
     const corpo = (await r.json()) as { data: { mensagens: unknown[]; estado: Record<string, unknown> } };
     expect(corpo.data.mensagens).toHaveLength(1);
     expect(corpo.data.estado.caso_obsoleto).toBeNull();
+  });
+});
+
+describe("GET — ia_configurada reflete a credencial da organização, não só o .env", () => {
+  // O bug: `ia_configurada` olhava SÓ o ambiente. Numa instalação que configura
+  // IA por `IA › Credenciais` (sem chave no `.env` — o caso da Vercel deste
+  // staging), o flag ficava false e escondia um recurso que FUNCIONA, porque o
+  // chat usa a credencial do AGENTE do caso.
+  const casoComAgente = {
+    id: CASE_ID,
+    title: "Desconto",
+    kind: "outro",
+    summary: "20%",
+    blocker: "10%",
+    status: "awaiting_human",
+    opened_at: "2026-03-10T12:00:00Z",
+    agent_id: AGENT_ID,
+    conversation_id: CONV_ID,
+    contact_id: CONTACT_ID,
+    context_snapshot: null,
+  };
+  const get = () => GET(new NextRequest(`http://localhost/api/v1/ai/cases/${CASE_ID}/chat`), { params: Promise.resolve({ id: CASE_ID }) });
+  const estadoDaResposta = async (r: Response) =>
+    ((await r.json()) as { data: { estado: Record<string, unknown> } }).data.estado;
+
+  it("SEM chave no ambiente, mas o agente do caso TEM credencial válida → true", async () => {
+    ambiente.llmCfg = {};
+    sessaoComVisibilidade([CONV_ID]);
+    poolFalso({ caso: casoComAgente, credencialOk: true });
+    const r = await get();
+    expect(r.status).toBe(200);
+    expect((await estadoDaResposta(r)).ia_configurada).toBe(true);
+  });
+
+  it("SEM chave no ambiente e SEM credencial utilizável do agente → false", async () => {
+    ambiente.llmCfg = {};
+    sessaoComVisibilidade([CONV_ID]);
+    poolFalso({ caso: casoComAgente, credencialOk: false });
+    const r = await get();
+    expect((await estadoDaResposta(r)).ia_configurada).toBe(false);
+  });
+
+  it("COM chave no ambiente → true, sem nem consultar a credencial (short-circuit)", async () => {
+    ambiente.llmCfg = { anthropicApiKey: "k" };
+    sessaoComVisibilidade([CONV_ID]);
+    const pool = poolFalso({ caso: casoComAgente, credencialOk: false });
+    const r = await get();
+    expect((await estadoDaResposta(r)).ia_configurada).toBe(true);
+    expect(pool.queries.some((q) => /ai_provider_credentials/.test(q.sql))).toBe(false);
+  });
+
+  it("caso sem agente (agent_id null) e sem chave no ambiente → false, sem consultar credencial", async () => {
+    ambiente.llmCfg = {};
+    sessaoComVisibilidade([CONV_ID]);
+    const pool = poolFalso(); // caso default tem agent_id: null
+    const r = await get();
+    expect((await estadoDaResposta(r)).ia_configurada).toBe(false);
+    expect(pool.queries.some((q) => /ai_provider_credentials/.test(q.sql))).toBe(false);
   });
 });
 

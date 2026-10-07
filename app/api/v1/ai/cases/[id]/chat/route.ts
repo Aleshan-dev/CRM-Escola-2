@@ -131,6 +131,40 @@ interface ContextoDaRota {
 }
 
 /**
+ * O agente do caso tem credencial de IA UTILIZÁVEL na organização?
+ *
+ * Sinal honesto para `ia_configurada` quando a instalação não põe chave no
+ * ambiente e configura IA só por `IA › Credenciais`. O caminho real do chat
+ * (`responderSobreOCaso` → `runModelCall`) usa o `provider` + `credential_id`
+ * da versão publicada do agente do caso, não o `.env` — então olhar só o
+ * ambiente escondia um recurso que FUNCIONA. Régua = a mesma do resolvedor de
+ * turno: credencial ativa e validada. Admin via Pool com filtro de organização
+ * programático (service role ignora RLS; CLAUDE.md anti-pattern 10).
+ */
+async function agenteTemCredencialUtilizavel(
+  pool: ReturnType<typeof getRequestPool>,
+  organizationId: string,
+  agentId: string | null,
+): Promise<boolean> {
+  if (!agentId) return false;
+  const { rows } = await pool.query<{ ok: boolean }>(
+    `select exists (
+       select 1
+       from public.ai_agents a
+       join public.ai_agent_versions v on v.id = a.published_version_id
+       join public.ai_provider_credentials cred
+         on cred.id = v.credential_id
+        and cred.organization_id = a.organization_id
+        and cred.is_active
+        and cred.validated_at is not null
+       where a.id = $2 and a.organization_id = $1
+     ) as ok`,
+    [organizationId, agentId],
+  );
+  return rows[0]?.ok === true;
+}
+
+/**
  * Autenticação + guarda de visibilidade, comum ao GET e ao POST.
  *
  * Devolve `{ response }` quando algo barrou — o chamador repassa, e não inventa
@@ -246,15 +280,22 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<Response> {
         [c.orgId, caso.contact_id],
       );
       const cfg = requestTurnDeps().llmCfg;
+      // Sem chave de IA a tela não oferece o clique: numa instalação fresca,
+      // um botão que sempre falha é pior que um botão ausente com a frase que
+      // diz onde configurar. Mas "sem chave" não é só o ambiente: o chat usa a
+      // credencial do AGENTE do caso (banco da organização), então quando ela
+      // existe e está validada o recurso funciona mesmo sem `.env`.
+      const chaveNoAmbiente = Boolean(
+        cfg.anthropicApiKey || cfg.openaiApiKey || cfg.openrouterApiKey,
+      );
+      const credencialDoAgente =
+        chaveNoAmbiente || (await agenteTemCredencialUtilizavel(pool, c.orgId, caso.agent_id));
       estado = {
         caso_obsoleto: await casoEstaObsoleto(pool, c.orgId, caso.context_snapshot),
         contato_bloqueado: contato[0]?.is_blocked ?? null,
         contato_anonimizado: contato[0]?.is_anonymized ?? null,
         status: caso.status,
-        // Sem chave de IA a tela não oferece o clique: numa instalação fresca,
-        // um botão que sempre falha é pior que um botão ausente com a frase que
-        // diz onde configurar.
-        ia_configurada: Boolean(cfg.anthropicApiKey || cfg.openaiApiKey || cfg.openrouterApiKey),
+        ia_configurada: credencialDoAgente,
       };
     }
   } catch (erro) {
