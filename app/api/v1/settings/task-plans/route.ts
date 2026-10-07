@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       // então o caminho vira string: "0.titulo" → "o item 0, campo titulo".
       details: Object.fromEntries(
         parsed.error.issues.map((problema) => [
-          problema.path.map((pedaco) => String(pedaco || "raiz")).join(".") || "raiz",
+          problema.path.map(String).join(".") || "raiz",
           problema.message,
         ]),
       ),
